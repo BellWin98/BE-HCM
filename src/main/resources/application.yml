@@ -1,0 +1,43 @@
+server:
+  port: 8080
+  servlet:
+    encoding:
+      charset: UTF-8
+      force: true
+    context-path: /
+  error:
+    whitelabel:
+      enabled: false
+
+spring:
+  profiles:
+    active: local
+    include: secret
+  servlet:
+    multipart:
+      max-file-size: 20MB
+      max-request-size: 100MB
+  jpa:
+    database: mysql
+    database-platform: org.hibernate.dialect.MariaDBDialect
+    generate-ddl: true
+    properties:
+      hibernate:
+        default_batch_fetch_size: 500
+    open-in-view: false
+
+jasypt:
+  encryptor:
+    algorithm: PBEWithMD5AndDES # ???? ????
+    pool-size: 2 # ??? ??? ?? ?? pool? ??
+    string-output-type: base64 # ??? ??? ?? ??? ?? ??? ??
+    key-obtention-iterations: 1000 # ??? ?? ?? ?? ???? ?? ?? ??
+    password: ${JASYPT_ENCRYPTOR_PASSWORD} # ???? ??
+
+springdoc:
+  api-docs:
+    enabled: true
+  swagger-ui:
+    enabled: true
+    path: /swagger-ui.html
+  override-with-generic-response: false

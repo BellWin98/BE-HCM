@@ -31,8 +31,6 @@ public class WorkoutRoom extends BaseTimeEntity {
 
     @Column(nullable = false)
     private LocalDate startDate;
-
-    @Column(nullable = false)
     private LocalDate endDate;
 
     @Column(nullable = false)

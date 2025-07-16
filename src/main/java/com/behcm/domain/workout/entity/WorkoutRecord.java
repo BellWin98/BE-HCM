@@ -9,16 +9,14 @@ import lombok.NoArgsConstructor;
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(uniqueConstraints = {
-        @UniqueConstraint(columnNames = {"member_id", "workout_room_id"})
-})
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @EntityListeners(AuditingEntityListener.class)
-public class WorkoutRoomMember {
+public class WorkoutRecord {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -33,37 +31,33 @@ public class WorkoutRoomMember {
     private WorkoutRoom workoutRoom;
 
     @Column(nullable = false)
-    private Integer weeklyWorkouts = 0;
+    private String workoutType;
 
     @Column(nullable = false)
-    private Long totalPenalty = 0L;
+    private LocalDate workoutDate;
 
     @Column(nullable = false)
-    private Boolean isOnBreak = false;
+    private Integer duration; // minutes
+
+    @Column(nullable = false)
+    private String imageUrl;
 
     @CreatedDate
     @Column(nullable = false, updatable = false)
-    private LocalDateTime joinedAt;
+    private LocalDateTime createdAt;
 
     @Builder
-    public WorkoutRoomMember(Member member, WorkoutRoom workoutRoom) {
+    public WorkoutRecord(Member member, WorkoutRoom workoutRoom, LocalDate workoutDate,
+                         String workoutType, Integer duration, String imageUrl) {
         this.member = member;
         this.workoutRoom = workoutRoom;
+        this.workoutDate = workoutDate;
+        this.workoutType = workoutType;
+        this.duration = duration;
+        this.imageUrl = imageUrl;
     }
 
-    public void updateWeeklyWorkouts(int weeklyWorkouts) {
-        this.weeklyWorkouts = weeklyWorkouts;
-    }
-
-    public void addPenalty(long penalty) {
-        this.totalPenalty += penalty;
-    }
-
-    public void setBreakStatus(boolean isOnBreak) {
-        this.isOnBreak = isOnBreak;
-    }
-
-    public void resetWeeklyWorkouts() {
-        this.weeklyWorkouts = 0;
+    public boolean canDelete() {
+        return workoutDate.equals(LocalDate.now());
     }
 }

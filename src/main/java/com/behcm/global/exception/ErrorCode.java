@@ -25,7 +25,7 @@ public enum ErrorCode {
     ALREADY_JOINED_ROOM(HttpStatus.BAD_REQUEST, "이미 다른 방에 참여 중입니다."),
     NOT_ROOM_MEMBER(HttpStatus.FORBIDDEN, "방 멤버가 아닙니다."),
     NOT_ROOM_OWNER(HttpStatus.FORBIDDEN, "방장이 아닙니다."),
-    INVALID_INVITE_CODE(HttpStatus.BAD_REQUEST, "유효하지 않은 초대 코드입니다."),
+    INVALID_ENTRY_CODE(HttpStatus.BAD_REQUEST, "입장코드가 맞지 않습니다."),
     ROOM_ALREADY_STARTED(HttpStatus.BAD_REQUEST, "이미 시작된 방에는 참여할 수 없습니다."),
 
     // Workout

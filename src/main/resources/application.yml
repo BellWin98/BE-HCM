@@ -32,7 +32,7 @@ jasypt:
     pool-size: 2
     string-output-type: base64
     key-obtention-iterations: 1000
-    password: ${JASYPT_ENCRYPTOR_PASSWORD} # ???? ??
+    password: ${JASYPT_ENCRYPTOR_PASSWORD}
 
 springdoc:
   api-docs:

@@ -1,9 +1,6 @@
 package com.behcm.domain.workout.dto;
 
-import jakarta.validation.constraints.Max;
-import jakarta.validation.constraints.Min;
-import jakarta.validation.constraints.NotEmpty;
-import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.*;
 import lombok.Data;
 
 import java.time.LocalDate;
@@ -30,4 +27,8 @@ public class CreateWorkoutRoomRequest {
     @NotNull(message = "최대 인원은 필수입니다.")
     @Min(value = 2, message = "최대 인원은 2명 이상이어야 합니다.")
     private Integer maxMembers;
+
+    @NotEmpty(message = "방 비밀번호는 필수입니다.")
+    @Size(min = 2, max = 8, message = "방 비밀번호는 2~8자리이어야 합니다.")
+    private String entryCode;
 }

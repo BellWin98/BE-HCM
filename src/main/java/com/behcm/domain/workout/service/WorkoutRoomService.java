@@ -54,6 +54,7 @@ public class WorkoutRoomService {
                 .startDate(request.getStartDate())
                 .endDate(request.getEndDate() != null ? request.getEndDate() : null)
                 .maxMembers(request.getMaxMembers())
+                .entryCode(request.getEntryCode())
                 .owner(owner)
                 .build();
 
@@ -82,9 +83,46 @@ public class WorkoutRoomService {
         return null;
     }
 
+    @Transactional(readOnly = true)
     public List<WorkoutRoomResponse> getWorkoutRooms() {
         return workoutRoomRepository.findActiveRooms().stream()
                 .map(WorkoutRoomResponse::from)
                 .toList();
+    }
+
+    public WorkoutRoomResponse joinWorkoutRoom(Long workoutRoomId, String entryCode, Member member) {
+
+        WorkoutRoom workoutRoom = workoutRoomRepository.findById(workoutRoomId)
+                .orElseThrow(() -> new CustomException(ErrorCode.ROOM_NOT_FOUND));
+
+        // 다른 운동방에 참여 중인지 확인
+        if (workoutRoomRepository.findActiveWorkoutRoomByMember(member).isPresent()) {
+            throw new CustomException(ErrorCode.ALREADY_JOINED_ROOM);
+        }
+
+        if (!workoutRoom.getEntryCode().equals(entryCode)) {
+            throw new CustomException(ErrorCode.INVALID_ENTRY_CODE);
+        }
+
+        if (!workoutRoom.canJoin()) {
+            if (!workoutRoom.getIsActive()) {
+                throw new CustomException(ErrorCode.ROOM_NOT_FOUND, "비활성화된 방입니다.");
+            } else if (workoutRoom.getCurrentMemberCount() >= workoutRoom.getMaxMembers()) {
+                throw new CustomException(ErrorCode.ROOM_FULL);
+            }
+        }
+
+        // 이미 해당 운동방에 참여중인지 확인
+        if (workoutRoomMemberRepository.existsByMemberAndWorkoutRoom(member, workoutRoom)) {
+            throw new CustomException(ErrorCode.ALREADY_JOINED_ROOM, "이미 동일한 운동방에 참여 중입니다.");
+        }
+
+        WorkoutRoomMember workoutRoomMember = WorkoutRoomMember.builder()
+                .member(member)
+                .workoutRoom(workoutRoom)
+                .build();
+        workoutRoomMemberRepository.save(workoutRoomMember);
+
+        return WorkoutRoomResponse.from(workoutRoom);
     }
 }

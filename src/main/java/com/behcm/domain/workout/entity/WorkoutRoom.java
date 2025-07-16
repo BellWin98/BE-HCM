@@ -29,6 +29,9 @@ public class WorkoutRoom extends BaseTimeEntity {
     @Column(nullable = false)
     private Long penaltyPerMiss;
 
+    @Column(nullable = false, length = 10)
+    private String entryCode;
+
     @Column(nullable = false)
     private LocalDate startDate;
     private LocalDate endDate;
@@ -48,13 +51,14 @@ public class WorkoutRoom extends BaseTimeEntity {
 
     @Builder
     public WorkoutRoom(String name, Integer minWeeklyWorkouts, Long penaltyPerMiss,
-                       LocalDate startDate, LocalDate endDate, Integer maxMembers, Member owner) {
+                       LocalDate startDate, LocalDate endDate, Integer maxMembers, String entryCode, Member owner) {
         this.name = name;
         this.minWeeklyWorkouts = minWeeklyWorkouts;
         this.penaltyPerMiss = penaltyPerMiss;
         this.startDate = startDate;
         this.endDate = endDate;
         this.maxMembers = maxMembers;
+        this.entryCode = entryCode;
         this.owner = owner;
     }
 
@@ -63,18 +67,22 @@ public class WorkoutRoom extends BaseTimeEntity {
     }
 
     public void updateRoomSettings(String name, Integer minWeeklyWorkouts, Long penaltyPerMiss,
-                                   LocalDate startDate, LocalDate endDate, Integer maxMembers) {
+                                   LocalDate startDate, LocalDate endDate, Integer maxMembers, String entryCode) {
         this.name = name;
         this.minWeeklyWorkouts = minWeeklyWorkouts;
         this.penaltyPerMiss = penaltyPerMiss;
         this.startDate = startDate;
         this.endDate = endDate;
         this.maxMembers = maxMembers;
+        this.entryCode = entryCode;
     }
 
     public boolean canJoin() {
-        return isActive && workoutRoomMembers.size() < maxMembers &&
-                (LocalDate.now().isBefore(endDate) || LocalDate.now().isEqual(startDate));
+        if (endDate != null) {
+            return isActive && workoutRoomMembers.size() < maxMembers &&
+                    (LocalDate.now().isBefore(endDate));
+        }
+        return isActive && workoutRoomMembers.size() < maxMembers;
     }
 
     public boolean isOwner(Member member) {

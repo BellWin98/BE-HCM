@@ -21,6 +21,7 @@ public class WorkoutRoomResponse {
     private LocalDate endDate;
     private Integer maxMembers;
     private Integer currentMembers;
+    private String entryCode;
     private MemberResponse owner;
     private Boolean isActive;
     private LocalDateTime createdAt;
@@ -36,6 +37,7 @@ public class WorkoutRoomResponse {
                 .endDate(workoutRoom.getEndDate())
                 .maxMembers(workoutRoom.getMaxMembers())
                 .currentMembers(workoutRoom.getCurrentMemberCount())
+                .entryCode(workoutRoom.getEntryCode())
                 .owner(MemberResponse.from(workoutRoom.getOwner()))
                 .isActive(workoutRoom.getIsActive())
                 .createdAt(workoutRoom.getCreatedAt())

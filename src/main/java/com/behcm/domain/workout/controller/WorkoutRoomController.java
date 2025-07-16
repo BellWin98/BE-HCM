@@ -42,4 +42,14 @@ public class WorkoutRoomController {
         List<WorkoutRoomResponse> response = workoutRoomService.getWorkoutRooms();
         return ResponseEntity.ok(ApiResponse.success(response));
     }
+
+    @PostMapping("/join/{workoutRoomId}")
+    public ResponseEntity<ApiResponse<WorkoutRoomResponse>> joinWorkoutRoom(
+            @PathVariable Long workoutRoomId,
+            @RequestParam String entryCode,
+            @AuthenticationPrincipal Member member
+    ) {
+        WorkoutRoomResponse response = workoutRoomService.joinWorkoutRoom(workoutRoomId, entryCode, member);
+        return ResponseEntity.ok(ApiResponse.success(response));
+    }
 }

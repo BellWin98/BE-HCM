@@ -30,12 +30,14 @@ public enum ErrorCode {
 
     // Workout
     WORKOUT_ALREADY_UPLOADED(HttpStatus.BAD_REQUEST, "오늘 이미 운동을 인증했습니다."),
+    WORKOUT_ALREADY_AUTHENTICATED(HttpStatus.BAD_REQUEST, "해당 날짜에 이미 운동 인증을 완료했습니다."),
     WORKOUT_NOT_FOUND(HttpStatus.NOT_FOUND, "운동 기록을 찾을 수 없습니다."),
     CANNOT_DELETE_WORKOUT(HttpStatus.BAD_REQUEST, "당일 운동만 삭제할 수 있습니다."),
 
     // File
     FILE_UPLOAD_FAILED(HttpStatus.INTERNAL_SERVER_ERROR, "파일 업로드에 실패했습니다."),
     INVALID_FILE_TYPE(HttpStatus.BAD_REQUEST, "지원하지 않는 파일 형식입니다."),
+    INVALID_FILE(HttpStatus.BAD_REQUEST, "유효하지 않은 파일입니다."),
     FILE_TOO_LARGE(HttpStatus.BAD_REQUEST, "파일 크기가 너무 큽니다."),
 
     // Common

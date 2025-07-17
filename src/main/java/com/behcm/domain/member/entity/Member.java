@@ -60,7 +60,7 @@ public class Member extends BaseTimeEntity implements UserDetails {
         this.password = password;
     }
 
-    public void updateWorkoutDays(int totalWorkoutDays) {
+    public void updateTotalWorkoutDays(int totalWorkoutDays) {
         this.totalWorkoutDays = totalWorkoutDays;
     }
 

@@ -31,7 +31,7 @@ public class WorkoutRoomMemberResponse {
                 .id(workoutRoomMember.getId())
                 .nickname(workoutRoomMember.getNickname())
                 .profileUrl(workoutRoomMember.getMember().getProfileUrl())
-                .weeklyWorkouts(workoutRoomMember.getTotalWorkouts())
+                .totalWorkouts(workoutRoomMember.getTotalWorkouts())
                 .weeklyWorkouts(workoutRoomMember.getWeeklyWorkouts())
                 .totalPenalty(workoutRoomMember.getTotalPenalty())
                 .isOnBreak(workoutRoomMember.getIsOnBreak())

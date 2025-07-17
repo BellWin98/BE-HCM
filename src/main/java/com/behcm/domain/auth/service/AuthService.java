@@ -43,6 +43,7 @@ public class AuthService {
                 .email(request.getEmail())
                 .password(passwordEncoder.encode(request.getPassword()))
                 .nickname(request.getNickname())
+                .profileUrl("")
                 .build();
         Member savedMember = memberRepository.save(member);
         TokenResponse tokenResponse = tokenProvider.generateTokensByEmail(savedMember.getEmail());

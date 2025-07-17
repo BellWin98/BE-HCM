@@ -13,8 +13,8 @@ public class MemberResponse {
     private Long id;
     private String email;
     private String nickname;
+    private String profileUrl;
     private Integer totalWorkoutDays;
-    private Double achievementRate;
     private Long totalPenalty;
     private LocalDateTime createdAt;
 
@@ -24,7 +24,6 @@ public class MemberResponse {
                 .email(member.getEmail())
                 .nickname(member.getNickname())
                 .totalWorkoutDays(member.getTotalWorkoutDays())
-                .achievementRate(member.getAchievementRate())
                 .totalPenalty(member.getTotalPenalty())
                 .createdAt(member.getCreatedAt())
                 .build();

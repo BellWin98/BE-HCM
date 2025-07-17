@@ -33,6 +33,9 @@ public class WorkoutRoomMember {
     private WorkoutRoom workoutRoom;
 
     @Column(nullable = false)
+    private Integer totalWorkouts = 0;
+
+    @Column(nullable = false)
     private Integer weeklyWorkouts = 0;
 
     @Column(nullable = false)
@@ -55,8 +58,12 @@ public class WorkoutRoomMember {
         this.weeklyWorkouts = weeklyWorkouts;
     }
 
-    public void addPenalty(long penalty) {
-        this.totalPenalty += penalty;
+    public void updateTotalWorkouts(int totalWorkouts) {
+        this.totalWorkouts = totalWorkouts;
+    }
+
+    public void updateTotalPenalty(Long totalPenalty) {
+        this.totalPenalty = totalPenalty;
     }
 
     public void setBreakStatus(boolean isOnBreak) {
@@ -65,5 +72,9 @@ public class WorkoutRoomMember {
 
     public void resetWeeklyWorkouts() {
         this.weeklyWorkouts = 0;
+    }
+
+    public String getNickname() {
+        return member.getNickname();
     }
 }

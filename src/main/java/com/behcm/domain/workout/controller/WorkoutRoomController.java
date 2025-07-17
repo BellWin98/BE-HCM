@@ -2,6 +2,7 @@ package com.behcm.domain.workout.controller;
 
 import com.behcm.domain.member.entity.Member;
 import com.behcm.domain.workout.dto.CreateWorkoutRoomRequest;
+import com.behcm.domain.workout.dto.WorkoutRoomDetailResponse;
 import com.behcm.domain.workout.dto.WorkoutRoomResponse;
 import com.behcm.domain.workout.service.WorkoutRoomService;
 import com.behcm.global.common.ApiResponse;
@@ -30,11 +31,19 @@ public class WorkoutRoomController {
     }
 
     @GetMapping("/current")
-    public ResponseEntity<ApiResponse<WorkoutRoomResponse>> getCurrentWorkoutRoom(
+    public ResponseEntity<ApiResponse<WorkoutRoomDetailResponse>> getCurrentWorkoutRoom(
             @AuthenticationPrincipal Member member
     ) {
-        WorkoutRoomResponse response = workoutRoomService.getCurrentWorkoutRoom(member);
+        WorkoutRoomDetailResponse response = workoutRoomService.getCurrentWorkoutRoom(member);
         return ResponseEntity.ok(ApiResponse.success(response));
+    }
+
+    @GetMapping("/validate")
+    public ResponseEntity<Boolean> isMemberInWorkoutRoom(
+            @AuthenticationPrincipal Member member
+    ) {
+        boolean response = workoutRoomService.isMemberInWorkoutRoom(member);
+        return ResponseEntity.ok(response);
     }
 
     @GetMapping

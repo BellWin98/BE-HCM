@@ -89,6 +89,10 @@ public class WorkoutRoom extends BaseTimeEntity {
         return owner.getId().equals(member.getId());
     }
 
+    public String getOwnerNickname() {
+        return owner.getNickname();
+    }
+
     public int getCurrentMemberCount() {
         return workoutRoomMembers.size();
     }

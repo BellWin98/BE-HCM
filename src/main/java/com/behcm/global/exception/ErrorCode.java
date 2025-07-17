@@ -19,14 +19,14 @@ public enum ErrorCode {
     MEMBER_NOT_FOUND(HttpStatus.NOT_FOUND, "사용자를 찾을 수 없습니다."),
     EMAIL_NOT_VERIFIED(HttpStatus.BAD_REQUEST, "이메일 인증이 필요합니다."),
 
-    // Room
-    ROOM_NOT_FOUND(HttpStatus.NOT_FOUND, "방을 찾을 수 없습니다."),
-    ROOM_FULL(HttpStatus.BAD_REQUEST, "방이 가득 찼습니다."),
-    ALREADY_JOINED_ROOM(HttpStatus.BAD_REQUEST, "이미 다른 방에 참여 중입니다."),
-    NOT_ROOM_MEMBER(HttpStatus.FORBIDDEN, "방 멤버가 아닙니다."),
-    NOT_ROOM_OWNER(HttpStatus.FORBIDDEN, "방장이 아닙니다."),
+    // Workout Room
+    WORKOUT_ROOM_NOT_FOUND(HttpStatus.NOT_FOUND, "운동방을 찾을 수 없습니다."),
+    WORKOUT_ROOM_FULL(HttpStatus.BAD_REQUEST, "운동방이 가득 찼습니다."),
+    ALREADY_JOINED_WORKOUT_ROOM(HttpStatus.BAD_REQUEST, "이미 다른 운동방에 참여 중입니다."),
+    NOT_WORKOUT_ROOM_MEMBER(HttpStatus.FORBIDDEN, "운동방 멤버가 아닙니다."),
+    NOT_WORKOUT_ROOM_OWNER(HttpStatus.FORBIDDEN, "방장이 아닙니다."),
     INVALID_ENTRY_CODE(HttpStatus.BAD_REQUEST, "입장코드가 맞지 않습니다."),
-    ROOM_ALREADY_STARTED(HttpStatus.BAD_REQUEST, "이미 시작된 방에는 참여할 수 없습니다."),
+    WORKOUT_ROOM_ALREADY_STARTED(HttpStatus.BAD_REQUEST, "이미 시작된 운동방에는 참여할 수 없습니다."),
 
     // Workout
     WORKOUT_ALREADY_UPLOADED(HttpStatus.BAD_REQUEST, "오늘 이미 운동을 인증했습니다."),

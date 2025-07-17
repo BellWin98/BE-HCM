@@ -31,6 +31,8 @@ public class Member extends BaseTimeEntity implements UserDetails {
     @Column(unique = true, nullable = false, length = 10)
     private String nickname;
 
+    private String profileUrl;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private MemberRole role = MemberRole.USER;
@@ -39,16 +41,14 @@ public class Member extends BaseTimeEntity implements UserDetails {
     private Integer totalWorkoutDays = 0;
 
     @Column(nullable = false)
-    private Double achievementRate = 0.0;
-
-    @Column(nullable = false)
     private Long totalPenalty = 0L;
 
     @Builder
-    public Member(String email, String password, String nickname, MemberRole role) {
+    public Member(String email, String password, String nickname, String profileUrl, MemberRole role) {
         this.email = email;
         this.password = password;
         this.nickname = nickname;
+        this.profileUrl = profileUrl;
         this.role = role != null ? role : MemberRole.USER;
     }
 
@@ -60,13 +60,12 @@ public class Member extends BaseTimeEntity implements UserDetails {
         this.password = password;
     }
 
-    public void updateWorkoutStats(int totalWorkoutDays, double achievementRate) {
+    public void updateWorkoutDays(int totalWorkoutDays) {
         this.totalWorkoutDays = totalWorkoutDays;
-        this.achievementRate = achievementRate;
     }
 
-    public void addPenalty(long penalty) {
-        this.totalPenalty += penalty;
+    public void updateTotalPenalty(long totalPenalty) {
+        this.totalPenalty = totalPenalty;
     }
 
     // UserDetails interface methods

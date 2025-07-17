@@ -11,6 +11,6 @@ import java.util.List;
 @Repository
 public interface WorkoutRoomMemberRepository extends JpaRepository<WorkoutRoomMember, Long> {
     List<WorkoutRoomMember> findByWorkoutRoomOrderByJoinedAt(WorkoutRoom workoutRoom);
-
+    List<WorkoutRoomMember> findByWorkoutRoomAndMemberNotOrderByJoinedAt(WorkoutRoom workoutRoom, Member member);
     boolean existsByMemberAndWorkoutRoom(Member member, WorkoutRoom workoutRoom);
 }

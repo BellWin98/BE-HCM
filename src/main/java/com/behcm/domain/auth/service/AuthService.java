@@ -30,6 +30,7 @@ public class AuthService {
     private final PasswordEncoder passwordEncoder;
     private final AuthenticationManager authenticationManager;
     private final JwtTokenProvider tokenProvider;
+    private final RefreshTokenService refreshTokenService;
 
     public AuthResponse register(RegisterRequest request) {
 
@@ -47,6 +48,8 @@ public class AuthService {
                 .build();
         Member savedMember = memberRepository.save(member);
         TokenResponse tokenResponse = tokenProvider.generateTokensByEmail(savedMember.getEmail());
+
+        refreshTokenService.storeRefreshToken(savedMember.getEmail(), tokenResponse.getRefreshToken());
 
         return new AuthResponse(
                 tokenResponse.getAccessToken(),
@@ -68,7 +71,30 @@ public class AuthService {
         Member member = memberRepository.findByEmail(request.getEmail())
                 .orElseThrow(() -> new CustomException(ErrorCode.MEMBER_NOT_FOUND));
 
+        refreshTokenService.storeRefreshToken(member.getEmail(), refreshToken);
+
         return new AuthResponse(accessToken, refreshToken, MemberResponse.from(member));
+    }
+
+    public AuthResponse refreshToken(String refreshToken) {
+        if (!tokenProvider.validateToken(refreshToken)) {
+            throw new CustomException(ErrorCode.INVALID_TOKEN);
+        }
+        
+        String email = tokenProvider.getEmailFromJwt(refreshToken);
+        
+        if (!refreshTokenService.isRefreshTokenValid(email, refreshToken)) {
+            throw new CustomException(ErrorCode.INVALID_TOKEN);
+        }
+        
+        Member member = memberRepository.findByEmail(email)
+                .orElseThrow(() -> new CustomException(ErrorCode.MEMBER_NOT_FOUND));
+        
+        TokenResponse tokenResponse = tokenProvider.generateTokensByEmail(email);
+        
+        refreshTokenService.storeRefreshToken(email, tokenResponse.getRefreshToken());
+        
+        return new AuthResponse(tokenResponse.getAccessToken(), tokenResponse.getRefreshToken(), MemberResponse.from(member));
     }
 
     @Transactional(readOnly = true)

@@ -1,7 +1,8 @@
-package com.behcm.domain.workout.service;
+package com.behcm.global.config.aws;
 
 import com.amazonaws.services.s3.AmazonS3Client;
 import com.amazonaws.services.s3.model.ObjectMetadata;
+import com.amazonaws.services.s3.model.PutObjectRequest;
 import com.behcm.global.exception.CustomException;
 import com.behcm.global.exception.ErrorCode;
 import lombok.RequiredArgsConstructor;
@@ -12,6 +13,9 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.text.SimpleDateFormat;
+import java.util.Date;
+import java.util.Locale;
 import java.util.UUID;
 
 @Service
@@ -19,13 +23,10 @@ import java.util.UUID;
 @Slf4j
 public class S3Service {
 
-    private final AmazonS3Client amazonS3Client;
-    
     @Value("${cloud.aws.s3.bucket}")
-    private String bucketName;
-    
-    @Value("${cloud.aws.region.static}")
-    private String region;
+    private String bucket;
+
+    private final AmazonS3Client amazonS3Client;
 
     public String uploadWorkoutImage(MultipartFile file) {
         if (file == null || file.isEmpty()) {
@@ -34,21 +35,24 @@ public class S3Service {
 
         // 파일 확장자 검증
         String originalFilename = file.getOriginalFilename();
-        if (originalFilename == null || !isValidImageFile(originalFilename)) {
+        if (!isValidImageFile(originalFilename)) {
             throw new CustomException(ErrorCode.INVALID_FILE_TYPE);
         }
 
+        String uploadFileUrl;
         String fileName = generateFileName(originalFilename);
-        String key = "workout-images/" + fileName;
+        String filePath = getFolderName();
+        String key = filePath + "/" +fileName;
 
         try (InputStream inputStream = file.getInputStream()){
-            ObjectMetadata metadata = new ObjectMetadata();
-            metadata.setContentLength(file.getSize());
-            metadata.setContentType(file.getContentType());
+            ObjectMetadata objectMetadata = new ObjectMetadata();
+            objectMetadata.setContentLength(file.getSize());
+            objectMetadata.setContentType(file.getContentType());
 
-            amazonS3Client.putObject(bucketName, originalFilename, file.getInputStream(), metadata);
+            amazonS3Client.putObject(new PutObjectRequest(bucket, key, inputStream, objectMetadata));
+            uploadFileUrl = getFileUrl(key);
 
-            return String.format("https://%s.s3.%s.amazonaws.com/%s", bucketName, region, key);
+            return uploadFileUrl;
         } catch (IOException e) {
             log.error("S3 파일 업로드 실패: {}", e.getMessage(), e);
             throw new CustomException(ErrorCode.FILE_UPLOAD_FAILED);
@@ -64,6 +68,18 @@ public class S3Service {
             }
         }
         return false;
+    }
+
+    public String getFileUrl(String key) {
+        return amazonS3Client.getUrl(bucket, key).toString();
+    }
+
+    private String getFolderName() {
+        SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd", Locale.getDefault());
+        Date date = new Date();
+        String str = sdf.format(date);
+
+        return str.replace("-", "/");
     }
 
     private String generateFileName(String originalFilename) {

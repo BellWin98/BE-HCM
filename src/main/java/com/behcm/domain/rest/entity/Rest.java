@@ -14,7 +14,7 @@ import java.time.LocalDate;
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @EntityListeners(AuditingEntityListener.class)
-public class RestInfo {
+public class Rest {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -34,7 +34,7 @@ public class RestInfo {
     private LocalDate endDate;
 
     @Builder
-    public RestInfo(WorkoutRoomMember workoutRoomMember, String reason, LocalDate startDate, LocalDate endDate) {
+    public Rest(WorkoutRoomMember workoutRoomMember, String reason, LocalDate startDate, LocalDate endDate) {
         this.workoutRoomMember = workoutRoomMember;
         this.reason = reason;
         this.startDate = startDate;

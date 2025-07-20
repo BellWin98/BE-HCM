@@ -2,8 +2,8 @@ package com.behcm.domain.workout.service;
 
 import com.behcm.domain.member.entity.Member;
 import com.behcm.domain.member.repository.MemberRepository;
-import com.behcm.domain.rest.dto.RestInfoResponse;
-import com.behcm.domain.rest.repository.RestInfoRepository;
+import com.behcm.domain.rest.dto.RestResponse;
+import com.behcm.domain.rest.repository.RestRepository;
 import com.behcm.domain.workout.dto.*;
 import com.behcm.domain.workout.entity.WorkoutRecord;
 import com.behcm.domain.workout.entity.WorkoutRoom;
@@ -32,7 +32,7 @@ public class WorkoutRoomService {
     private final WorkoutRoomMemberRepository workoutRoomMemberRepository;
     private final WorkoutRecordRepository workoutRecordRepository;
     private final MemberRepository memberRepository;
-    private final RestInfoRepository restInfoRepository;
+    private final RestRepository restRepository;
 
     public WorkoutRoomResponse createWorkoutRoom(Member owner, CreateWorkoutRoomRequest request) {
 
@@ -83,8 +83,8 @@ public class WorkoutRoomService {
                     List<WorkoutRecordResponse> workoutRecords = workoutRecordRepository.findAllByMember(workoutRoomMember.getMember()).stream()
                             .map(WorkoutRecordResponse::from)
                             .toList();
-                    List<RestInfoResponse> restInfoList = restInfoRepository.findAllByWorkoutRoomMember(workoutRoomMember).stream()
-                            .map(RestInfoResponse::from)
+                    List<RestResponse> restInfoList = restRepository.findAllByWorkoutRoomMember(workoutRoomMember).stream()
+                            .map(RestResponse::from)
                             .toList();
                     return WorkoutRoomMemberResponse.of(workoutRoomMember, workoutRecords, restInfoList);
                 })

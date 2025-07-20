@@ -1,6 +1,6 @@
 package com.behcm.domain.workout.dto;
 
-import com.behcm.domain.rest.dto.RestInfoResponse;
+import com.behcm.domain.rest.dto.RestResponse;
 import com.behcm.domain.workout.entity.WorkoutRoomMember;
 import lombok.Builder;
 import lombok.Getter;
@@ -20,12 +20,12 @@ public class WorkoutRoomMemberResponse {
     private Boolean isOnBreak;
     private LocalDateTime joinedAt;
     private List<WorkoutRecordResponse> workoutRecords;
-    private List<RestInfoResponse> restInfoList;
+    private List<RestResponse> restInfoList;
 
     public static WorkoutRoomMemberResponse of(
             WorkoutRoomMember workoutRoomMember,
             List<WorkoutRecordResponse> workoutRecords,
-            List<RestInfoResponse> restInfoList
+            List<RestResponse> restInfoList
     ) {
         return WorkoutRoomMemberResponse.builder()
                 .id(workoutRoomMember.getId())

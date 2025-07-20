@@ -45,7 +45,7 @@ public class WorkoutService {
         }
         
         // 이미지 S3에 업로드
-        String imageUrl = s3Service.uploadWorkoutImage(request.getImage());
+        String imageUrl = s3Service.uploadImage(request.getImage());
         
         // 운동 기록 저장
         WorkoutRecord workoutRecord = WorkoutRecord.builder()

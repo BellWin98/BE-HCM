@@ -28,7 +28,7 @@ public class S3Service {
 
     private final AmazonS3Client amazonS3Client;
 
-    public String uploadWorkoutImage(MultipartFile file) {
+    public String uploadImage(MultipartFile file) {
         if (file == null || file.isEmpty()) {
             throw new CustomException(ErrorCode.INVALID_FILE);
         }

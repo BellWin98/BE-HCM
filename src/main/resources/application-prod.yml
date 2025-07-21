@@ -1,0 +1,28 @@
+spring:
+  config:
+    activate:
+      on-profile: prod
+  datasource:
+    url: ENC(oQ4u3P3AFqyVyNghblrxR+vBbNHJsT9Ed0l2DUJT8Ex7okw7xmfsjhXFquE3zi+FoT1KHRUyC/4DnjYUtuQQsjoWusyB2BmFFleUkO3BVQ5eqi1Sj6x2dIctTdHzaJCwdKJCYJ013LtkvlqO62FHCT+byODHHZxgMzBqYSh3uRkqRJXl0EvZIWUv/PFIgSIVmIMQ4AnzpO4E++N/L/2Spg==)
+    username: ENC(KECJYP3aLTAaS/1ffwfn2Q==)
+    password: ENC(dH70a8PAfeYkwJ/fS9oTCyQ7nIM9QfYhlVqbVF+T/0A=)
+    driver-class-name: org.mariadb.jdbc.Driver
+  jpa:
+    properties:
+      hibernate:
+        format_sql: false
+        highlight_sql: false
+    hibernate:
+      ddl-auto: update
+    show-sql: false
+  data:
+    redis:
+      host: ENC(+mNfUF8iXbnTe2oQ58Z2WA==)
+      port: 6379
+      password: ENC(fFn96KY60L7dV8VvoBEASYnsAHjA4BPN)
+
+# 로깅 설정
+logging:
+  level:
+    root: WARN
+    com.behcm: INFO

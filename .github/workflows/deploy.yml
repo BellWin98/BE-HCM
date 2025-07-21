@@ -58,7 +58,7 @@ jobs:
           script: |
             sudo docker stop hcm || true
             sudo docker rm -f $(sudo docker ps --filter 'status=exited' -a -q) || true
-            sudo docker pull ${{ secrets.DOCKER_REPO }}/board
+            sudo docker pull ${{ secrets.DOCKER_REPO }}/hcm
             sudo docker rmi $(docker images -f "dangling=true" -q)
             export JASYPT_ENCRYPTOR_PASSWORD=$JASYPT_ENCRYPTOR_PASSWORD
             sudo docker-compose -f $DOCKER_COMPOSE_PATH up -d

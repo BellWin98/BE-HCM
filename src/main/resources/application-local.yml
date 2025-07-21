@@ -14,7 +14,7 @@ spring:
         highlight_sql: true
     hibernate:
       ddl-auto: update
-    show-sql: false
+    show-sql: true
   data:
     redis:
       host: localhost
@@ -23,5 +23,5 @@ spring:
 # 로깅 설정
 logging:
   level:
-    root: error
+    root: INFO
     com.behcm: INFO

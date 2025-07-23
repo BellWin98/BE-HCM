@@ -43,6 +43,8 @@ public class Member extends BaseTimeEntity implements UserDetails {
     @Column(nullable = false)
     private Long totalPenalty = 0L;
 
+    private String fcmToken;
+
     @Builder
     public Member(String email, String password, String nickname, String profileUrl, MemberRole role) {
         this.email = email;
@@ -66,6 +68,10 @@ public class Member extends BaseTimeEntity implements UserDetails {
 
     public void updateTotalPenalty(long totalPenalty) {
         this.totalPenalty = totalPenalty;
+    }
+
+    public void updateFcmToken(String fcmToken) {
+        this.fcmToken = fcmToken;
     }
 
     // UserDetails interface methods

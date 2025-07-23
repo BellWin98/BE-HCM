@@ -2,6 +2,7 @@ package com.behcm.domain.workout.service;
 
 import com.behcm.domain.member.entity.Member;
 import com.behcm.domain.member.repository.MemberRepository;
+import com.behcm.domain.notification.service.NotificationService;
 import com.behcm.domain.workout.dto.WorkoutRequest;
 import com.behcm.domain.workout.dto.WorkoutResponse;
 import com.behcm.domain.workout.entity.WorkoutRecord;
@@ -20,6 +21,7 @@ import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.time.temporal.TemporalAdjusters;
+import java.util.List;
 
 @Service
 @RequiredArgsConstructor
@@ -30,6 +32,7 @@ public class WorkoutService {
     private final WorkoutRoomMemberRepository workoutRoomMemberRepository;
     private final MemberRepository memberRepository;
     private final S3Service s3Service;
+    private final NotificationService notificationService;
 
     public WorkoutResponse authenticateWorkout(Member member, WorkoutRequest request) {
         // 현재 참여중인 운동방 조회
@@ -67,7 +70,8 @@ public class WorkoutService {
         }
         member.updateTotalWorkoutDays(member.getTotalWorkoutDays() + 1);
         memberRepository.save(member);
-        
+        sendNotificationToWorkRoomMembers(workoutRoom, member);
+
         return WorkoutResponse.from(savedWorkoutRecord);
     }
 
@@ -85,5 +89,22 @@ public class WorkoutService {
 
         // 경계값 포함: startOfWeek <= targetDate <= endOfWeek
         return !targetDate.isBefore(startOfWeek) && !targetDate.isAfter(endOfWeek);
+    }
+
+    private void sendNotificationToWorkRoomMembers(WorkoutRoom workoutRoom, Member member) {
+
+        // 본인 제외 같은 운동방의 다른 멤버들 조회
+//        List<WorkoutRoomMember> membersToSend = workoutRoomMemberRepository.findByWorkoutRoomAndMemberNotOrderByJoinedAt(workoutRoom, member);
+        List<WorkoutRoomMember> membersToSend = workoutRoomMemberRepository.findByWorkoutRoomOrderByJoinedAt(workoutRoom);
+
+        // 알림을 보낼 유효한 FCM 토큰 목록 필터링
+        List<String> tokens = membersToSend.stream()
+                .map(WorkoutRoomMember::getMember)
+                .filter(m -> m.getFcmToken() != null && !m.getFcmToken().isEmpty()) // FCM 토큰이 있는 사용자만
+                .map(Member::getFcmToken)
+                .toList();
+
+        // 비동기로 알림 발송
+        notificationService.sendWorkoutNotification(tokens, member.getNickname());
     }
 }

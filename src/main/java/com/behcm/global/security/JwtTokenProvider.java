@@ -6,7 +6,10 @@ import io.jsonwebtoken.*;
 import io.jsonwebtoken.security.Keys;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.stereotype.Component;
 
 import java.security.Key;
@@ -19,14 +22,18 @@ public class JwtTokenProvider {
     private final Key key;
     private final long accessTokenExpiration;
     private final long refreshTokenExpiration;
+    private final UserDetailsService userDetailsService;
 
     public JwtTokenProvider(
             @Value("${jwt.secret}") String secretKey,
             @Value("${jwt.access-token-expiration}") long accessTokenExpiration,
-            @Value("${jwt.refresh-token-expiration}") long refreshTokenExpiration) {
+            @Value("${jwt.refresh-token-expiration}") long refreshTokenExpiration,
+            UserDetailsService userDetailsService
+    ) {
         this.key = Keys.hmacShaKeyFor(secretKey.getBytes());
         this.accessTokenExpiration = accessTokenExpiration;
         this.refreshTokenExpiration = refreshTokenExpiration;
+        this.userDetailsService = userDetailsService;
     }
 
     public String generateAccessToken(Authentication authentication) {
@@ -57,11 +64,7 @@ public class JwtTokenProvider {
     }
 
     public String getEmailFromJwt(String token) {
-        Claims claims = Jwts.parserBuilder()
-                .setSigningKey(key)
-                .build()
-                .parseClaimsJws(token)
-                .getBody();
+        Claims claims = parseClaims(token);
 
         return claims.getSubject();
     }
@@ -88,6 +91,14 @@ public class JwtTokenProvider {
         return false;
     }
 
+    public Authentication getAuthentication(String token) {
+        Claims claims = parseClaims(token);
+        String memberEmail = claims.getSubject();
+        UserDetails userDetails = userDetailsService.loadUserByUsername(memberEmail);
+
+        return new UsernamePasswordAuthenticationToken(userDetails, "", userDetails.getAuthorities());
+    }
+
     private String generateToken(Authentication authentication, long tokenExpiration) {
         Member member = (Member) authentication.getPrincipal();
         Claims claims = Jwts.claims().setSubject(member.getUsername());
@@ -100,5 +111,17 @@ public class JwtTokenProvider {
                 .setExpiration(expiryDate)
                 .signWith(key, SignatureAlgorithm.HS512)
                 .compact();
+    }
+
+    private Claims parseClaims(String accessToken) {
+        try {
+            return Jwts.parserBuilder()
+                    .setSigningKey(key)
+                    .build()
+                    .parseClaimsJws(accessToken)
+                    .getBody();
+        } catch (ExpiredJwtException e) {
+            return e.getClaims();
+        }
     }
 }

@@ -10,5 +10,5 @@ import org.springframework.stereotype.Repository;
 @Repository
 public interface ChatMessageRepository extends JpaRepository<ChatMessage, Long> {
     // 채팅방 ID를 기준으로 메시지를 최신순으로 페이징하여 조회합니다.
-    Page<ChatMessage> findByWorkoutRoomOrderByTimestampDesc(WorkoutRoom workoutRoom, Pageable pageable);
+    Page<ChatMessage> findByWorkoutRoomOrderByTimestampAsc(WorkoutRoom workoutRoom, Pageable pageable);
 }

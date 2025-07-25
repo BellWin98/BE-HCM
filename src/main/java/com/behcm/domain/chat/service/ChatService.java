@@ -64,7 +64,7 @@ public class ChatService {
             throw new IllegalArgumentException("roomId와 실제 운동방 id 불일치");
         }
         Pageable pageable = PageRequest.of(page, size);
-        Page<ChatMessage> chatMessages = chatMessageRepository.findByWorkoutRoomOrderByTimestampDesc(workoutRoom, pageable);
+        Page<ChatMessage> chatMessages = chatMessageRepository.findByWorkoutRoomOrderByTimestampAsc(workoutRoom, pageable);
 
         return chatMessages.getContent().stream()
                 .map(ChatMessageResponse::from)

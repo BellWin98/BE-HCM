@@ -1,7 +1,7 @@
 package com.behcm.domain.chat.controller;
 
+import com.behcm.domain.chat.dto.ChatHistoryResponse;
 import com.behcm.domain.chat.dto.ChatMessageRequest;
-import com.behcm.domain.chat.dto.ChatMessageResponse;
 import com.behcm.domain.chat.service.ChatService;
 import com.behcm.domain.member.entity.Member;
 import com.behcm.global.common.ApiResponse;
@@ -14,12 +14,7 @@ import org.springframework.messaging.handler.annotation.Payload;
 import org.springframework.messaging.simp.stomp.StompHeaderAccessor;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.RestController;
-
-import java.util.List;
+import org.springframework.web.bind.annotation.*;
 
 @Slf4j
 @RestController
@@ -53,13 +48,23 @@ public class ChatController {
 
     // 채팅방의 이전 대화 기록을 가져오는 API
     @GetMapping("/api/chat/rooms/{roomId}/messages")
-    public ResponseEntity<ApiResponse<List<ChatMessageResponse>>> getChatHistory(
+    public ResponseEntity<ApiResponse<ChatHistoryResponse>> getChatHistory(
             @PathVariable Long roomId,
             @AuthenticationPrincipal Member member,
-            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(required = false) Long cursorId,
             @RequestParam(defaultValue = "20") int size
     ) {
-        List<ChatMessageResponse> response = chatService.getChatHistory(member, roomId, page, size);
+        ChatHistoryResponse response = chatService.getChatHistory(member, roomId, cursorId, size);
         return ResponseEntity.ok(ApiResponse.success(response));
+    }
+
+    // 유저가 채팅을 읽었음을 서버에 알리는 API
+    @PostMapping("/api/chat/rooms/{roomId}/read")
+    public ResponseEntity<ApiResponse<Void>> updateLastReadMessage(
+            @PathVariable Long roomId,
+            @AuthenticationPrincipal Member member
+    ) {
+        chatService.updateLastReadMessage(member, roomId);
+        return ResponseEntity.ok(ApiResponse.success(null));
     }
 }

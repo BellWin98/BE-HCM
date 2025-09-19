@@ -1,6 +1,7 @@
 package com.behcm.domain.workout.service;
 
 import com.behcm.domain.member.entity.Member;
+import com.behcm.domain.member.entity.MemberRole;
 import com.behcm.domain.member.repository.MemberRepository;
 import com.behcm.domain.rest.dto.RestResponse;
 import com.behcm.domain.rest.repository.RestRepository;
@@ -76,7 +77,7 @@ public class WorkoutRoomService {
 
     @Transactional(readOnly = true)
     public WorkoutRoomDetailResponse getCurrentWorkoutRoom(Member member) {
-        WorkoutRoom workoutRoom = workoutRoomRepository.findActiveWorkoutRoomByMember(member)
+        WorkoutRoom workoutRoom = workoutRoomRepository.findFirstByWorkoutRoomMembersMemberAndIsActiveTrue(member)
                 .orElseThrow(() -> new CustomException(ErrorCode.WORKOUT_ROOM_NOT_FOUND, "유저가 속한 운동방이 없습니다."));
         List<WorkoutRoomMemberResponse> workoutRoomMembers = workoutRoomMemberRepository.findByWorkoutRoomOrderByJoinedAt(workoutRoom).stream()
                 .map(workoutRoomMember -> {
@@ -96,8 +97,37 @@ public class WorkoutRoomService {
             return new WorkoutRoomDetailResponse(WorkoutRoomResponse.from(workoutRoom), workoutRoomMembers, WorkoutRecordResponse.from(currentMemberWorkoutRecord));
         }
         return new WorkoutRoomDetailResponse(WorkoutRoomResponse.from(workoutRoom), workoutRoomMembers, null);
+    }
 
+    @Transactional(readOnly = true)
+    public List<WorkoutRoomResponse> getJoinedWorkoutRooms(Member member) {
+        return workoutRoomMemberRepository.findWorkoutRoomMembersByMember(member).stream()
+                .map(workoutRoomMember -> WorkoutRoomResponse.from(workoutRoomMember.getWorkoutRoom()))
+                .toList();
+    }
 
+    @Transactional(readOnly = true)
+    public WorkoutRoomDetailResponse getJoinedWorkoutRoom(Long roomId, Member member) {
+        WorkoutRoom workoutRoom = workoutRoomRepository.findById(roomId)
+                .orElseThrow(() -> new CustomException(ErrorCode.WORKOUT_ROOM_NOT_FOUND, "유저가 속한 운동방이 없습니다."));
+        List<WorkoutRoomMemberResponse> workoutRoomMembers = workoutRoomMemberRepository.findByWorkoutRoomOrderByJoinedAt(workoutRoom).stream()
+                .map(workoutRoomMember -> {
+                    List<WorkoutRecordResponse> workoutRecords = workoutRecordRepository.findAllByMember(workoutRoomMember.getMember()).stream()
+                            .map(WorkoutRecordResponse::from)
+                            .toList();
+                    List<RestResponse> restInfoList = restRepository.findAllByWorkoutRoomMember(workoutRoomMember).stream()
+                            .map(RestResponse::from)
+                            .toList();
+                    return WorkoutRoomMemberResponse.of(workoutRoomMember, workoutRecords, restInfoList);
+                })
+                .toList();
+        Optional<WorkoutRecord> currentMemberWorkoutRecordOpt = workoutRecordRepository.findByMemberAndWorkoutDate(member, LocalDate.now());
+        WorkoutRecord currentMemberWorkoutRecord;
+        if (currentMemberWorkoutRecordOpt.isPresent()) {
+            currentMemberWorkoutRecord = currentMemberWorkoutRecordOpt.get();
+            return new WorkoutRoomDetailResponse(WorkoutRoomResponse.from(workoutRoom), workoutRoomMembers, WorkoutRecordResponse.from(currentMemberWorkoutRecord));
+        }
+        return new WorkoutRoomDetailResponse(WorkoutRoomResponse.from(workoutRoom), workoutRoomMembers, null);
     }
 
     @Transactional(readOnly = true)
@@ -112,8 +142,8 @@ public class WorkoutRoomService {
         WorkoutRoom workoutRoom = workoutRoomRepository.findById(workoutRoomId)
                 .orElseThrow(() -> new CustomException(ErrorCode.WORKOUT_ROOM_NOT_FOUND));
 
-        // 다른 운동방에 참여 중인지 확인
-        if (workoutRoomRepository.findActiveWorkoutRoomByMember(member).isPresent()) {
+        // 다른 운동방에 참여 중인지 확인 (관리자의 경우, 여러 운동방에 참여 가능)
+        if (member.getRole() == MemberRole.USER && workoutRoomRepository.findActiveWorkoutRoomByMember(member).isPresent()) {
             throw new CustomException(ErrorCode.ALREADY_JOINED_WORKOUT_ROOM);
         }
 
@@ -145,6 +175,6 @@ public class WorkoutRoomService {
 
     @Transactional(readOnly = true)
     public boolean isMemberInWorkoutRoom(Member member) {
-        return workoutRoomRepository.findActiveWorkoutRoomByMember(member).isPresent();
+        return !workoutRoomMemberRepository.findWorkoutRoomMembersByMember(member).isEmpty();
     }
 }

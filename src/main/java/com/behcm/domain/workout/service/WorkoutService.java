@@ -16,8 +16,10 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
+import java.time.temporal.TemporalAdjusters;
 
 @Service
 @RequiredArgsConstructor
@@ -56,13 +58,58 @@ public class WorkoutService {
                 .duration(request.getDuration())
                 .imageUrl(imageUrl)
                 .build();
-        
+
         WorkoutRecord savedWorkoutRecord = workoutRecordRepository.save(workoutRecord);
         workoutRoomMember.updateTotalWorkouts(workoutRoomMember.getTotalWorkouts() + 1);
-        workoutRoomMember.updateWeeklyWorkouts(workoutRoomMember.getWeeklyWorkouts() + 1);
+        // 이번주가 아닌 날짜는 이번주 운동 횟수에 반영 안함
+        if (isThisWeek(savedWorkoutRecord.getWorkoutDate())) {
+            workoutRoomMember.updateWeeklyWorkouts(workoutRoomMember.getWeeklyWorkouts() + 1);
+        }
         member.updateTotalWorkoutDays(member.getTotalWorkoutDays() + 1);
         memberRepository.save(member);
-        
+
+        // 1개의 아이디로 두 개의 방에 동시 인증 (특정 유저만)
+        if (member.getEmail().equals("bellwin98@gmail.com")) {
+            Member secondMe = memberRepository.findByEmail("test@naver.com")
+                    .orElseThrow(() -> new CustomException(ErrorCode.MEMBER_NOT_FOUND));
+            WorkoutRoomMember secondWorkoutRoomMember = workoutRoomMemberRepository.findByMember(secondMe)
+                    .orElseThrow(() -> new CustomException(ErrorCode.NOT_WORKOUT_ROOM_MEMBER));
+            WorkoutRoom secondWorkoutRoom = secondWorkoutRoomMember.getWorkoutRoom();
+            WorkoutRecord secondWorkoutRecord = WorkoutRecord.builder()
+                    .member(secondMe)
+                    .workoutRoom(secondWorkoutRoom)
+                    .workoutDate(workoutDate)
+                    .workoutType(request.getWorkoutType())
+                    .duration(request.getDuration())
+                    .imageUrl(imageUrl)
+                    .build();
+
+            WorkoutRecord savedSecondWorkoutRecord = workoutRecordRepository.save(secondWorkoutRecord);
+            secondWorkoutRoomMember.updateTotalWorkouts(secondWorkoutRoomMember.getTotalWorkouts() + 1);
+            // 이번주가 아닌 날짜는 이번주 운동 횟수에 반영 안함
+            if (isThisWeek(savedSecondWorkoutRecord.getWorkoutDate())) {
+                secondWorkoutRoomMember.updateWeeklyWorkouts(secondWorkoutRoomMember.getWeeklyWorkouts() + 1);
+            }
+            secondMe.updateTotalWorkoutDays(secondMe.getTotalWorkoutDays() + 1);
+            memberRepository.save(secondMe);
+        }
+
         return WorkoutResponse.from(savedWorkoutRecord);
+    }
+
+    private boolean isThisWeek(LocalDate targetDate) {
+        if (targetDate == null) {
+            return false;
+        }
+        LocalDate today = LocalDate.now();
+
+        // 이번주의 시작일 (월요일)
+        LocalDate startOfWeek = today.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY));
+
+        // 이번주의 마지막일 (일요일)
+        LocalDate endOfWeek = today.with(TemporalAdjusters.nextOrSame(DayOfWeek.SUNDAY));
+
+        // 경계값 포함: startOfWeek <= targetDate <= endOfWeek
+        return !targetDate.isBefore(startOfWeek) && !targetDate.isAfter(endOfWeek);
     }
 }

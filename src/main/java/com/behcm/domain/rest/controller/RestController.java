@@ -21,11 +21,11 @@ public class RestController {
     private final RestService restService;
 
     @PostMapping
-    public ResponseEntity<ApiResponse<RestResponse>> registerRestDay(
+    public ResponseEntity<ApiResponse<Void>> registerRestDay(
             @Valid @RequestBody RestRequest request,
             @AuthenticationPrincipal Member member
     ) {
-        RestResponse response = restService.registerRestDay(member, request);
-        return ResponseEntity.ok(ApiResponse.success(response));
+        restService.registerRestDay(member, request);
+        return ResponseEntity.ok(ApiResponse.success(null));
     }
 }

@@ -37,8 +37,8 @@ public class WorkoutRoomService {
 
     public WorkoutRoomResponse createWorkoutRoom(Member owner, CreateWorkoutRoomRequest request) {
 
-        // 이미 다른 활성 중인 운동방에 참여 중인지 확인
-        if (workoutRoomRepository.findActiveWorkoutRoomByMember(owner).isPresent()) {
+        // 이미 다른 활성 중인 운동방에 참여 중인지 확인 (관리자는 제외)
+        if (owner.getRole() == MemberRole.USER && workoutRoomRepository.findActiveWorkoutRoomByMember(owner).isPresent()) {
             throw new CustomException(ErrorCode.ALREADY_JOINED_WORKOUT_ROOM);
         }
 
@@ -77,6 +77,8 @@ public class WorkoutRoomService {
 
     @Transactional(readOnly = true)
     public WorkoutRoomDetailResponse getCurrentWorkoutRoom(Member member) {
+        // NOTE: ADMIN이 여러 운동방에 참여한 경우, 첫 번째 방만 반환됩니다.
+        // 모든 참여 방을 조회하려면 getJoinedWorkoutRooms() 메서드를 사용하세요.
         WorkoutRoom workoutRoom = workoutRoomRepository.findFirstByWorkoutRoomMembersMemberAndIsActiveTrue(member)
                 .orElseThrow(() -> new CustomException(ErrorCode.WORKOUT_ROOM_NOT_FOUND, "유저가 속한 운동방이 없습니다."));
         List<WorkoutRoomMemberResponse> workoutRoomMembers = workoutRoomMemberRepository.findByWorkoutRoomOrderByJoinedAt(workoutRoom).stream()
@@ -90,7 +92,7 @@ public class WorkoutRoomService {
                     return WorkoutRoomMemberResponse.of(workoutRoomMember, workoutRecords, restInfoList);
                 })
                 .toList();
-        Optional<WorkoutRecord> currentMemberWorkoutRecordOpt = workoutRecordRepository.findByMemberAndWorkoutDate(member, LocalDate.now());
+        Optional<WorkoutRecord> currentMemberWorkoutRecordOpt = workoutRecordRepository.findByMemberAndWorkoutRoomAndWorkoutDate(member, workoutRoom, LocalDate.now());
         WorkoutRecord currentMemberWorkoutRecord;
         if (currentMemberWorkoutRecordOpt.isPresent()) {
             currentMemberWorkoutRecord = currentMemberWorkoutRecordOpt.get();
@@ -121,7 +123,7 @@ public class WorkoutRoomService {
                     return WorkoutRoomMemberResponse.of(workoutRoomMember, workoutRecords, restInfoList);
                 })
                 .toList();
-        Optional<WorkoutRecord> currentMemberWorkoutRecordOpt = workoutRecordRepository.findByMemberAndWorkoutDate(member, LocalDate.now());
+        Optional<WorkoutRecord> currentMemberWorkoutRecordOpt = workoutRecordRepository.findByMemberAndWorkoutRoomAndWorkoutDate(member, workoutRoom, LocalDate.now());
         WorkoutRecord currentMemberWorkoutRecord;
         if (currentMemberWorkoutRecordOpt.isPresent()) {
             currentMemberWorkoutRecord = currentMemberWorkoutRecordOpt.get();

@@ -34,6 +34,7 @@ public class WorkoutController {
                 .build();
         
         WorkoutResponse response = workoutService.authenticateWorkout(member, request);
+        
         return ResponseEntity.ok(ApiResponse.success(response));
     }
 }

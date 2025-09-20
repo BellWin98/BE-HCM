@@ -13,6 +13,6 @@ import java.util.Optional;
 @Repository
 public interface WorkoutRecordRepository extends JpaRepository<WorkoutRecord, Long> {
     List<WorkoutRecord> findAllByMember(Member member);
-    Optional<WorkoutRecord> findByMemberAndWorkoutDate(Member member, LocalDate today);
+    Optional<WorkoutRecord> findByMemberAndWorkoutRoomAndWorkoutDate(Member member, WorkoutRoom workoutRoom, LocalDate today);
     boolean existsByMemberAndWorkoutRoomAndWorkoutDate(Member member, WorkoutRoom workoutRoom, LocalDate workoutDate);
 }

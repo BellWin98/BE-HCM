@@ -33,6 +33,7 @@ public class EmailVerificationService {
         }
     }
 
+    @Async("mailExecutor")
     public void sendVerificationEmail(String email) {
         checkEmailDuplicate(email);
 
@@ -79,14 +80,14 @@ public class EmailVerificationService {
         log.info("Email verification completed for: {}", email);
     }
 
-    @Async
     public void sendEmail(String to, String verificationCode) {
         try {
             SimpleMailMessage message = new SimpleMailMessage();
             message.setTo(to);
             message.setSubject("HCM 이메일 인증 코드");
             message.setText(String.format("""
-                    안녕하세요. 회원가입을 위한 이메일 인증 코드입니다.
+                    안녕하세요. 헬창마을(HCM) 입니다.
+                    회원가입을 위한 이메일 인증 코드입니다.
                     
                     인증 코드: %s
                     

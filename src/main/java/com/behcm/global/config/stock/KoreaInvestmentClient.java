@@ -4,12 +4,16 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.http.*;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestTemplate;
 
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 
 @Slf4j
 @Component
@@ -17,16 +21,30 @@ import java.util.Map;
 public class KoreaInvestmentClient {
 
     private final KoreaInvestmentProperties properties;
-//    private final RestTemplate restTemplate = new RestTemplate();
     private final RestTemplate restTemplate;
+    private final RedisTemplate<String, Object> redisTemplate;
     private final ObjectMapper objectMapper = new ObjectMapper();
-    private String accessToken;
+
+    private static final String ACCESS_TOKEN_KEY = "korea_investment:access_token";
+    private static final String ACCESS_TOKEN_EXPIRY_KEY = "korea_investment:access_token_expiry";
 
     public String getAccessToken() {
-        if (accessToken != null) {
-            return accessToken;
+        String cachedToken = (String) redisTemplate.opsForValue().get(ACCESS_TOKEN_KEY);
+        String cachedExpiry = (String) redisTemplate.opsForValue().get(ACCESS_TOKEN_EXPIRY_KEY);
+
+        if (cachedToken != null && cachedExpiry != null) {
+            LocalDateTime expiryTime = LocalDateTime.parse(cachedExpiry, DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
+            if (LocalDateTime.now().isBefore(expiryTime)) {
+                log.debug("Using cached access token");
+                return cachedToken;
+            }
         }
 
+        log.info("Fetching new access token from Korea Investment API");
+        return fetchNewAccessToken();
+    }
+
+    private String fetchNewAccessToken() {
         String url = properties.getBaseUrl() + "/oauth2/tokenP";
 
         HttpHeaders headers = new HttpHeaders();
@@ -42,8 +60,16 @@ public class KoreaInvestmentClient {
         try {
             ResponseEntity<String> response = restTemplate.exchange(url, HttpMethod.POST, request, String.class);
             JsonNode responseJson = objectMapper.readTree(response.getBody());
-            this.accessToken = responseJson.get("access_token").asText();
-            return this.accessToken;
+
+            String accessToken = responseJson.get("access_token").asText();
+            String expiryTimeStr = responseJson.get("access_token_token_expired").asText();
+            int expiresInSeconds = responseJson.get("expires_in").asInt();
+
+            redisTemplate.opsForValue().set(ACCESS_TOKEN_KEY, accessToken, expiresInSeconds - 300, TimeUnit.SECONDS);
+            redisTemplate.opsForValue().set(ACCESS_TOKEN_EXPIRY_KEY, expiryTimeStr, expiresInSeconds - 300, TimeUnit.SECONDS);
+
+            log.info("New access token cached successfully. Expires at: {}", expiryTimeStr);
+            return accessToken;
         } catch (Exception e) {
             log.error("Failed to get access token", e);
             throw new RuntimeException("Failed to get access token", e);

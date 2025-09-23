@@ -1,4 +1,4 @@
-package com.behcm.global;
+package com.behcm.global.config;
 
 import org.apache.hc.client5.http.classic.HttpClient;
 import org.apache.hc.client5.http.impl.classic.HttpClients;

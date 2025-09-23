@@ -52,3 +52,9 @@ springdoc:
     enabled: true
     path: /swagger-ui.html
   override-with-generic-response: false
+
+payment:
+  pg:
+    api-url: ${PG_API_URL:https://api.example-pg.com}
+    api-key: ${PG_API_KEY:your-pg-api-key}
+    merchant-id: ${PG_MERCHANT_ID:your-merchant-id}

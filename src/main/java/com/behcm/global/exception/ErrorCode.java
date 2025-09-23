@@ -47,6 +47,11 @@ public enum ErrorCode {
     INVALID_FILE(HttpStatus.BAD_REQUEST, "유효하지 않은 파일입니다."),
     FILE_TOO_LARGE(HttpStatus.BAD_REQUEST, "파일 크기가 너무 큽니다."),
 
+    // Penalty
+    PAYMENT_FAILED(HttpStatus.BAD_REQUEST, "결제 처리에 실패했습니다."),
+    INVALID_REQUEST(HttpStatus.BAD_REQUEST, "잘못된 요청입니다."),
+    NOT_FOUND(HttpStatus.NOT_FOUND, "요청한 리소스를 찾을 수 없습니다."),
+
     // Common
     INTERNAL_SERVER_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "서버 내부 오류가 발생했습니다."),
     INVALID_INPUT(HttpStatus.BAD_REQUEST, "잘못된 입력값입니다."),

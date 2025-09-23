@@ -15,9 +15,12 @@ import java.util.List;
 @AllArgsConstructor
 public class StockPortfolioResponse {
 
+    private BigDecimal totalBuyValue;
     private BigDecimal totalMarketValue;
     private BigDecimal totalProfitLoss;
     private BigDecimal totalProfitLossRate;
+    private BigDecimal depositToday;
+    private BigDecimal depositD2;
     private List<StockHoldingDto> holdings;
     private String lastUpdated;
 
@@ -32,6 +35,7 @@ public class StockPortfolioResponse {
         private BigDecimal averagePrice;
         private BigDecimal currentPrice;
         private BigDecimal marketValue;
+        private BigDecimal purchasePrice;
         private BigDecimal profitLoss;
         private BigDecimal profitLossRate;
         private String sector;

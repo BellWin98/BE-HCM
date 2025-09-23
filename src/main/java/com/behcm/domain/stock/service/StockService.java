@@ -107,6 +107,7 @@ public class StockService {
                         .averagePrice(new BigDecimal(holding.get("pchs_avg_pric").asText()))
                         .currentPrice(new BigDecimal(holding.get("prpr").asText()))
                         .marketValue(new BigDecimal(holding.get("evlu_amt").asText()))
+                        .purchasePrice(new BigDecimal(holding.get("pchs_amt").asText()))
                         .profitLoss(new BigDecimal(holding.get("evlu_pfls_amt").asText()))
                         .profitLossRate(new BigDecimal(holding.get("evlu_pfls_rt").asText()))
                         .sector("")
@@ -121,11 +122,16 @@ public class StockService {
         BigDecimal totalBuyValue = output2 != null ? new BigDecimal(output2.get(0).get("pchs_amt_smtl_amt").asText()) : BigDecimal.ZERO;
         BigDecimal totalProfitLoss = output2 != null ? new BigDecimal(output2.get(0).get("evlu_pfls_smtl_amt").asText()) : BigDecimal.ZERO;
         BigDecimal totalProfitLossRate = output2 != null ? new BigDecimal(String.valueOf(totalMarketValue.subtract(totalBuyValue).divide(totalBuyValue, 4, RoundingMode.HALF_UP).multiply(BigDecimal.valueOf(100)))) : BigDecimal.ZERO;
+        BigDecimal depositToday = output2 != null ? new BigDecimal(output2.get(0).get("dnca_tot_amt").asText()) : BigDecimal.ZERO;
+        BigDecimal depositD2 = output2 != null ? new BigDecimal(output2.get(0).get("prvs_rcdl_excc_amt").asText()) : BigDecimal.ZERO;
 
         return StockPortfolioResponse.builder()
+            .totalBuyValue(totalBuyValue)
             .totalMarketValue(totalMarketValue)
             .totalProfitLoss(totalProfitLoss)
             .totalProfitLossRate(totalProfitLossRate)
+            .depositToday(depositToday)
+            .depositD2(depositD2)
             .holdings(holdings)
             .lastUpdated(java.time.LocalDateTime.now().toString())
             .build();

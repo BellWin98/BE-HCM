@@ -7,6 +7,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.http.*;
 import org.springframework.stereotype.Component;
+import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestTemplate;
 
 import java.time.LocalDateTime;
@@ -72,12 +73,21 @@ public class KoreaInvestmentClient {
             return accessToken;
         } catch (Exception e) {
             log.error("Failed to get access token", e);
+            clearTokenCache();
             throw new RuntimeException("Failed to get access token", e);
         }
     }
 
     public JsonNode callApi(String endpoint, String transactionId) {
-        String url = properties.getBaseUrl() + endpoint;
+        return callApiWithRetry(endpoint, transactionId, null, false);
+    }
+
+    public JsonNode callApiWithParams(String endpoint, String transactionId, Map<String, String> params) {
+        return callApiWithRetry(endpoint, transactionId, params, false);
+    }
+
+    private JsonNode callApiWithRetry(String endpoint, String transactionId, Map<String, String> params, boolean isRetry) {
+        String url = buildUrl(endpoint, params);
 
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
@@ -90,14 +100,27 @@ public class KoreaInvestmentClient {
 
         try {
             ResponseEntity<String> response = restTemplate.exchange(url, HttpMethod.GET, request, String.class);
-            return objectMapper.readTree(response.getBody());
+            JsonNode responseJson = objectMapper.readTree(response.getBody());
+
+            if (isTokenExpiredResponse(responseJson)) {
+                return handleTokenExpiry(endpoint, transactionId, params, isRetry);
+            }
+
+            return responseJson;
+        } catch (HttpClientErrorException e) {
+            if (e.getStatusCode() == HttpStatus.UNAUTHORIZED && !isRetry) {
+                log.warn("Received 401 Unauthorized, attempting token refresh");
+                return handleTokenExpiry(endpoint, transactionId, params, isRetry);
+            }
+            log.error("Failed to call Korea Investment API: {}", url, e);
+            throw new RuntimeException("Failed to call Korea Investment API", e);
         } catch (Exception e) {
             log.error("Failed to call Korea Investment API: {}", url, e);
             throw new RuntimeException("Failed to call Korea Investment API", e);
         }
     }
 
-    public JsonNode callApiWithParams(String endpoint, String transactionId, Map<String, String> params) {
+    private String buildUrl(String endpoint, Map<String, String> params) {
         StringBuilder urlBuilder = new StringBuilder(properties.getBaseUrl() + endpoint);
 
         if (params != null && !params.isEmpty()) {
@@ -106,23 +129,38 @@ public class KoreaInvestmentClient {
             urlBuilder.setLength(urlBuilder.length() - 1);
         }
 
-        String url = urlBuilder.toString();
+        return urlBuilder.toString();
+    }
 
-        HttpHeaders headers = new HttpHeaders();
-        headers.setContentType(MediaType.APPLICATION_JSON);
-        headers.set("authorization", "Bearer " + getAccessToken());
-        headers.set("appkey", properties.getAppKey());
-        headers.set("appsecret", properties.getAppSecret());
-        headers.set("tr_id", transactionId);
-
-        HttpEntity<String> request = new HttpEntity<>(headers);
-
-        try {
-            ResponseEntity<String> response = restTemplate.exchange(url, HttpMethod.GET, request, String.class);
-            return objectMapper.readTree(response.getBody());
-        } catch (Exception e) {
-            log.error("Failed to call Korea Investment API: {}", url, e);
-            throw new RuntimeException("Failed to call Korea Investment API", e);
+    private boolean isTokenExpiredResponse(JsonNode responseJson) {
+        if (responseJson.has("rt_cd")) {
+            String rtCd = responseJson.get("rt_cd").asText();
+            return "EGW00123".equals(rtCd) || "EGW00124".equals(rtCd);
         }
+        return false;
+    }
+
+    private JsonNode handleTokenExpiry(String endpoint, String transactionId, Map<String, String> params, boolean isRetry) {
+        if (isRetry) {
+            log.error("Token refresh failed, cannot retry again");
+            throw new RuntimeException("Token refresh failed after retry");
+        }
+
+        log.info("Token expired, clearing cache and fetching new token");
+        clearTokenCache();
+
+        return callApiWithRetry(endpoint, transactionId, params, true);
+    }
+
+    private void clearTokenCache() {
+        redisTemplate.delete(ACCESS_TOKEN_KEY);
+        redisTemplate.delete(ACCESS_TOKEN_EXPIRY_KEY);
+        log.info("Token cache cleared");
+    }
+
+    public void forceTokenRefresh() {
+        log.info("Forcing token refresh");
+        clearTokenCache();
+        getAccessToken();
     }
 }

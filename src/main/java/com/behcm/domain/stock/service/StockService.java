@@ -1,8 +1,7 @@
 package com.behcm.domain.stock.service;
 
-import com.behcm.domain.stock.dto.StockInfoResponse;
-import com.behcm.domain.stock.dto.StockPortfolioResponse;
-import com.behcm.domain.stock.dto.StockPriceResponse;
+import com.behcm.domain.stock.dto.*;
+import com.behcm.domain.stock.dto.TradingProfitLossResponse.TradingProfitLossDto;
 import com.behcm.global.config.stock.KoreaInvestmentClient;
 import com.behcm.global.config.stock.KoreaInvestmentProperties;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -78,6 +77,27 @@ public class StockService {
 
     public void refreshStockData() {
         log.info("Stock data refresh requested");
+    }
+
+    public TradingProfitLossResponse getTradingProfitLoss(TradingProfitLossRequest request) {
+        Map<String, String> params = new HashMap<>();
+        params.put("CANO", properties.getAccountNumber());
+        params.put("SORT_DVSN", "00");
+        params.put("ACNT_PRDT_CD", properties.getAccountProductCode());
+        params.put("PDNO", "");
+        params.put("INQR_STRT_DT", request.getStartDate().replace("-", ""));
+        params.put("INQR_END_DT", request.getEndDate().replace("-", ""));
+        params.put("CTX_AREA_NK100", "");
+        params.put("CBLC_DVSN", "00");
+        params.put("CTX_AREA_FK100", "");
+
+        JsonNode response = koreaInvestmentClient.callApiWithParams(
+            "/uapi/domestic-stock/v1/trading/inquire-period-trade-profit",
+            "TTTC8715R",
+            params
+        );
+
+        return parseTradingProfitLossResponse(response, request);
     }
 
     private StockPortfolioResponse parsePortfolioResponse(JsonNode response) {
@@ -179,6 +199,54 @@ public class StockService {
             .listedDate("")
             .listedShares(0L)
             .description("")
+            .build();
+    }
+
+    private TradingProfitLossResponse parseTradingProfitLossResponse(JsonNode response, TradingProfitLossRequest request) {
+        JsonNode output1 = response.get("output1");
+        List<TradingProfitLossDto> trades = new ArrayList<>();
+
+        if (output1 != null && output1.isArray()) {
+            for (JsonNode trade : output1) {
+                TradingProfitLossDto tradeDto = TradingProfitLossDto.builder()
+                    .stockCode(trade.get("pdno").asText())
+                    .stockName(trade.get("prdt_name").asText())
+                    .tradeDate(trade.get("trad_dt").asText())
+                    .tradeType(trade.get("buy_qty").asText().equals("0") ? "SELL" : "BUY")
+                    .quantity(Integer.parseInt(trade.get("buy_qty").asText().equals("0") ? trade.get("sll_qty").asText() : trade.get("buy_qty").asText()))
+                    .price(new BigDecimal(trade.get("buy_qty").asText().equals("0") ? trade.get("sll_pric").asText() : trade.get("pchs_unpr").asText()))
+                    .amount(new BigDecimal(trade.get("buy_qty").asText().equals("0") ? trade.get("sll_amt").asText() : trade.get("buy_amt").asText()))
+                    .profitLoss(new BigDecimal(trade.get("rlzt_pfls").asText()))
+                    .profitLossRate(new BigDecimal(trade.get("pfls_rt").asText()))
+                    .fee(new BigDecimal(trade.get("fee").asText()))
+                    .tax(new BigDecimal(trade.get("tl_tax") != null ? trade.get("tl_tax").asText() : "0"))
+                    .build();
+
+                trades.add(tradeDto);
+            }
+        }
+
+        JsonNode output2 = response.get("output2");
+
+        BigDecimal totalBuyAmount = new BigDecimal(output2.get("buy_excc_amt_smtl").asText());
+        BigDecimal totalSellAmount = new BigDecimal(output2.get("sll_excc_amt_smtl").asText());
+        BigDecimal totalProfitLoss = new BigDecimal(output2.get("tot_rlzt_pfls").asText());
+        BigDecimal totalProfitLossRate = new BigDecimal(output2.get("tot_pftrt").asText());
+        BigDecimal totalFee = new BigDecimal(output2.get("tot_fee").asText());
+        BigDecimal totalTax = new BigDecimal(output2.get("tot_tltx").asText());
+
+        String period = String.format("%s ~ %s", request.getStartDate(), request.getEndDate());
+
+        return TradingProfitLossResponse.builder()
+            .period(period)
+            .totalBuyAmount(totalBuyAmount)
+            .totalSellAmount(totalSellAmount)
+            .totalProfitLoss(totalProfitLoss)
+            .totalProfitLossRate(totalProfitLossRate)
+            .totalFee(totalFee)
+            .totalTax(totalTax)
+            .tradeCount(trades.size())
+            .trades(trades)
             .build();
     }
 }

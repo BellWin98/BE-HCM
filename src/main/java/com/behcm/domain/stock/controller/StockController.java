@@ -1,8 +1,6 @@
 package com.behcm.domain.stock.controller;
 
-import com.behcm.domain.stock.dto.StockInfoResponse;
-import com.behcm.domain.stock.dto.StockPortfolioResponse;
-import com.behcm.domain.stock.dto.StockPriceResponse;
+import com.behcm.domain.stock.dto.*;
 import com.behcm.domain.stock.service.StockService;
 import com.behcm.global.common.ApiResponse;
 import lombok.RequiredArgsConstructor;
@@ -42,5 +40,13 @@ public class StockController {
     public ResponseEntity<ApiResponse<Void>> refreshStockData() {
         stockService.refreshStockData();
         return ResponseEntity.ok(ApiResponse.success(null));
+    }
+
+    @PostMapping("/trading-profit-loss")
+    public ResponseEntity<ApiResponse<TradingProfitLossResponse>> getTradingProfitLoss(
+            @RequestBody TradingProfitLossRequest request
+    ) {
+        TradingProfitLossResponse profitLoss = stockService.getTradingProfitLoss(request);
+        return ResponseEntity.ok(ApiResponse.success(profitLoss));
     }
 }

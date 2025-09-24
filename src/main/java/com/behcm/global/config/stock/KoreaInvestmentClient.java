@@ -95,6 +95,7 @@ public class KoreaInvestmentClient {
         headers.set("appkey", properties.getAppKey());
         headers.set("appsecret", properties.getAppSecret());
         headers.set("tr_id", transactionId);
+        headers.set("custtype", "P");
 
         HttpEntity<String> request = new HttpEntity<>(headers);
 

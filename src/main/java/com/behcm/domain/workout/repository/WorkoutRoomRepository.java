@@ -20,4 +20,8 @@ public interface WorkoutRoomRepository extends JpaRepository<WorkoutRoom, Long> 
 
     @Query("SELECT wr FROM WorkoutRoom wr WHERE wr.isActive = true AND (wr.endDate IS NULL OR wr.endDate >= CURRENT_DATE)")
     List<WorkoutRoom> findActiveRooms();
+
+    List<WorkoutRoom> findByIsActiveTrue();
+    Optional<WorkoutRoom> findByEntryCode(String entryCode);
+    Optional<WorkoutRoom> findByIdAndIsActiveTrue(Long roomId);
 }

@@ -1,9 +1,9 @@
 package com.behcm.domain.penalty.service;
 
 import com.behcm.domain.penalty.dto.*;
-import com.behcm.domain.penalty.entity.BankAccount;
+import com.behcm.domain.penalty.entity.PenaltyAccount;
 import com.behcm.domain.penalty.entity.Penalty;
-import com.behcm.domain.penalty.repository.BankAccountRepository;
+import com.behcm.domain.penalty.repository.PenaltyAccountRepository;
 import com.behcm.domain.penalty.repository.PenaltyRepository;
 import com.behcm.domain.rest.entity.Rest;
 import com.behcm.domain.rest.repository.RestRepository;
@@ -36,7 +36,7 @@ public class PenaltyService {
     private final WorkoutRoomRepository workoutRoomRepository;
     private final WorkoutRecordRepository workoutRecordRepository;
     private final RestRepository restRepository;
-    private final BankAccountRepository bankAccountRepository;
+    private final PenaltyAccountRepository penaltyAccountRepository;
     private final PenaltyRepository penaltyRepository;
     private final PaymentService paymentService;
 
@@ -59,41 +59,50 @@ public class PenaltyService {
         log.info("Weekly penalty calculation completed");
     }
 
-    public BankAccountInfo getBankAccount(Long roomId) {
+    public PenaltyAccountInfo getPenaltyAccount(Long roomId) {
         WorkoutRoom workoutRoom = workoutRoomRepository.findById(roomId)
                 .orElseThrow(() -> new CustomException(ErrorCode.NOT_FOUND));
-        BankAccount bankAccount = bankAccountRepository.findByWorkoutRoom(workoutRoom)
+        PenaltyAccount penaltyAccount = penaltyAccountRepository.findByWorkoutRoom(workoutRoom)
                 .orElseThrow(() -> new CustomException(ErrorCode.NOT_FOUND));
 
-        return BankAccountInfo.from(bankAccount);
+        return PenaltyAccountInfo.from(penaltyAccount);
     }
 
     @Transactional
-    public BankAccountInfo upsertBankAccount(Long roomId, BankAccountRequest request) {
+    public PenaltyAccountInfo upsertPenaltyAccount(Long roomId, PenaltyAccountRequest request) {
         WorkoutRoom workoutRoom = workoutRoomRepository.findById(roomId)
                 .orElseThrow(() -> new CustomException(ErrorCode.NOT_FOUND));
 
-        BankAccount bankAccount = bankAccountRepository.findByWorkoutRoom(workoutRoom)
+        PenaltyAccount penaltyAccount = penaltyAccountRepository.findByWorkoutRoom(workoutRoom)
                 .map(existingAccount -> {
                     existingAccount.updateAccountInfo(
                             request.getBankName(),
                             request.getAccountNumber(),
-                            request.getHolderName()
+                            request.getAccountHolder()
                     );
                     return existingAccount;
                 })
-                .orElse(BankAccount.builder()
+                .orElse(PenaltyAccount.builder()
                         .bankName(request.getBankName())
                         .accountNumber(request.getAccountNumber())
-                        .holderName(request.getHolderName())
+                        .accountHolder(request.getAccountHolder())
                         .workoutRoom(workoutRoom)
                         .build());
 
-        bankAccount = bankAccountRepository.save(bankAccount);
-        return BankAccountInfo.from(bankAccount);
+        penaltyAccount = penaltyAccountRepository.save(penaltyAccount);
+        return PenaltyAccountInfo.from(penaltyAccount);
     }
 
-    public PenaltyUnpaidSummary getUnpaidPenaltySummary(Long roomId) {
+    @Transactional
+    public void deletePenaltyAccount(Long roomId) {
+        WorkoutRoom workoutRoom = workoutRoomRepository.findById(roomId)
+                .orElseThrow(() -> new CustomException(ErrorCode.NOT_FOUND));
+
+        penaltyAccountRepository.findByWorkoutRoom(workoutRoom)
+                .ifPresent(penaltyAccountRepository::delete);
+    }
+
+    public PenaltyUnpaidSummary getPenaltyRecords(Long roomId) {
         List<Penalty> unpaidPenalties;
 
         if (roomId != null) {

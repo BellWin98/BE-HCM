@@ -8,27 +8,33 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
-@RequestMapping("/api/workout/rooms")
+@RequestMapping("/api/penalty/rooms")
 @RequiredArgsConstructor
 public class PenaltyController {
 
     private final PenaltyService penaltyService;
 
-    @GetMapping("{roomId}/penalty/account")
-    public ResponseEntity<ApiResponse<BankAccountInfo>> getBankAccount(@PathVariable Long roomId) {
-        BankAccountInfo response = penaltyService.getBankAccount(roomId);
+    @PostMapping("/{roomId}/account")
+    public ResponseEntity<ApiResponse<PenaltyAccountInfo>> upsertPenaltyAccount(@PathVariable Long roomId, @RequestBody PenaltyAccountRequest request) {
+        PenaltyAccountInfo response = penaltyService.upsertPenaltyAccount(roomId, request);
         return ResponseEntity.ok(ApiResponse.success(response));
     }
 
-    @PostMapping("/{roomId}/penalty/account")
-    public ResponseEntity<ApiResponse<BankAccountInfo>> upsertBankAccount(@PathVariable Long roomId, @RequestBody BankAccountRequest request) {
-        BankAccountInfo response = penaltyService.upsertBankAccount(roomId, request);
+    @GetMapping("{roomId}/account")
+    public ResponseEntity<ApiResponse<PenaltyAccountInfo>> getPenaltyAccount(@PathVariable Long roomId) {
+        PenaltyAccountInfo response = penaltyService.getPenaltyAccount(roomId);
         return ResponseEntity.ok(ApiResponse.success(response));
     }
 
-    @GetMapping("/{roomId}/penalty/unpaid/summary")
-    public ResponseEntity<ApiResponse<PenaltyUnpaidSummary>> getUnpaidPenaltySummary(@PathVariable Long roomId) {
-        PenaltyUnpaidSummary response = penaltyService.getUnpaidPenaltySummary(roomId);
+    @DeleteMapping("/{roomId}/account")
+    public ResponseEntity<ApiResponse<Void>> deletePenaltyAccount(@PathVariable Long roomId) {
+        penaltyService.deletePenaltyAccount(roomId);
+        return ResponseEntity.ok(ApiResponse.success(null));
+    }
+
+    @GetMapping("/{roomId}/penalty/records")
+    public ResponseEntity<ApiResponse<PenaltyUnpaidSummary>> getPenaltyRecords(@PathVariable Long roomId) {
+        PenaltyUnpaidSummary response = penaltyService.getPenaltyRecords(roomId);
         return ResponseEntity.ok(ApiResponse.success(response));
     }
 

@@ -11,7 +11,7 @@ import lombok.NoArgsConstructor;
 @Entity
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
-public class BankAccount extends BaseTimeEntity {
+public class PenaltyAccount extends BaseTimeEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -24,23 +24,23 @@ public class BankAccount extends BaseTimeEntity {
     private String accountNumber;
 
     @Column(nullable = false, length = 30)
-    private String holderName;
+    private String accountHolder;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "workout_room_id", nullable = false)
     private WorkoutRoom workoutRoom;
 
     @Builder
-    public BankAccount(String bankName, String accountNumber, String holderName, WorkoutRoom workoutRoom) {
+    public PenaltyAccount(String bankName, String accountNumber, String accountHolder, WorkoutRoom workoutRoom) {
         this.bankName = bankName;
         this.accountNumber = accountNumber;
-        this.holderName = holderName;
+        this.accountHolder = accountHolder;
         this.workoutRoom = workoutRoom;
     }
 
-    public void updateAccountInfo(String bankName, String accountNumber, String holderName) {
+    public void updateAccountInfo(String bankName, String accountNumber, String accountHolder) {
         this.bankName = bankName;
         this.accountNumber = accountNumber;
-        this.holderName = holderName;
+        this.accountHolder = accountHolder;
     }
 }

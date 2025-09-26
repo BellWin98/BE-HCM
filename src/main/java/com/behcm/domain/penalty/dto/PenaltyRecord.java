@@ -18,7 +18,6 @@ public class PenaltyRecord {
     private LocalDate weekEndDate;
     private Boolean isPaid;
     private LocalDateTime paidAt;
-    private LocalDateTime createdAt;
 
     public static PenaltyRecord from(Penalty penalty) {
         return PenaltyRecord.builder()
@@ -30,7 +29,6 @@ public class PenaltyRecord {
                 .weekEndDate(penalty.getWeekEndDate())
                 .isPaid(penalty.getIsPaid())
                 .paidAt(penalty.getPaidAt())
-                .createdAt(penalty.getCreatedAt())
                 .build();
     }
 }

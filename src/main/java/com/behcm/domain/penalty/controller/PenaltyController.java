@@ -7,6 +7,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
+
 @RestController
 @RequestMapping("/api/penalty/rooms")
 @RequiredArgsConstructor
@@ -32,9 +34,9 @@ public class PenaltyController {
         return ResponseEntity.ok(ApiResponse.success(null));
     }
 
-    @GetMapping("/{roomId}/penalty/records")
-    public ResponseEntity<ApiResponse<PenaltyUnpaidSummary>> getPenaltyRecords(@PathVariable Long roomId) {
-        PenaltyUnpaidSummary response = penaltyService.getPenaltyRecords(roomId);
+    @GetMapping("/{roomId}/records")
+    public ResponseEntity<ApiResponse<List<PenaltyRecord>>> getPenaltyRecords(@PathVariable Long roomId) {
+        List<PenaltyRecord> response = penaltyService.getPenaltyRecords(roomId);
         return ResponseEntity.ok(ApiResponse.success(response));
     }
 

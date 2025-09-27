@@ -11,22 +11,24 @@ import java.time.LocalDateTime;
 @Builder
 public class PenaltyRecord {
     private Long id;
-    private Long penaltyAmount;
-    private Integer requiredWorkouts;
-    private Integer actualWorkouts;
+    private Long workoutRoomMemberId;
     private LocalDate weekStartDate;
     private LocalDate weekEndDate;
+    private Integer requiredWorkouts;
+    private Integer actualWorkouts;
+    private Long penaltyAmount;
     private Boolean isPaid;
     private LocalDateTime paidAt;
 
     public static PenaltyRecord from(Penalty penalty) {
         return PenaltyRecord.builder()
                 .id(penalty.getId())
-                .penaltyAmount(penalty.getPenaltyAmount())
-                .requiredWorkouts(penalty.getRequiredWorkouts())
-                .actualWorkouts(penalty.getActualWorkouts())
+                .workoutRoomMemberId(penalty.getWorkoutRoomMember().getId())
                 .weekStartDate(penalty.getWeekStartDate())
                 .weekEndDate(penalty.getWeekEndDate())
+                .requiredWorkouts(penalty.getRequiredWorkouts())
+                .actualWorkouts(penalty.getActualWorkouts())
+                .penaltyAmount(penalty.getPenaltyAmount())
                 .isPaid(penalty.getIsPaid())
                 .paidAt(penalty.getPaidAt())
                 .build();

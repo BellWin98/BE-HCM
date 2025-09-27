@@ -19,4 +19,7 @@ public interface PenaltyRepository extends JpaRepository<Penalty, Long> {
 
     @Query("SELECT p FROM Penalty p WHERE p.id IN :ids")
     List<Penalty> findByIds(@Param("ids") List<Long> ids);
+
+    @Query("SELECT p FROM Penalty p WHERE p.workoutRoomMember.workoutRoom.id = :roomId")
+    List<Penalty> findAllByWorkoutRoomId(@Param("roomId") Long roomId);
 }

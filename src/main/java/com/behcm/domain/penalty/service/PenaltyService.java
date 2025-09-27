@@ -102,20 +102,26 @@ public class PenaltyService {
                 .ifPresent(penaltyAccountRepository::delete);
     }
 
-    public PenaltyUnpaidSummary getPenaltyRecords(Long roomId) {
-        List<Penalty> unpaidPenalties;
+//    public PenaltyUnpaidSummary getPenaltyRecords(Long roomId) {
+//        List<Penalty> unpaidPenalties;
+//
+//        if (roomId != null) {
+//            unpaidPenalties = penaltyRepository.findUnpaidByRoomId(roomId);
+//        } else {
+//            unpaidPenalties = penaltyRepository.findAllUnpaid();
+//        }
+//
+//        List<PenaltyRecord> records = unpaidPenalties.stream()
+//                .map(PenaltyRecord::from)
+//                .collect(Collectors.toList());
+//
+//        return PenaltyUnpaidSummary.from(records);
+//    }
 
-        if (roomId != null) {
-            unpaidPenalties = penaltyRepository.findUnpaidByRoomId(roomId);
-        } else {
-            unpaidPenalties = penaltyRepository.findAllUnpaid();
-        }
-
-        List<PenaltyRecord> records = unpaidPenalties.stream()
+    public List<PenaltyRecord> getPenaltyRecords(Long roomId) {
+        return penaltyRepository.findAllByWorkoutRoomId(roomId).stream()
                 .map(PenaltyRecord::from)
-                .collect(Collectors.toList());
-
-        return PenaltyUnpaidSummary.from(records);
+                .toList();
     }
 
     @Transactional

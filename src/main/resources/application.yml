@@ -58,3 +58,7 @@ payment:
     api-url: ${PG_API_URL:https://api.example-pg.com}
     api-key: ${PG_API_KEY:your-pg-api-key}
     merchant-id: ${PG_MERCHANT_ID:your-merchant-id}
+
+toss:
+  payments:
+    secret-key: ${TOSS_PAYMENTS_SECRET_KEY:test_sk_zXLkKEypNArWmo50nX3lmeaxYG5R}

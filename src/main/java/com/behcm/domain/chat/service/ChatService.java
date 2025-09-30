@@ -37,20 +37,20 @@ public class ChatService {
     private final RedisTemplate<String, Object> redisTemplate;
 
     public void sendMessage(Long roomId, Member sender, ChatMessageRequest request) {
-        WorkoutRoomMember workoutRoomSender = workoutRoomMemberRepository.findByMember(sender)
+        WorkoutRoomMember wrm = workoutRoomMemberRepository.findWorkoutRoomMembersByMember(sender).stream()
+                .filter(workoutRoomMember -> workoutRoomMember.getWorkoutRoom().getId().equals(roomId))
+                .findFirst()
                 .orElseThrow(() -> new CustomException(ErrorCode.NOT_WORKOUT_ROOM_MEMBER));
-        if (!roomId.equals(workoutRoomSender.getWorkoutRoom().getId())) {
-            throw new IllegalArgumentException("roomId와 실제 운동방 id 불일치");
-        }
+
         ChatMessage chatMessage = ChatMessage.builder()
                 .sender(sender)
-                .workoutRoom(workoutRoomSender.getWorkoutRoom())
+                .workoutRoom(wrm.getWorkoutRoom())
                 .content(request.getContent())
                 .messageType(request.getType())
                 .build();
 
         // 보낸 사람은 자동으로 읽음 처리
-        chatMessage.addReadBy(workoutRoomSender.getNickname());
+        chatMessage.addReadBy(wrm.getNickname());
 
         ChatMessage savedChatMessage = chatMessageRepository.save(chatMessage);
         ChatMessageResponse response = ChatMessageResponse.from(savedChatMessage);
@@ -60,21 +60,19 @@ public class ChatService {
 
     @Transactional(readOnly = true)
     public ChatHistoryResponse getChatHistory(Member member, Long roomId, Long cursorId, int size) {
-        WorkoutRoomMember workoutRoomMember = workoutRoomMemberRepository.findByMember(member)
+        WorkoutRoomMember wrm = workoutRoomMemberRepository.findWorkoutRoomMembersByMember(member).stream()
+                .filter(workoutRoomMember -> workoutRoomMember.getWorkoutRoom().getId().equals(roomId))
+                .findFirst()
                 .orElseThrow(() -> new CustomException(ErrorCode.NOT_WORKOUT_ROOM_MEMBER));
-        WorkoutRoom workoutRoom = workoutRoomMember.getWorkoutRoom();
-        if (!roomId.equals(workoutRoom.getId())) {
-            throw new IllegalArgumentException("roomId와 실제 운동방 id 불일치");
-        }
 
         // 1. 초기 로드: cursorId가 null 일 때
         if (cursorId == null) {
-            return getInitialMessages(workoutRoom, workoutRoomMember, size);
+            return getInitialMessages(wrm.getWorkoutRoom(), wrm, size);
         }
 
         // 2. 이전 기록 스크롤 로드
         Pageable pageable = PageRequest.of(0, size);
-        Slice<ChatMessage> messageSlice = chatMessageRepository.findByWorkoutRoomAndIdLessThanOrderByIdDesc(workoutRoom, cursorId, pageable);
+        Slice<ChatMessage> messageSlice = chatMessageRepository.findByWorkoutRoomAndIdLessThanOrderByIdDesc(wrm.getWorkoutRoom(), cursorId, pageable);
         List<ChatMessageResponse> messages = messageSlice.getContent().stream()
                 .map(ChatMessageResponse::from)
                 .sorted(Comparator.comparing(ChatMessageResponse::getId))
@@ -86,27 +84,27 @@ public class ChatService {
     }
 
     public void updateLastReadMessage(Member member, Long roomId) {
-        WorkoutRoomMember workoutRoomMember = workoutRoomMemberRepository.findByMember(member)
+        WorkoutRoomMember wrm = workoutRoomMemberRepository.findWorkoutRoomMembersByMember(member).stream()
+                .filter(workoutRoomMember -> workoutRoomMember.getWorkoutRoom().getId().equals(roomId))
+                .findFirst()
                 .orElseThrow(() -> new CustomException(ErrorCode.NOT_WORKOUT_ROOM_MEMBER));
-        WorkoutRoom workoutRoom = workoutRoomMember.getWorkoutRoom();
 
         // 현재 채팅방의 가장 최신 메시지를 찾음
-        ChatMessage latestMessage = chatMessageRepository.findFirstByWorkoutRoomOrderByIdDesc(workoutRoom);
+        ChatMessage latestMessage = chatMessageRepository.findFirstByWorkoutRoomOrderByIdDesc(wrm.getWorkoutRoom());
         if (latestMessage != null) {
-            workoutRoomMember.setLastReadMessage(latestMessage);
-            workoutRoomMemberRepository.save(workoutRoomMember);
+            wrm.setLastReadMessage(latestMessage);
+            workoutRoomMemberRepository.save(wrm);
         }
     }
 
     public void markAsRead(Long roomId, Long messageId, Member member) {
-        WorkoutRoomMember workoutRoomMember = workoutRoomMemberRepository.findByMember(member)
+        WorkoutRoomMember wrm = workoutRoomMemberRepository.findWorkoutRoomMembersByMember(member).stream()
+                .filter(workoutRoomMember -> workoutRoomMember.getWorkoutRoom().getId().equals(roomId))
+                .findFirst()
                 .orElseThrow(() -> new CustomException(ErrorCode.NOT_WORKOUT_ROOM_MEMBER));
-        if (!roomId.equals(workoutRoomMember.getWorkoutRoom().getId())) {
-            throw new IllegalArgumentException("roomId와 실제 운동방 id 불일치");
-        }
         ChatMessage chatMessage = chatMessageRepository.findById(messageId)
                 .orElseThrow(() -> new CustomException(ErrorCode.CHAT_MESSAGE_NOT_FOUND));
-        chatMessage.addReadBy(workoutRoomMember.getNickname());
+        chatMessage.addReadBy(wrm.getNickname());
         chatMessageRepository.save(chatMessage);
 
         // 읽음 상태 업데이트 정보를 브로드캐스팅

@@ -15,4 +15,5 @@ public interface WorkoutRoomMemberRepository extends JpaRepository<WorkoutRoomMe
     List<WorkoutRoomMember> findByWorkoutRoomAndMemberNotOrderByJoinedAt(WorkoutRoom workoutRoom, Member member);
     boolean existsByMemberAndWorkoutRoom(Member member, WorkoutRoom workoutRoom);
     Optional<WorkoutRoomMember> findByMember(Member member);
+    List<WorkoutRoomMember> findWorkoutRoomMembersByMember(Member member);
 }

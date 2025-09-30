@@ -20,6 +20,7 @@ import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.time.temporal.TemporalAdjusters;
+import java.util.List;
 
 @Service
 @RequiredArgsConstructor
@@ -32,69 +33,39 @@ public class WorkoutService {
     private final S3Service s3Service;
 
     public WorkoutResponse authenticateWorkout(Member member, WorkoutRequest request) {
-        // 현재 참여중인 운동방 조회
-        WorkoutRoomMember workoutRoomMember = workoutRoomMemberRepository.findByMember(member)
-                .orElseThrow(() -> new CustomException(ErrorCode.WORKOUT_ROOM_NOT_FOUND));
-
-        WorkoutRoom workoutRoom = workoutRoomMember.getWorkoutRoom();
-        
-        // 운동 날짜 파싱
         LocalDate workoutDate = LocalDate.parse(request.getWorkoutDate(), DateTimeFormatter.ISO_LOCAL_DATE);
-        
-        // 중복 운동 인증 체크
-        if (workoutRecordRepository.existsByMemberAndWorkoutRoomAndWorkoutDate(member, workoutRoom, workoutDate)) {
-            throw new CustomException(ErrorCode.WORKOUT_ALREADY_AUTHENTICATED);
-        }
-        
         // 이미지 S3에 업로드
         String imageUrl = s3Service.uploadImage(request.getImage());
-        
-        // 운동 기록 저장
-        WorkoutRecord workoutRecord = WorkoutRecord.builder()
-                .member(member)
-                .workoutRoom(workoutRoom)
-                .workoutDate(workoutDate)
-                .workoutType(request.getWorkoutType())
-                .duration(request.getDuration())
-                .imageUrl(imageUrl)
-                .build();
-
-        WorkoutRecord savedWorkoutRecord = workoutRecordRepository.save(workoutRecord);
-        workoutRoomMember.updateTotalWorkouts(workoutRoomMember.getTotalWorkouts() + 1);
-        // 이번주가 아닌 날짜는 이번주 운동 횟수에 반영 안함
-        if (isThisWeek(savedWorkoutRecord.getWorkoutDate())) {
-            workoutRoomMember.updateWeeklyWorkouts(workoutRoomMember.getWeeklyWorkouts() + 1);
+        List<WorkoutRoomMember> wrms = workoutRoomMemberRepository.findWorkoutRoomMembersByMember(member);
+        if (wrms.isEmpty()) {
+            throw new CustomException(ErrorCode.WORKOUT_ROOM_NOT_FOUND);
         }
-        member.updateTotalWorkoutDays(member.getTotalWorkoutDays() + 1);
-        memberRepository.save(member);
-
-        // 1개의 아이디로 두 개의 방에 동시 인증 (특정 유저만)
-        if (member.getEmail().equals("bellwin98@gmail.com")) {
-            Member secondMe = memberRepository.findByEmail("test@naver.com")
-                    .orElseThrow(() -> new CustomException(ErrorCode.MEMBER_NOT_FOUND));
-            WorkoutRoomMember secondWorkoutRoomMember = workoutRoomMemberRepository.findByMember(secondMe)
-                    .orElseThrow(() -> new CustomException(ErrorCode.NOT_WORKOUT_ROOM_MEMBER));
-            WorkoutRoom secondWorkoutRoom = secondWorkoutRoomMember.getWorkoutRoom();
-            WorkoutRecord secondWorkoutRecord = WorkoutRecord.builder()
-                    .member(secondMe)
-                    .workoutRoom(secondWorkoutRoom)
+        for (WorkoutRoomMember wrm : wrms) {
+            WorkoutRoom workoutRoom = wrm.getWorkoutRoom();
+            // 중복 운동 인증 체크
+            if (workoutRecordRepository.existsByMemberAndWorkoutRoomAndWorkoutDate(member, workoutRoom, workoutDate)) {
+                throw new CustomException(ErrorCode.WORKOUT_ALREADY_AUTHENTICATED);
+            }
+            // 운동 기록 저장
+            WorkoutRecord workoutRecord = WorkoutRecord.builder()
+                    .member(member)
+                    .workoutRoom(workoutRoom)
                     .workoutDate(workoutDate)
                     .workoutType(request.getWorkoutType())
                     .duration(request.getDuration())
                     .imageUrl(imageUrl)
                     .build();
-
-            WorkoutRecord savedSecondWorkoutRecord = workoutRecordRepository.save(secondWorkoutRecord);
-            secondWorkoutRoomMember.updateTotalWorkouts(secondWorkoutRoomMember.getTotalWorkouts() + 1);
+            WorkoutRecord savedWorkoutRecord = workoutRecordRepository.save(workoutRecord);
+            wrm.updateTotalWorkouts(wrm.getTotalWorkouts() + 1);
             // 이번주가 아닌 날짜는 이번주 운동 횟수에 반영 안함
-            if (isThisWeek(savedSecondWorkoutRecord.getWorkoutDate())) {
-                secondWorkoutRoomMember.updateWeeklyWorkouts(secondWorkoutRoomMember.getWeeklyWorkouts() + 1);
+            if (isThisWeek(savedWorkoutRecord.getWorkoutDate())) {
+                wrm.updateWeeklyWorkouts(wrm.getWeeklyWorkouts() + 1);
             }
-            secondMe.updateTotalWorkoutDays(secondMe.getTotalWorkoutDays() + 1);
-            memberRepository.save(secondMe);
         }
+        member.updateTotalWorkoutDays(member.getTotalWorkoutDays() + 1);
+        memberRepository.save(member);
 
-        return WorkoutResponse.from(savedWorkoutRecord);
+        return new WorkoutResponse(workoutDate, request.getWorkoutType(), request.getDuration(), imageUrl);
     }
 
     private boolean isThisWeek(LocalDate targetDate) {

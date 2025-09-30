@@ -35,7 +35,7 @@ public class Member extends BaseTimeEntity implements UserDetails {
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
-    private MemberRole role = MemberRole.USER;
+    private MemberRole role;
 
     @Column(nullable = false)
     private Integer totalWorkoutDays = 0;

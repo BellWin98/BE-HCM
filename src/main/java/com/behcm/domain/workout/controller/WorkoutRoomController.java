@@ -65,7 +65,7 @@ public class WorkoutRoomController {
 
     @GetMapping
     public ResponseEntity<ApiResponse<List<WorkoutRoomResponse>>> getWorkoutRooms() {
-        List<WorkoutRoomResponse> response = workoutRoomService.getWorkoutRooms();
+        List<WorkoutRoomResponse> response = workoutRoomService.getAllActiveWorkoutRooms();
         return ResponseEntity.ok(ApiResponse.success(response));
     }
 

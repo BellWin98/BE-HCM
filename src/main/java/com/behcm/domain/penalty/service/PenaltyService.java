@@ -5,11 +5,8 @@ import com.behcm.domain.penalty.entity.PenaltyAccount;
 import com.behcm.domain.penalty.entity.Penalty;
 import com.behcm.domain.penalty.repository.PenaltyAccountRepository;
 import com.behcm.domain.penalty.repository.PenaltyRepository;
-import com.behcm.domain.rest.entity.Rest;
-import com.behcm.domain.rest.repository.RestRepository;
 import com.behcm.domain.workout.entity.WorkoutRoom;
 import com.behcm.domain.workout.entity.WorkoutRoomMember;
-import com.behcm.domain.workout.repository.WorkoutRecordRepository;
 import com.behcm.domain.workout.repository.WorkoutRoomRepository;
 import com.behcm.global.exception.CustomException;
 import com.behcm.global.exception.ErrorCode;
@@ -18,14 +15,14 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
-import java.time.temporal.TemporalAdjusters;
 import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
+
+import static com.behcm.global.util.DateUtils.*;
 
 @Service
 @Slf4j
@@ -34,19 +31,16 @@ import java.util.stream.Collectors;
 public class PenaltyService {
 
     private final WorkoutRoomRepository workoutRoomRepository;
-    private final WorkoutRecordRepository workoutRecordRepository;
-    private final RestRepository restRepository;
     private final PenaltyAccountRepository penaltyAccountRepository;
     private final PenaltyRepository penaltyRepository;
-    private final PaymentService paymentService;
+    private final PenaltyCalculator penaltyCalculator;
 
     @Transactional
     public void calculateAndAssignPenalties() {
         log.info("Starting weekly penalty calculation");
 
-        LocalDate today = LocalDate.now();
-        LocalDate lastWeekStart = today.minusWeeks(1).with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY));
-        LocalDate lastWeekEnd = lastWeekStart.plusDays(6);
+        LocalDate lastWeekStart = getLastWeekStart();
+        LocalDate lastWeekEnd = getLastWeekEnd();
 
         log.info("Calculating penalties for week: {} to {}", lastWeekStart, lastWeekEnd);
 
@@ -102,55 +96,11 @@ public class PenaltyService {
                 .ifPresent(penaltyAccountRepository::delete);
     }
 
-//    public PenaltyUnpaidSummary getPenaltyRecords(Long roomId) {
-//        List<Penalty> unpaidPenalties;
-//
-//        if (roomId != null) {
-//            unpaidPenalties = penaltyRepository.findUnpaidByRoomId(roomId);
-//        } else {
-//            unpaidPenalties = penaltyRepository.findAllUnpaid();
-//        }
-//
-//        List<PenaltyRecord> records = unpaidPenalties.stream()
-//                .map(PenaltyRecord::from)
-//                .collect(Collectors.toList());
-//
-//        return PenaltyUnpaidSummary.from(records);
-//    }
 
     public List<PenaltyRecord> getPenaltyRecords(Long roomId) {
         return penaltyRepository.findAllByWorkoutRoomId(roomId).stream()
                 .map(PenaltyRecord::from)
                 .toList();
-    }
-
-    @Transactional
-    public PayPenaltyResponse payPenalty(Long roomId, PayPenaltyRequest request) {
-        List<Penalty> penaltiesToPay = getPenaltiesToPay(roomId, request);
-
-        Long totalPenaltyAmount = penaltiesToPay.stream()
-                .mapToLong(Penalty::getPenaltyAmount)
-                .sum();
-
-        if (!request.getAmount().equals(totalPenaltyAmount)) {
-            throw new CustomException(ErrorCode.INVALID_REQUEST);
-        }
-
-        String orderId = generateOrderId();
-        PaymentService.PaymentResult paymentResult = paymentService.processPayment(request.getAmount(), orderId);
-
-        if (!paymentResult.isSuccess()) {
-            throw new CustomException(ErrorCode.PAYMENT_FAILED);
-        }
-
-        penaltiesToPay.forEach(Penalty::markAsPaid);
-        penaltyRepository.saveAll(penaltiesToPay);
-
-        return PayPenaltyResponse.builder()
-                .success(true)
-                .paidAmount(request.getAmount())
-                .paidAt(LocalDateTime.now().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME))
-                .build();
     }
 
     private void processWorkoutRoomPenalties(WorkoutRoom workoutRoom, LocalDate weekStart, LocalDate weekEnd) {
@@ -159,61 +109,12 @@ public class PenaltyService {
         List<WorkoutRoomMember> members = workoutRoom.getWorkoutRoomMembers();
 
         for (WorkoutRoomMember member : members) {
-            if (isMemberOnBreak(member, weekStart, weekEnd)) {
-                log.debug("Skipping penalty calculation for member {} - on break", member.getNickname());
-                continue;
-            }
+            Penalty penalty = penaltyCalculator.calculatePenalty(member, workoutRoom, weekStart, weekEnd);
 
-            int actualWorkouts = (int) workoutRecordRepository.countByMemberAndWorkoutRoomAndWorkoutDateBetween(
-                    member.getMember(), workoutRoom, weekStart, weekEnd);
-
-            int requiredWorkouts = workoutRoom.getMinWeeklyWorkouts();
-
-            if (actualWorkouts < requiredWorkouts) {
-                int missedWorkouts = requiredWorkouts - actualWorkouts;
-                long penaltyAmount = missedWorkouts * workoutRoom.getPenaltyPerMiss();
-
-                Penalty penalty = Penalty.builder()
-                        .workoutRoomMember(member)
-                        .penaltyAmount(penaltyAmount)
-                        .requiredWorkouts(requiredWorkouts)
-                        .actualWorkouts(actualWorkouts)
-                        .weekStartDate(weekStart)
-                        .weekEndDate(weekEnd)
-                        .build();
-
+            if (penalty != null) {
                 penaltyRepository.save(penalty);
-
-                member.updateTotalPenalty(member.getTotalPenalty() + penaltyAmount);
-
-                log.info("Penalty assigned to {} in room {}: {}원 (Required: {}, Actual: {})",
-                        member.getNickname(), workoutRoom.getName(), penaltyAmount, requiredWorkouts, actualWorkouts);
-            } else {
-                log.debug("No penalty for {} in room {} - met requirements (Required: {}, Actual: {})",
-                        member.getNickname(), workoutRoom.getName(), requiredWorkouts, actualWorkouts);
+                member.updateTotalPenalty(member.getTotalPenalty() + penalty.getPenaltyAmount());
             }
         }
-    }
-
-    private boolean isMemberOnBreak(WorkoutRoomMember member, LocalDate weekStart, LocalDate weekEnd) {
-        List<Rest> restPeriods = restRepository.findAllByWorkoutRoomMember(member);
-
-        return restPeriods.stream().anyMatch(rest ->
-                !(rest.getEndDate().isBefore(weekStart) || rest.getStartDate().isAfter(weekEnd))
-        );
-    }
-
-    private List<Penalty> getPenaltiesToPay(Long roomId, PayPenaltyRequest request) {
-        if (request.getPenaltyRecordIds() != null && !request.getPenaltyRecordIds().isEmpty()) {
-            return penaltyRepository.findByIds(request.getPenaltyRecordIds());
-        } else if (roomId != null) {
-            return penaltyRepository.findUnpaidByRoomId(roomId);
-        } else {
-            return penaltyRepository.findAllUnpaid();
-        }
-    }
-
-    private String generateOrderId() {
-        return "PEN_" + System.currentTimeMillis() + "_" + UUID.randomUUID().toString().substring(0, 8).toUpperCase();
     }
 }

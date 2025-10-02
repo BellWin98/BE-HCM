@@ -16,11 +16,11 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
-import java.time.temporal.TemporalAdjusters;
 import java.util.List;
+
+import static com.behcm.global.util.DateUtils.isThisWeek;
 
 @Service
 @RequiredArgsConstructor
@@ -66,21 +66,5 @@ public class WorkoutService {
         memberRepository.save(member);
 
         return new WorkoutResponse(workoutDate, request.getWorkoutType(), request.getDuration(), imageUrl);
-    }
-
-    private boolean isThisWeek(LocalDate targetDate) {
-        if (targetDate == null) {
-            return false;
-        }
-        LocalDate today = LocalDate.now();
-
-        // 이번주의 시작일 (월요일)
-        LocalDate startOfWeek = today.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY));
-
-        // 이번주의 마지막일 (일요일)
-        LocalDate endOfWeek = today.with(TemporalAdjusters.nextOrSame(DayOfWeek.SUNDAY));
-
-        // 경계값 포함: startOfWeek <= targetDate <= endOfWeek
-        return !targetDate.isBefore(startOfWeek) && !targetDate.isAfter(endOfWeek);
     }
 }

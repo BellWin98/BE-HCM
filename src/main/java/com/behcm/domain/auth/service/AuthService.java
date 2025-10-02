@@ -10,6 +10,7 @@ import com.behcm.global.common.TokenResponse;
 import com.behcm.global.exception.CustomException;
 import com.behcm.global.exception.ErrorCode;
 import com.behcm.global.security.JwtTokenProvider;
+import com.behcm.global.util.MemberUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -31,15 +32,11 @@ public class AuthService {
     private final AuthenticationManager authenticationManager;
     private final JwtTokenProvider tokenProvider;
     private final RefreshTokenService refreshTokenService;
+    private final MemberUtils memberUtils;
 
     public AuthResponse register(RegisterRequest request) {
-
-        if (memberRepository.existsByEmail(request.getEmail())) {
-            throw new CustomException(ErrorCode.EMAIL_ALREADY_EXISTS);
-        }
-        if (memberRepository.existsByNickname(request.getNickname())) {
-            throw new CustomException(ErrorCode.NICKNAME_ALREADY_EXISTS);
-        }
+        memberUtils.validateEmailExists(request.getEmail());
+        memberUtils.validateNicknameExists(request.getNickname());
         Member member = Member.builder()
                 .email(request.getEmail())
                 .password(passwordEncoder.encode(request.getPassword()))
@@ -68,8 +65,7 @@ public class AuthService {
         SecurityContextHolder.getContext().setAuthentication(authentication);
         String accessToken = tokenProvider.generateAccessToken(authentication);
         String refreshToken = tokenProvider.generateRefreshToken(authentication);
-        Member member = memberRepository.findByEmail(request.getEmail())
-                .orElseThrow(() -> new CustomException(ErrorCode.MEMBER_NOT_FOUND));
+        Member member = memberUtils.findMemberByEmail(request.getEmail());
 
         refreshTokenService.storeRefreshToken(member.getEmail(), refreshToken);
 
@@ -87,8 +83,7 @@ public class AuthService {
             throw new CustomException(ErrorCode.INVALID_TOKEN);
         }
         
-        Member member = memberRepository.findByEmail(email)
-                .orElseThrow(() -> new CustomException(ErrorCode.MEMBER_NOT_FOUND));
+        Member member = memberUtils.findMemberByEmail(email);
         
         TokenResponse tokenResponse = tokenProvider.generateTokensByEmail(email);
         
@@ -99,8 +94,7 @@ public class AuthService {
 
     @Transactional(readOnly = true)
     public MemberResponse getCurrentUser(String email) {
-        Member member = memberRepository.findByEmail(email)
-                .orElseThrow(() -> new CustomException(ErrorCode.MEMBER_NOT_FOUND));
+        Member member = memberUtils.findMemberByEmail(email);
 
         return MemberResponse.from(member);
     }

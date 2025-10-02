@@ -15,6 +15,11 @@ import java.util.List;
 @Entity
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
+@Table(indexes = {
+    @Index(name = "idx_workout_room_active", columnList = "is_active"),
+    @Index(name = "idx_workout_room_entry_code", columnList = "entry_code"),
+    @Index(name = "idx_workout_room_active_end_date", columnList = "is_active, end_date")
+})
 public class WorkoutRoom extends BaseTimeEntity {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

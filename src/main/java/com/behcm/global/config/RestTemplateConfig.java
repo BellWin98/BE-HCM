@@ -21,7 +21,7 @@ import java.time.Duration;
 public class RestTemplateConfig {
 
     @Bean
-    @Profile("local")
+    @Profile({"local", "test"})
     public RestTemplate localRestTemplate() throws Exception {
         // 모든 인증서를 신뢰하도록 TrustStrategy 구현
         TrustStrategy acceptingTrustStrategy = (X509Certificate[] chain, String authType) -> true;

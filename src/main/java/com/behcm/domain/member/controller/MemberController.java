@@ -44,7 +44,7 @@ public class MemberController {
         return ResponseEntity.ok(ApiResponse.success(response));
     }
 
-/*    @GetMapping("/workout-feed")
+    @GetMapping("/workout-feed")
     @Operation(summary = "사용자 운동 피드 조회", description = "사용자의 운동 기록 피드를 조회합니다.")
     public ResponseEntity<ApiResponse<Page<WorkoutFeedItemResponse>>> getMemberWorkoutFeed(
             @AuthenticationPrincipal Member member,
@@ -77,6 +77,6 @@ public class MemberController {
     ) {
         MemberSettingsResponse response = memberService.updateMemberSettings(member, request);
         return ResponseEntity.ok(ApiResponse.success(response));
-    }*/
+    }
 
 }

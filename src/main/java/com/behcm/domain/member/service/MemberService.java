@@ -1,6 +1,9 @@
 package com.behcm.domain.member.service;
 
-import com.behcm.domain.member.dto.*;
+import com.behcm.domain.member.dto.MemberProfileResponse;
+import com.behcm.domain.member.dto.MemberSettingsResponse;
+import com.behcm.domain.member.dto.UpdateMemberProfileRequest;
+import com.behcm.domain.member.dto.UpdateMemberSettingsRequest;
 import com.behcm.domain.member.entity.Member;
 import com.behcm.domain.member.entity.MemberSettings;
 import com.behcm.domain.member.repository.MemberRepository;
@@ -10,14 +13,8 @@ import com.behcm.domain.workout.dto.WorkoutStatsResponse;
 import com.behcm.domain.workout.entity.WorkoutRecord;
 import com.behcm.domain.workout.repository.WorkoutLikeRepository;
 import com.behcm.domain.workout.repository.WorkoutRecordRepository;
-import com.behcm.global.exception.CustomException;
-import com.behcm.global.exception.ErrorCode;
 import lombok.RequiredArgsConstructor;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageImpl;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Pageable;
-import org.springframework.data.domain.Sort;
+import org.springframework.data.domain.*;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -35,8 +32,8 @@ public class MemberService {
 
     private final MemberRepository memberRepository;
     private final WorkoutRecordRepository workoutRecordRepository;
-/*    private final WorkoutLikeRepository workoutLikeRepository;
-    private final MemberSettingsRepository memberSettingsRepository;*/
+    private final WorkoutLikeRepository workoutLikeRepository;
+    private final MemberSettingsRepository memberSettingsRepository;
 
     public MemberProfileResponse getMemberProfile(Member member) {
         List<WorkoutRecord> workoutRecords = workoutRecordRepository.findAllByMember(member);
@@ -59,7 +56,7 @@ public class MemberService {
         return MemberProfileResponse.from(savedMember, currentStreak, longestStreak);
     }
 
-/*    public Page<WorkoutFeedItemResponse> getMemberWorkoutFeed(Member member, int page, int size) {
+    public Page<WorkoutFeedItemResponse> getMemberWorkoutFeed(Member member, int page, int size) {
         Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "workoutDate"));
         List<WorkoutRecord> allRecords = workoutRecordRepository.findAllByMember(member);
 
@@ -176,7 +173,7 @@ public class MemberService {
         }
 
         return MemberSettingsResponse.from(settings);
-    }*/
+    }
 
     private int calculateCurrentStreak(List<WorkoutRecord> records) {
         if (records.isEmpty()) {

@@ -50,7 +50,7 @@ public class ChatService {
                 .build();
 
         // 보낸 사람은 자동으로 읽음 처리
-        chatMessage.addReadBy(wrm.getNickname());
+//        chatMessage.addReadBy(wrm.getNickname());
 
         ChatMessage savedChatMessage = chatMessageRepository.save(chatMessage);
         ChatMessageResponse response = ChatMessageResponse.from(savedChatMessage);
@@ -104,7 +104,7 @@ public class ChatService {
                 .orElseThrow(() -> new CustomException(ErrorCode.NOT_WORKOUT_ROOM_MEMBER));
         ChatMessage chatMessage = chatMessageRepository.findById(messageId)
                 .orElseThrow(() -> new CustomException(ErrorCode.CHAT_MESSAGE_NOT_FOUND));
-        chatMessage.addReadBy(wrm.getNickname());
+//        chatMessage.addReadBy(wrm.getNickname());
         chatMessageRepository.save(chatMessage);
 
         // 읽음 상태 업데이트 정보를 브로드캐스팅

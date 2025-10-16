@@ -16,7 +16,6 @@ public class WorkoutFeedItemResponse {
     private String workoutType;
     private Integer duration;
     private String imageUrl;
-    private String description;
     private Long likes;
     private Long comments;
     private Boolean isLiked;
@@ -30,10 +29,21 @@ public class WorkoutFeedItemResponse {
                 .workoutType(workoutRecord.getWorkoutType())
                 .duration(workoutRecord.getDuration())
                 .imageUrl(workoutRecord.getImageUrl())
-                .description(null) // WorkoutRecord에 description 필드가 없으므로 null
                 .likes(likes)
                 .comments(comments)
                 .isLiked(isLiked)
+                .createdAt(workoutRecord.getCreatedAt())
+                .roomName(workoutRecord.getWorkoutRoom().getName())
+                .build();
+    }
+
+    public static WorkoutFeedItemResponse from(WorkoutRecord workoutRecord) {
+        return WorkoutFeedItemResponse.builder()
+                .id(workoutRecord.getId())
+                .workoutDate(workoutRecord.getWorkoutDate())
+                .workoutType(workoutRecord.getWorkoutType())
+                .duration(workoutRecord.getDuration())
+                .imageUrl(workoutRecord.getImageUrl())
                 .createdAt(workoutRecord.getCreatedAt())
                 .roomName(workoutRecord.getWorkoutRoom().getName())
                 .build();

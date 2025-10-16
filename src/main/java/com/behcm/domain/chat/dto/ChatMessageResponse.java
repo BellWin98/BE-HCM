@@ -16,7 +16,7 @@ public class ChatMessageResponse {
     private String content;
     private String sender;
     private String imageUrl;
-    private Set<String> readBy;
+//    private Set<String> readBy;
     private LocalDateTime timestamp;
 
     public static ChatMessageResponse from(ChatMessage chatMessage) {
@@ -26,7 +26,7 @@ public class ChatMessageResponse {
                 .content(chatMessage.getContent())
                 .sender(chatMessage.getSender().getNickname())
                 .imageUrl(chatMessage.getImageUrl())
-                .readBy(chatMessage.getReadBy())
+//                .readBy(chatMessage.getReadBy())
                 .timestamp(chatMessage.getTimestamp())
                 .build();
     }

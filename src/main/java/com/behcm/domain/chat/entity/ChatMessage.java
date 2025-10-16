@@ -33,10 +33,10 @@ public class ChatMessage {
 
     private String imageUrl;
 
-    @ElementCollection(fetch = FetchType.EAGER)
+/*    @ElementCollection(fetch = FetchType.EAGER)
     @CollectionTable(name = "chat_message_read_by", joinColumns = @JoinColumn(name = "chat_message_id"))
     @Column(name = "member_nickname")
-    private Set<String> readBy = new HashSet<>();
+    private Set<String> readBy = new HashSet<>();*/
 
     @CreatedDate
     @Column(updatable = false)
@@ -59,7 +59,7 @@ public class ChatMessage {
         this.sender = sender;
     }
 
-    public void addReadBy(String nickname) {
-        this.readBy.add(nickname);
-    }
+//    public void addReadBy(String nickname) {
+//        this.readBy.add(nickname);
+//    }
 }

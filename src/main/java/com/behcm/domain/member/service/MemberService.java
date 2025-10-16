@@ -58,32 +58,7 @@ public class MemberService {
 
     public Page<WorkoutFeedItemResponse> getMemberWorkoutFeed(Member member, int page, int size) {
         Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "workoutDate"));
-        List<WorkoutFeedItemResponse> feedItems = workoutRecordRepository.findAllByMember(member, pageable).stream()
-                .map(WorkoutFeedItemResponse::from)
-                .toList();
-
-/*        // 페이지네이션 적용
-        int start = (int) pageable.getOffset();
-        int end = Math.min((start + pageable.getPageSize()), allRecords.size());
-        List<WorkoutRecord> pagedRecords = allRecords.subList(start, end);
-
-        List<Long> recordIds = pagedRecords.stream()
-                .map(WorkoutRecord::getId)
-                .collect(Collectors.toList());
-
-        List<Long> likedRecordIds = workoutLikeRepository.findLikedWorkoutRecordIdsByMemberIdAndWorkoutRecordIds(
-                member.getId(), recordIds);
-
-        List<WorkoutFeedItemResponse> feedItems = pagedRecords.stream()
-                .map(record -> {
-                    long likes = workoutLikeRepository.countByWorkoutRecordId(record.getId());
-                    long comments = 0L; // 댓글 기능이 없으므로 0
-                    boolean isLiked = likedRecordIds.contains(record.getId());
-                    return WorkoutFeedItemResponse.from(record, likes, comments, isLiked);
-                })
-                .collect(Collectors.toList());*/
-
-        return new PageImpl<>(feedItems, pageable, feedItems.size());
+        return workoutRecordRepository.findAllByMember(member, pageable).map(WorkoutFeedItemResponse::from);
     }
 
     public WorkoutStatsResponse getMemberWorkoutStats(Member member) {

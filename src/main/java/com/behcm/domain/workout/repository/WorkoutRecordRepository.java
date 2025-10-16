@@ -3,6 +3,8 @@ package com.behcm.domain.workout.repository;
 import com.behcm.domain.member.entity.Member;
 import com.behcm.domain.workout.entity.WorkoutRecord;
 import com.behcm.domain.workout.entity.WorkoutRoom;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -15,6 +17,7 @@ import java.util.Optional;
 @Repository
 public interface WorkoutRecordRepository extends JpaRepository<WorkoutRecord, Long> {
     List<WorkoutRecord> findAllByMember(Member member);
+    Page<WorkoutRecord> findAllByMember(Member member, Pageable pageable);
     Optional<WorkoutRecord> findByMemberAndWorkoutRoomAndWorkoutDate(Member member, WorkoutRoom workoutRoom, LocalDate today);
     boolean existsByMemberAndWorkoutRoomAndWorkoutDate(Member member, WorkoutRoom workoutRoom, LocalDate workoutDate);
 

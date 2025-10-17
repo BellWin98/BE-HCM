@@ -164,18 +164,16 @@ public class MemberService {
                 .toList();
 
         LocalDate today = LocalDate.now();
-        LocalDate checkDate = today;
+        LocalDate checkDate = today.minusDays(1);
 
-        // 어제 운동하지 않았으면 streak는 0
-        if (!workoutDates.contains(today.minusDays(1))) {
-            return 0;
-        }
-
-        int streak = 1;
+        int streak = workoutDates.contains(today) ? 1 : 0;
         for (LocalDate workoutDate : workoutDates) {
+            if (workoutDate.equals(today)) {
+                continue;
+            }
             if (workoutDate.equals(checkDate)) {
                 streak++;
-                checkDate = workoutDate.minusDays(1);
+                checkDate = checkDate.minusDays(1);
             } else {
                 break;
             }

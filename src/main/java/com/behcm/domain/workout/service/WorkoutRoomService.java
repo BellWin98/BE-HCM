@@ -6,7 +6,6 @@ import com.behcm.domain.member.repository.MemberRepository;
 import com.behcm.domain.rest.dto.RestResponse;
 import com.behcm.domain.rest.repository.RestRepository;
 import com.behcm.domain.workout.dto.*;
-import com.behcm.domain.workout.entity.WorkoutRecord;
 import com.behcm.domain.workout.entity.WorkoutRoom;
 import com.behcm.domain.workout.entity.WorkoutRoomMember;
 import com.behcm.domain.workout.repository.WorkoutRecordRepository;
@@ -17,12 +16,13 @@ import com.behcm.global.exception.ErrorCode;
 import com.behcm.global.util.ValidationUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.util.List;
-import java.util.Optional;
 
 @Service
 @RequiredArgsConstructor
@@ -60,9 +60,10 @@ public class WorkoutRoomService {
         return buildWorkoutRoomDetailResponse(workoutRoom, member);
     }
 
+    @Cacheable(value = "memberRooms", key = "#member.id")
     @Transactional(readOnly = true)
     public List<WorkoutRoomResponse> getJoinedWorkoutRooms(Member member) {
-        return workoutRoomMemberRepository.findWorkoutRoomMembersByMember(member).stream()
+        return workoutRoomMemberRepository.findWorkoutRoomMembersByMemberWithFetch(member).stream()
                 .map(workoutRoomMember -> WorkoutRoomResponse.from(workoutRoomMember.getWorkoutRoom()))
                 .toList();
     }
@@ -74,6 +75,7 @@ public class WorkoutRoomService {
         return buildWorkoutRoomDetailResponse(workoutRoom, member);
     }
 
+    @Cacheable(value = "activeRooms")
     @Transactional(readOnly = true)
     public List<WorkoutRoomResponse> getAllActiveWorkoutRooms() {
         return workoutRoomRepository.findActiveRooms().stream()
@@ -81,6 +83,7 @@ public class WorkoutRoomService {
                 .toList();
     }
 
+    @CacheEvict(value = {"memberRooms", "activeRooms"}, allEntries = true)
     public WorkoutRoomResponse joinWorkoutRoom(Long workoutRoomId, String entryCode, Member member) {
         log.info("Member {} attempting to join workout room ID: {}", member.getEmail(), workoutRoomId);
 

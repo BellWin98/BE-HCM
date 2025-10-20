@@ -19,9 +19,10 @@ import java.util.Set;
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @EntityListeners(AuditingEntityListener.class)
 @Table(indexes = {
-    @Index(name = "idx_chat_message_room_id_desc", columnList = "workout_room DESC, id DESC"),
-    @Index(name = "idx_chat_message_room_id_asc", columnList = "workout_room ASC, id ASC"),
-    @Index(name = "idx_chat_message_room_timestamp", columnList = "workout_room, timestamp")
+    @Index(name = "idx_chat_message_room_id_desc", columnList = "workout_room, id DESC"),
+    @Index(name = "idx_chat_message_room_id_asc", columnList = "workout_room, id ASC"),
+    @Index(name = "idx_chat_message_room_timestamp", columnList = "workout_room, timestamp"),
+    @Index(name = "idx_chat_message_id_room", columnList = "id, workout_room")
 })
 public class ChatMessage {
 

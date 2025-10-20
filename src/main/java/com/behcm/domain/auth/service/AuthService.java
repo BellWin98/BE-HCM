@@ -91,11 +91,4 @@ public class AuthService {
         
         return new AuthResponse(tokenResponse.getAccessToken(), tokenResponse.getRefreshToken(), MemberResponse.from(member));
     }
-
-    @Transactional(readOnly = true)
-    public MemberResponse getCurrentUser(String email) {
-        Member member = memberUtils.findMemberByEmail(email);
-
-        return MemberResponse.from(member);
-    }
 }

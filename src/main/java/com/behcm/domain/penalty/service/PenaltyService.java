@@ -1,8 +1,10 @@
 package com.behcm.domain.penalty.service;
 
-import com.behcm.domain.penalty.dto.*;
-import com.behcm.domain.penalty.entity.PenaltyAccount;
+import com.behcm.domain.penalty.dto.PenaltyAccountInfo;
+import com.behcm.domain.penalty.dto.PenaltyAccountRequest;
+import com.behcm.domain.penalty.dto.PenaltyRecord;
 import com.behcm.domain.penalty.entity.Penalty;
+import com.behcm.domain.penalty.entity.PenaltyAccount;
 import com.behcm.domain.penalty.repository.PenaltyAccountRepository;
 import com.behcm.domain.penalty.repository.PenaltyRepository;
 import com.behcm.domain.workout.entity.WorkoutRoom;
@@ -10,19 +12,18 @@ import com.behcm.domain.workout.entity.WorkoutRoomMember;
 import com.behcm.domain.workout.repository.WorkoutRoomRepository;
 import com.behcm.global.exception.CustomException;
 import com.behcm.global.exception.ErrorCode;
+import com.behcm.global.util.DateUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
-import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
 import java.util.List;
-import java.util.UUID;
-import java.util.stream.Collectors;
 
-import static com.behcm.global.util.DateUtils.*;
+import static com.behcm.global.util.DateUtils.getLastWeekEnd;
+import static com.behcm.global.util.DateUtils.getLastWeekStart;
 
 @Service
 @Slf4j
@@ -44,7 +45,7 @@ public class PenaltyService {
 
         log.info("Calculating penalties for week: {} to {}", lastWeekStart, lastWeekEnd);
 
-        List<WorkoutRoom> activeWorkoutRooms = workoutRoomRepository.findByIsActiveTrue();
+        List<WorkoutRoom> activeWorkoutRooms = workoutRoomRepository.findByIsActiveTrueWithFetch();
 
         for (WorkoutRoom workoutRoom : activeWorkoutRooms) {
             processWorkoutRoomPenalties(workoutRoom, lastWeekStart, lastWeekEnd);
@@ -97,6 +98,7 @@ public class PenaltyService {
     }
 
 
+    @Cacheable(value = "penaltyRecords", key = "#roomId")
     public List<PenaltyRecord> getPenaltyRecords(Long roomId) {
         return penaltyRepository.findAllByWorkoutRoomId(roomId).stream()
                 .map(PenaltyRecord::from)

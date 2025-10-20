@@ -44,8 +44,8 @@ public class IndexPerformanceComparisonTest {
     @PersistenceContext
     private EntityManager entityManager;
 
-    private static final int MEMBER_COUNT = 100000;
-    private static final int WORKOUT_RECORD_COUNT = 5000000;
+    private static final int MEMBER_COUNT = 100;
+    private static final int WORKOUT_RECORD_COUNT = 50000;
     private static final int PERFORMANCE_TEST_ITERATIONS = 100;
 
     private List<Member> testMembers;

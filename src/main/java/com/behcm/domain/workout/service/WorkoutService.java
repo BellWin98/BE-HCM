@@ -36,7 +36,7 @@ public class WorkoutService {
         LocalDate workoutDate = LocalDate.parse(request.getWorkoutDate(), DateTimeFormatter.ISO_LOCAL_DATE);
         // 이미지 S3에 업로드
         String imageUrl = s3Service.uploadImage(request.getImage());
-        List<WorkoutRoomMember> wrms = workoutRoomMemberRepository.findWorkoutRoomMembersByMember(member);
+        List<WorkoutRoomMember> wrms = workoutRoomMemberRepository.findWorkoutRoomMembersByMemberWithFetch(member);
         if (wrms.isEmpty()) {
             throw new CustomException(ErrorCode.WORKOUT_ROOM_NOT_FOUND);
         }

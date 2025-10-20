@@ -4,8 +4,10 @@ import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.temporal.TemporalAdjusters;
 
+// final 키워드: 상속 방지
 public final class DateUtils {
 
+    // private 생성자: 인스턴스화 방지
     private DateUtils() {
         throw new UnsupportedOperationException("Utility class");
     }

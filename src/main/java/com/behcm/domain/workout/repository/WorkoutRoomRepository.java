@@ -22,6 +22,13 @@ public interface WorkoutRoomRepository extends JpaRepository<WorkoutRoom, Long> 
     List<WorkoutRoom> findActiveRooms();
 
     List<WorkoutRoom> findByIsActiveTrue();
+
+    @Query("SELECT wr FROM WorkoutRoom wr " +
+           "JOIN FETCH wr.owner " +
+           "LEFT JOIN FETCH wr.workoutRoomMembers wrm " +
+           "LEFT JOIN FETCH wrm.member " +
+           "WHERE wr.isActive = true")
+    List<WorkoutRoom> findByIsActiveTrueWithFetch();
     Optional<WorkoutRoom> findByEntryCode(String entryCode);
     Optional<WorkoutRoom> findByIdAndIsActiveTrue(Long roomId);
 }

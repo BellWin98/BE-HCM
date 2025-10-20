@@ -18,7 +18,7 @@ import java.util.concurrent.TimeUnit;
 
 @Configuration
 @Slf4j
-@Profile("test")
+@Profile({"local", "test"})
 public class QueryPerformanceConfig {
 
     @PersistenceUnit

@@ -49,7 +49,7 @@ public class MemberController {
     public ResponseEntity<ApiResponse<Page<WorkoutFeedItemResponse>>> getMemberWorkoutFeed(
             @AuthenticationPrincipal Member member,
             @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "10") int size
+            @RequestParam(defaultValue = "20") int size
     ) {
         Page<WorkoutFeedItemResponse> response = memberService.getMemberWorkoutFeed(member, page, size);
         return ResponseEntity.ok(ApiResponse.success(response));

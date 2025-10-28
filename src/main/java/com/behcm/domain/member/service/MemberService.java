@@ -13,6 +13,8 @@ import com.behcm.domain.workout.dto.WorkoutStatsResponse;
 import com.behcm.domain.workout.entity.WorkoutRecord;
 import com.behcm.domain.workout.repository.WorkoutLikeRepository;
 import com.behcm.domain.workout.repository.WorkoutRecordRepository;
+import com.behcm.global.exception.CustomException;
+import com.behcm.global.exception.ErrorCode;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.*;
 import org.springframework.stereotype.Service;
@@ -46,6 +48,9 @@ public class MemberService {
 
     @Transactional
     public MemberProfileResponse updateMemberProfile(Member member, UpdateMemberProfileRequest request) {
+        if (!member.getNickname().equals(request.getNickname()) && memberRepository.existsByNickname(request.getNickname())) {
+            throw new CustomException(ErrorCode.NICKNAME_ALREADY_EXISTS);
+        }
         member.updateProfile(request.getNickname(), request.getBio(), request.getProfileUrl());
         Member savedMember = memberRepository.save(member);
 

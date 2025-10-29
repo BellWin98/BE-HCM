@@ -1,9 +1,9 @@
 package com.behcm.global.security;
 
-import com.behcm.domain.member.entity.Member;
-import com.behcm.global.common.TokenResponse;
+import com.behcm.domain.member.entity.MemberRole;
 import io.jsonwebtoken.*;
 import io.jsonwebtoken.security.Keys;
+import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -17,14 +17,16 @@ import java.util.Date;
 
 @Component
 @Slf4j
-public class JwtTokenProvider {
+public class TokenProvider {
 
     private final Key key;
+    @Getter
     private final long accessTokenExpiration;
+    @Getter
     private final long refreshTokenExpiration;
     private final UserDetailsService userDetailsService;
 
-    public JwtTokenProvider(
+    public TokenProvider(
             @Value("${jwt.secret}") String secretKey,
             @Value("${jwt.access-token-expiration}") long accessTokenExpiration,
             @Value("${jwt.refresh-token-expiration}") long refreshTokenExpiration,
@@ -36,37 +38,46 @@ public class JwtTokenProvider {
         this.userDetailsService = userDetailsService;
     }
 
-    public String generateAccessToken(Authentication authentication) {
-        return generateToken(authentication, accessTokenExpiration);
-    }
+    public String createAccessToken(String email, MemberRole role) {
+        Date now = new Date();
+        Date expiryDate = new Date(System.currentTimeMillis() + accessTokenExpiration);
 
-    public String generateRefreshToken(Authentication authentication) {
-        return generateToken(authentication, refreshTokenExpiration);
-    }
-
-    public TokenResponse generateTokensByEmail(String email) {
-        Date accessTokenExpiryDate = new Date(System.currentTimeMillis() + accessTokenExpiration);
-        Date refreshTokenExpiryDate = new Date(System.currentTimeMillis() + refreshTokenExpiration);
-        String accessToken = Jwts.builder()
+        return Jwts.builder()
                 .setSubject(email)
-                .setIssuedAt(new Date())
-                .setExpiration(accessTokenExpiryDate)
+                .claim("role", role.name())
+                .claim("type", "access")
+                .setIssuedAt(now)
+                .setExpiration(expiryDate)
                 .signWith(key, SignatureAlgorithm.HS512)
                 .compact();
-        String refreshToken = Jwts.builder()
+    }
+
+    public String createRefreshToken(String email) {
+        Date now = new Date();
+        Date expiryDate = new Date(System.currentTimeMillis() + refreshTokenExpiration);
+
+        return Jwts.builder()
                 .setSubject(email)
-                .setIssuedAt(new Date())
-                .setExpiration(refreshTokenExpiryDate)
+                .claim("type", "refresh")
+                .setIssuedAt(now)
+                .setExpiration(expiryDate)
                 .signWith(key, SignatureAlgorithm.HS512)
                 .compact();
-
-        return new TokenResponse(accessToken, refreshToken);
     }
 
     public String getEmailFromJwt(String token) {
         Claims claims = parseClaims(token);
-
         return claims.getSubject();
+    }
+
+    public String getRoleFromToken(String accessToken) {
+        Claims claims = parseClaims(accessToken);
+        return claims.get("role", String.class);
+    }
+
+    public String getTokenType(String token) {
+        Claims claims = parseClaims(token);
+        return claims.get("type", String.class);
     }
 
     public boolean validateToken(String token) {
@@ -99,26 +110,12 @@ public class JwtTokenProvider {
         return new UsernamePasswordAuthenticationToken(userDetails, "", userDetails.getAuthorities());
     }
 
-    private String generateToken(Authentication authentication, long tokenExpiration) {
-        Member member = (Member) authentication.getPrincipal();
-        Claims claims = Jwts.claims().setSubject(member.getUsername());
-        claims.put("roles", member.getAuthorities());
-        Date expiryDate = new Date(System.currentTimeMillis() + tokenExpiration);
-
-        return Jwts.builder()
-                .setClaims(claims)
-                .setIssuedAt(new Date())
-                .setExpiration(expiryDate)
-                .signWith(key, SignatureAlgorithm.HS512)
-                .compact();
-    }
-
-    private Claims parseClaims(String accessToken) {
+    private Claims parseClaims(String token) {
         try {
             return Jwts.parserBuilder()
                     .setSigningKey(key)
                     .build()
-                    .parseClaimsJws(accessToken)
+                    .parseClaimsJws(token)
                     .getBody();
         } catch (ExpiredJwtException e) {
             return e.getClaims();

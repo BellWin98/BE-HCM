@@ -1,6 +1,6 @@
 package com.behcm.global.config.websocket;
 
-import com.behcm.global.security.JwtTokenProvider;
+import com.behcm.global.security.TokenProvider;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.messaging.Message;
@@ -18,7 +18,7 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class JwtChannelInterceptor implements ChannelInterceptor {
 
-    private final JwtTokenProvider jwtTokenProvider;
+    private final TokenProvider tokenProvider;
 
     @Override
     public Message<?> preSend(Message<?> message, MessageChannel channel) {
@@ -29,9 +29,9 @@ public class JwtChannelInterceptor implements ChannelInterceptor {
             StompCommand.SEND.equals(accessor.getCommand()) ||
             StompCommand.SUBSCRIBE.equals(accessor.getCommand())
         ) {
-            String token = accessor.getFirstNativeHeader("Authorization");
-            if (token != null && jwtTokenProvider.validateToken(token.replace("Bearer ", ""))) {
-                Authentication authentication = jwtTokenProvider.getAuthentication(token.replace("Bearer ", ""));
+            String accessToken = (String) accessor.getSessionAttributes().get("accessToken");
+            if (accessToken != null && tokenProvider.validateToken(accessToken)) {
+                Authentication authentication = tokenProvider.getAuthentication(accessToken);
                 SecurityContextHolder.getContext().setAuthentication(authentication);
                 accessor.setUser(authentication); // WebSocket 세션에 사용자 정보 저장
             }

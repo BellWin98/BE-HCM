@@ -22,6 +22,7 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
         registry
                 .addEndpoint("/wss")
                 .setAllowedOriginPatterns("http://localhost:*", "https://localhost:*", "https://hcm-red.vercel.app")
+                .addInterceptors(new HttpHandshakeInterceptor())
                 .withSockJS(); // SockJS는 WebSocket을 지원하지 않는 브라우저에서도 유사한 경험을 제공합니다.
     }
 

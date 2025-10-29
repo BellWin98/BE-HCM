@@ -146,7 +146,7 @@ public class AuthService {
                 .secure(true)
                 .path("/")
                 .maxAge(tokenProvider.getAccessTokenExpiration() / 1000)
-                .sameSite("Strict")
+                .sameSite("None")
                 .build();
 
         response.addHeader("Set-Cookie", cookie.toString());
@@ -162,7 +162,7 @@ public class AuthService {
                 .secure(true)
                 .path("/")
                 .maxAge(tokenProvider.getRefreshTokenExpiration() / 1000)
-                .sameSite("Strict")
+                .sameSite("None")
                 .build();
 
         response.addHeader("Set-Cookie", cookie.toString());
@@ -178,7 +178,7 @@ public class AuthService {
                 .secure(true)
                 .path("/")
                 .maxAge(0)
-                .sameSite("Strict")
+                .sameSite("None")
                 .build();
         ResponseCookie refreshTokenCookie = ResponseCookie
                 .from("refreshTokenId", "")
@@ -186,7 +186,7 @@ public class AuthService {
                 .secure(true)
                 .path("/")
                 .maxAge(0)
-                .sameSite("Strict")
+                .sameSite("None")
                 .build();
         response.addHeader("Set-Cookie", accessTokenCookie.toString());
         response.addHeader("Set-Cookie", refreshTokenCookie.toString());

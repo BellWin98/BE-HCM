@@ -6,6 +6,7 @@ import lombok.Getter;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Getter
 @Builder
@@ -13,18 +14,18 @@ public class WorkoutRecordResponse {
 
     private Long id;
     private LocalDate workoutDate;
-    private String workoutType;
+    private List<String> workoutTypes;
     private Integer duration;
-    private String imageUrl;
+    private List<String> imageUrls;
     private LocalDateTime createdAt;
 
     public static WorkoutRecordResponse from(WorkoutRecord workoutRecord) {
         return WorkoutRecordResponse.builder()
                 .id(workoutRecord.getId())
                 .workoutDate(workoutRecord.getWorkoutDate())
-                .workoutType(workoutRecord.getWorkoutType())
+                .workoutTypes(workoutRecord.getWorkoutTypes())
                 .duration(workoutRecord.getDuration())
-                .imageUrl(workoutRecord.getImageUrl())
+                .imageUrls(workoutRecord.getImageUrls())
                 .createdAt(workoutRecord.getCreatedAt())
                 .build();
     }

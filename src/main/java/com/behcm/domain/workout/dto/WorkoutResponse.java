@@ -6,12 +6,13 @@ import lombok.Builder;
 import lombok.Getter;
 
 import java.time.LocalDate;
+import java.util.List;
 
 @Getter
 @AllArgsConstructor
 public class WorkoutResponse {
     private LocalDate workoutDate;
-    private String workoutType;
+    private List<String> workoutTypes;
     private Integer duration;
-    private String imageUrl;
+    private List<String> imageUrls;
 }

@@ -14,6 +14,8 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.util.List;
+
 @RestController
 @RequestMapping("/api/workouts")
 @RequiredArgsConstructor
@@ -26,18 +28,18 @@ public class WorkoutController {
     @PostMapping
     public ResponseEntity<ApiResponse<WorkoutResponse>> authenticateWorkout(
             @RequestParam String workoutDate,
-            @RequestParam String workoutType,
+            @RequestParam List<String> workoutTypes,
             @RequestParam Integer duration,
-            @RequestParam MultipartFile image,
+            @RequestParam List<MultipartFile> images,
             @AuthenticationPrincipal Member member
     ) {
         WorkoutRequest request = WorkoutRequest.builder()
                 .workoutDate(workoutDate)
-                .workoutType(workoutType)
+                .workoutTypes(workoutTypes)
                 .duration(duration)
-                .image(image)
+                .images(images)
                 .build();
-        
+
         WorkoutResponse response = workoutService.authenticateWorkout(member, request);
 
         return ResponseEntity.ok(ApiResponse.success(response));

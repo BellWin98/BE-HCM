@@ -34,8 +34,8 @@ public class WorkoutService {
 
     public WorkoutResponse authenticateWorkout(Member member, WorkoutRequest request) {
         LocalDate workoutDate = LocalDate.parse(request.getWorkoutDate(), DateTimeFormatter.ISO_LOCAL_DATE);
-        // 이미지 S3에 업로드
-        String imageUrl = s3Service.uploadImage(request.getImage());
+        // 여러 이미지 S3에 업로드
+        List<String> imageUrls = s3Service.uploadImages(request.getImages());
         List<WorkoutRoomMember> wrms = workoutRoomMemberRepository.findWorkoutRoomMembersByMember(member);
         if (wrms.isEmpty()) {
             throw new CustomException(ErrorCode.WORKOUT_ROOM_NOT_FOUND);
@@ -51,9 +51,9 @@ public class WorkoutService {
                     .member(member)
                     .workoutRoom(workoutRoom)
                     .workoutDate(workoutDate)
-                    .workoutType(request.getWorkoutType())
+                    .workoutTypes(request.getWorkoutTypes())
                     .duration(request.getDuration())
-                    .imageUrl(imageUrl)
+                    .imageUrls(imageUrls)
                     .build();
             WorkoutRecord savedWorkoutRecord = workoutRecordRepository.save(workoutRecord);
             wrm.updateTotalWorkouts(wrm.getTotalWorkouts() + 1);
@@ -65,7 +65,7 @@ public class WorkoutService {
         member.updateTotalWorkoutDays(member.getTotalWorkoutDays() + 1);
         memberRepository.save(member);
 
-        return new WorkoutResponse(workoutDate, request.getWorkoutType(), request.getDuration(), imageUrl);
+        return new WorkoutResponse(workoutDate, request.getWorkoutTypes(), request.getDuration(), imageUrls);
     }
 
     private boolean isThisWeek(LocalDate targetDate) {

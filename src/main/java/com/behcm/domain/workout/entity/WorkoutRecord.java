@@ -32,7 +32,7 @@ public class WorkoutRecord {
     @JoinColumn(name = "workout_room_id", nullable = false)
     private WorkoutRoom workoutRoom;
 
-    @ElementCollection(fetch = FetchType.LAZY)
+    @ElementCollection(fetch = FetchType.EAGER)
     @CollectionTable(name = "workout_type", joinColumns = @JoinColumn(name = "workout_record_id"))
     @Column(name = "workout_type", nullable = false)
     private List<String> workoutTypes = new ArrayList<>();
@@ -43,7 +43,7 @@ public class WorkoutRecord {
     @Column(nullable = false)
     private Integer duration; // minutes
 
-    @ElementCollection(fetch = FetchType.LAZY)
+    @ElementCollection(fetch = FetchType.EAGER)
     @CollectionTable(name = "workout_image", joinColumns = @JoinColumn(name = "workout_record_id"))
     @Column(name = "image_url", nullable = false, length = 512)
     private List<String> imageUrls = new ArrayList<>();
@@ -58,9 +58,9 @@ public class WorkoutRecord {
         this.member = member;
         this.workoutRoom = workoutRoom;
         this.workoutDate = workoutDate;
-        this.workoutTypes = workoutTypes != null ? workoutTypes : new ArrayList<>();
+        this.workoutTypes = workoutTypes;
         this.duration = duration;
-        this.imageUrls = imageUrls != null ? imageUrls : new ArrayList<>();
+        this.imageUrls = imageUrls;
     }
 
     public boolean canDelete() {

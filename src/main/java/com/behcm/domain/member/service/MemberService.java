@@ -90,9 +90,10 @@ public class MemberService {
                                 !record.getWorkoutDate().isAfter(endOfMonth))
                 .count();
 
-        // 가장 많이 한 운동 타입
+        // 가장 많이 한 운동 타입 (여러 운동 종류를 모두 고려)
         String favoriteWorkoutType = allRecords.stream()
-                .collect(Collectors.groupingBy(WorkoutRecord::getWorkoutType, Collectors.counting()))
+                .flatMap(record -> record.getWorkoutTypes().stream())
+                .collect(Collectors.groupingBy(type -> type, Collectors.counting()))
                 .entrySet().stream()
                 .max(Map.Entry.comparingByValue())
                 .map(Map.Entry::getKey)

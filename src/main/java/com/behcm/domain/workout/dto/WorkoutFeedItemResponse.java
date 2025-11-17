@@ -6,6 +6,7 @@ import lombok.Getter;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Getter
 @Builder
@@ -13,9 +14,9 @@ public class WorkoutFeedItemResponse {
 
     private Long id;
     private LocalDate workoutDate;
-    private String workoutType;
+    private List<String> workoutTypes;
     private Integer duration;
-    private String imageUrl;
+    private List<String> imageUrls;
     private Long likes;
     private Long comments;
     private Boolean isLiked;
@@ -26,9 +27,9 @@ public class WorkoutFeedItemResponse {
         return WorkoutFeedItemResponse.builder()
                 .id(workoutRecord.getId())
                 .workoutDate(workoutRecord.getWorkoutDate())
-                .workoutType(workoutRecord.getWorkoutType())
+                .workoutTypes(workoutRecord.getWorkoutTypes())
                 .duration(workoutRecord.getDuration())
-                .imageUrl(workoutRecord.getImageUrl())
+                .imageUrls(workoutRecord.getImageUrls())
                 .likes(likes)
                 .comments(comments)
                 .isLiked(isLiked)
@@ -41,9 +42,9 @@ public class WorkoutFeedItemResponse {
         return WorkoutFeedItemResponse.builder()
                 .id(workoutRecord.getId())
                 .workoutDate(workoutRecord.getWorkoutDate())
-                .workoutType(workoutRecord.getWorkoutType())
+                .workoutTypes(workoutRecord.getWorkoutTypes())
                 .duration(workoutRecord.getDuration())
-                .imageUrl(workoutRecord.getImageUrl())
+                .imageUrls(workoutRecord.getImageUrls())
                 .createdAt(workoutRecord.getCreatedAt())
                 .roomName(workoutRecord.getWorkoutRoom().getName())
                 .build();

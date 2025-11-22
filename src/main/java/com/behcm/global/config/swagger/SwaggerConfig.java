@@ -17,7 +17,7 @@ import org.springframework.context.annotation.Configuration;
                 version = "v1"
         ),
         servers = {
-//                @Server(url = "https://api.kwonyonghyun.p-e.kr", description = "개발 서버"),
+                @Server(url = "https://backend.bw-board.kro.kr", description = "개발/운영 서버"),
                 @Server(url = "http://localhost:8080", description = "로컬 서버")
         }
 )

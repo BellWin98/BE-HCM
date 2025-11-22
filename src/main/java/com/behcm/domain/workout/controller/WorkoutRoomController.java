@@ -38,6 +38,23 @@ public class WorkoutRoomController {
         return ResponseEntity.ok(ApiResponse.success(response));
     }
 
+    @GetMapping("/joined")
+    public ResponseEntity<ApiResponse<List<WorkoutRoomResponse>>> getJoinedWorkoutRooms(
+            @AuthenticationPrincipal Member member
+    ) {
+        List<WorkoutRoomResponse> response = workoutRoomService.getJoinedWorkoutRooms(member);
+        return ResponseEntity.ok(ApiResponse.success(response));
+    }
+
+    @GetMapping("/joined/{roomId}")
+    public ResponseEntity<ApiResponse<WorkoutRoomDetailResponse>> getJoinedWorkoutRoom(
+            @PathVariable Long roomId,
+            @AuthenticationPrincipal Member member
+    ) {
+        WorkoutRoomDetailResponse response = workoutRoomService.getJoinedWorkoutRoom(roomId, member);
+        return ResponseEntity.ok(ApiResponse.success(response));
+    }
+
     @GetMapping("/validate")
     public ResponseEntity<Boolean> isMemberInWorkoutRoom(
             @AuthenticationPrincipal Member member

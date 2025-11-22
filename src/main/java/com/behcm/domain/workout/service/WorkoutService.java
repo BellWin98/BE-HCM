@@ -35,44 +35,41 @@ public class WorkoutService {
     private final NotificationService notificationService;
 
     public WorkoutResponse authenticateWorkout(Member member, WorkoutRequest request) {
-        // 현재 참여중인 운동방 조회
-        WorkoutRoomMember workoutRoomMember = workoutRoomMemberRepository.findByMember(member)
-                .orElseThrow(() -> new CustomException(ErrorCode.WORKOUT_ROOM_NOT_FOUND));
-
-        WorkoutRoom workoutRoom = workoutRoomMember.getWorkoutRoom();
-        
-        // 운동 날짜 파싱
         LocalDate workoutDate = LocalDate.parse(request.getWorkoutDate(), DateTimeFormatter.ISO_LOCAL_DATE);
-        
-        // 중복 운동 인증 체크
-        if (workoutRecordRepository.existsByMemberAndWorkoutRoomAndWorkoutDate(member, workoutRoom, workoutDate)) {
-            throw new CustomException(ErrorCode.WORKOUT_ALREADY_AUTHENTICATED);
+        List<WorkoutRoomMember> wrms = workoutRoomMemberRepository.findWorkoutRoomMembersByMember(member);
+        if (wrms.isEmpty()) {
+            throw new CustomException(ErrorCode.WORKOUT_ROOM_NOT_FOUND);
         }
-        
-        // 이미지 S3에 업로드
-        String imageUrl = s3Service.uploadImage(request.getImage());
-        
-        // 운동 기록 저장
-        WorkoutRecord workoutRecord = WorkoutRecord.builder()
-                .member(member)
-                .workoutRoom(workoutRoom)
-                .workoutDate(workoutDate)
-                .workoutType(request.getWorkoutType())
-                .duration(request.getDuration())
-                .imageUrl(imageUrl)
-                .build();
-        
-        WorkoutRecord savedWorkoutRecord = workoutRecordRepository.save(workoutRecord);
-        workoutRoomMember.updateTotalWorkouts(workoutRoomMember.getTotalWorkouts() + 1);
-        // 이번주가 아닌 날짜는 이번주 운동 횟수에 반영 안함
-        if (isThisWeek(savedWorkoutRecord.getWorkoutDate())) {
-            workoutRoomMember.updateWeeklyWorkouts(workoutRoomMember.getWeeklyWorkouts() + 1);
+        // 여러 이미지 S3에 업로드
+        List<String> imageUrls = s3Service.uploadImages(request.getImages());
+        for (WorkoutRoomMember wrm : wrms) {
+            WorkoutRoom workoutRoom = wrm.getWorkoutRoom();
+            // 중복 운동 인증 체크
+            if (workoutRecordRepository.existsByMemberAndWorkoutRoomAndWorkoutDate(member, workoutRoom, workoutDate)) {
+                throw new CustomException(ErrorCode.WORKOUT_ALREADY_AUTHENTICATED);
+            }
+            // 운동 기록 저장
+            WorkoutRecord workoutRecord = WorkoutRecord.builder()
+                    .member(member)
+                    .workoutRoom(workoutRoom)
+                    .workoutDate(workoutDate)
+                    .workoutTypes(request.getWorkoutTypes())
+                    .duration(request.getDuration())
+                    .imageUrls(imageUrls)
+                    .build();
+            WorkoutRecord savedWorkoutRecord = workoutRecordRepository.save(workoutRecord);
+            wrm.updateTotalWorkouts(wrm.getTotalWorkouts() + 1);
+            // 이번주가 아닌 날짜는 이번주 운동 횟수에 반영 안함
+            if (isThisWeek(savedWorkoutRecord.getWorkoutDate())) {
+                wrm.updateWeeklyWorkouts(wrm.getWeeklyWorkouts() + 1);
+            }
+
+            sendNotificationToWorkRoomMembers(workoutRoom, member);
         }
         member.updateTotalWorkoutDays(member.getTotalWorkoutDays() + 1);
         memberRepository.save(member);
-        sendNotificationToWorkRoomMembers(workoutRoom, member);
 
-        return WorkoutResponse.from(savedWorkoutRecord);
+        return new WorkoutResponse(workoutDate, request.getWorkoutTypes(), request.getDuration(), imageUrls);
     }
 
     private boolean isThisWeek(LocalDate targetDate) {

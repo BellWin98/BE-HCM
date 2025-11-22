@@ -25,6 +25,17 @@ spring:
       hibernate:
         default_batch_fetch_size: 500
     open-in-view: false
+  mail:
+    host: ENC(TirknCfj2ZkPj3nyJ9AjRn0fpKSiLCkK)
+    port: 587
+    username: ENC(eomNCOQJqgXyicrTgm/NW1cCsWBXxbMU/8Z0sD+NmME=)
+    password: ENC(xceSdNFJ5/7DDvINycoaaGeKAaIdxf4xrrG2wFydiHA=)
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
 
 jasypt:
   encryptor:

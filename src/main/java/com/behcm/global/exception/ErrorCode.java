@@ -9,8 +9,8 @@ import org.springframework.http.HttpStatus;
 public enum ErrorCode {
 
     // Auth
-    EMAIL_ALREADY_EXISTS(HttpStatus.BAD_REQUEST, "이미 존재하는 이메일입니다."),
-    NICKNAME_ALREADY_EXISTS(HttpStatus.BAD_REQUEST, "이미 존재하는 닉네임입니다."),
+    EMAIL_ALREADY_EXISTS(HttpStatus.BAD_REQUEST, "이미 사용 중인 이메일입니다."),
+    NICKNAME_ALREADY_EXISTS(HttpStatus.BAD_REQUEST, "이미 사용 중인 닉네임입니다."),
     INVALID_CREDENTIALS(HttpStatus.UNAUTHORIZED, "이메일 또는 비밀번호가 올바르지 않습니다."),
     TOKEN_EXPIRED(HttpStatus.UNAUTHORIZED, "토큰이 만료되었습니다."),
     INVALID_TOKEN(HttpStatus.UNAUTHORIZED, "유효하지 않은 토큰입니다."),
@@ -18,6 +18,10 @@ public enum ErrorCode {
     // User
     MEMBER_NOT_FOUND(HttpStatus.NOT_FOUND, "사용자를 찾을 수 없습니다."),
     EMAIL_NOT_VERIFIED(HttpStatus.BAD_REQUEST, "이메일 인증이 필요합니다."),
+    EMAIL_SEND_FAILED(HttpStatus.BAD_REQUEST, "이메일 발송에 실패했습니다."),
+    VERIFICATION_CODE_NOT_FOUND(HttpStatus.NOT_FOUND, "인증 코드를 찾을 수 없습니다."),
+    VERIFICATION_CODE_EXPIRED(HttpStatus.BAD_REQUEST, "인증 코드가 만료되었습니다."),
+    INVALID_VERIFICATION_CODE(HttpStatus.BAD_REQUEST, "잘못된 인증 코드입니다."),
 
     // Workout Room
     WORKOUT_ROOM_NOT_FOUND(HttpStatus.NOT_FOUND, "운동방을 찾을 수 없습니다."),
@@ -32,7 +36,13 @@ public enum ErrorCode {
     WORKOUT_ALREADY_UPLOADED(HttpStatus.BAD_REQUEST, "오늘 이미 운동을 인증했습니다."),
     WORKOUT_ALREADY_AUTHENTICATED(HttpStatus.BAD_REQUEST, "해당 날짜에 이미 운동 인증을 완료했습니다."),
     WORKOUT_NOT_FOUND(HttpStatus.NOT_FOUND, "운동 기록을 찾을 수 없습니다."),
+    WORKOUT_RECORD_NOT_FOUND(HttpStatus.NOT_FOUND, "운동 기록을 찾을 수 없습니다."),
     CANNOT_DELETE_WORKOUT(HttpStatus.BAD_REQUEST, "당일 운동만 삭제할 수 있습니다."),
+    ALREADY_LIKED(HttpStatus.BAD_REQUEST, "이미 좋아요를 눌렀습니다."),
+    LIKE_NOT_FOUND(HttpStatus.NOT_FOUND, "좋아요를 누른 적이 없습니다."),
+
+    // Chat
+    CHAT_MESSAGE_NOT_FOUND(HttpStatus.NOT_FOUND, "채팅 메시지를 찾을 수 없습니다."),
 
     // File
     FILE_UPLOAD_FAILED(HttpStatus.INTERNAL_SERVER_ERROR, "파일 업로드에 실패했습니다."),
@@ -40,10 +50,16 @@ public enum ErrorCode {
     INVALID_FILE(HttpStatus.BAD_REQUEST, "유효하지 않은 파일입니다."),
     FILE_TOO_LARGE(HttpStatus.BAD_REQUEST, "파일 크기가 너무 큽니다."),
 
+    // Penalty
+    PAYMENT_FAILED(HttpStatus.BAD_REQUEST, "결제 처리에 실패했습니다."),
+    INVALID_REQUEST(HttpStatus.BAD_REQUEST, "잘못된 요청입니다."),
+    NOT_FOUND(HttpStatus.NOT_FOUND, "요청한 리소스를 찾을 수 없습니다."),
+
     // Common
     INTERNAL_SERVER_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "서버 내부 오류가 발생했습니다."),
     INVALID_INPUT(HttpStatus.BAD_REQUEST, "잘못된 입력값입니다."),
-    ACCESS_DENIED(HttpStatus.FORBIDDEN, "접근이 거부되었습니다.");
+    ACCESS_DENIED(HttpStatus.FORBIDDEN, "접근이 거부되었습니다."),
+    COUNT_LIMIT_EXCEEDED(HttpStatus.BAD_REQUEST, "허용된 개수 제한을 초과했습니다.");
 
     private final HttpStatus httpStatus;
     private final String message;

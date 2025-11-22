@@ -3,7 +3,7 @@ spring:
     activate:
       on-profile: prod
   datasource:
-    url: ENC(oQ4u3P3AFqyVyNghblrxR+vBbNHJsT9Ed0l2DUJT8Ex7okw7xmfsjhXFquE3zi+FoT1KHRUyC/4DnjYUtuQQsjoWusyB2BmFFleUkO3BVQ5eqi1Sj6x2dIctTdHzaJCwdKJCYJ013LtkvlqO62FHCT+byODHHZxgMzBqYSh3uRkqRJXl0EvZIWUv/PFIgSIVmIMQ4AnzpO4E++N/L/2Spg==)
+    url: ENC(42WYIfUytCVQfEbhbpYW0DglBLb9py1sBvOJ8tMFCcwTYRetUcDQZjRxnfHOpR0laALK7BpiAxc3rC24QdD4fwP31b/uQxDb7ug+kwOWzf+gihjznRgToCPxNMY2tVthqwEvrqN9CtU/Tl7YlwBQjs4avOtYdlNSv/zGFYguLyU2LHg+4T6WQbCLX4Zvff4agNM9TQjpLCw=)
     username: ENC(KECJYP3aLTAaS/1ffwfn2Q==)
     password: ENC(dH70a8PAfeYkwJ/fS9oTCyQ7nIM9QfYhlVqbVF+T/0A=)
     driver-class-name: org.mariadb.jdbc.Driver

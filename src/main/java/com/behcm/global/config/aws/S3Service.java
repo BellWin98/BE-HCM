@@ -14,9 +14,7 @@ import org.springframework.web.multipart.MultipartFile;
 import java.io.IOException;
 import java.io.InputStream;
 import java.text.SimpleDateFormat;
-import java.util.Date;
-import java.util.Locale;
-import java.util.UUID;
+import java.util.*;
 
 @Service
 @RequiredArgsConstructor
@@ -57,6 +55,19 @@ public class S3Service {
             log.error("S3 파일 업로드 실패: {}", e.getMessage(), e);
             throw new CustomException(ErrorCode.FILE_UPLOAD_FAILED);
         }
+    }
+
+    public List<String> uploadImages(java.util.List<MultipartFile> files) {
+        if (files == null || files.isEmpty()) {
+            throw new CustomException(ErrorCode.INVALID_FILE);
+        }
+
+        List<String> uploadedUrls = new ArrayList<>();
+        for (MultipartFile file : files) {
+            String uploadedUrl = uploadImage(file);
+            uploadedUrls.add(uploadedUrl);
+        }
+        return uploadedUrls;
     }
 
     private boolean isValidImageFile(String filename) {

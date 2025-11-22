@@ -1,11 +1,9 @@
 package com.behcm.domain.workout.entity;
 
+import com.behcm.domain.chat.entity.ChatMessage;
 import com.behcm.domain.member.entity.Member;
 import jakarta.persistence.*;
-import lombok.AccessLevel;
-import lombok.Builder;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
+import lombok.*;
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
@@ -31,6 +29,11 @@ public class WorkoutRoomMember {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "workout_room_id", nullable = false)
     private WorkoutRoom workoutRoom;
+
+    @Setter
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "last_read_chat_message_id")
+    private ChatMessage lastReadMessage; // 마지막으로 읽은 메시지 참조
 
     @Column(nullable = false)
     private Integer totalWorkouts = 0;

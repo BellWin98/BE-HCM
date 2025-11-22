@@ -33,9 +33,12 @@ public class Member extends BaseTimeEntity implements UserDetails {
 
     private String profileUrl;
 
+    @Column(length = 500)
+    private String bio;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
-    private MemberRole role = MemberRole.USER;
+    private MemberRole role;
 
     @Column(nullable = false)
     private Integer totalWorkoutDays = 0;
@@ -60,6 +63,12 @@ public class Member extends BaseTimeEntity implements UserDetails {
 
     public void updatePassword(String password) {
         this.password = password;
+    }
+
+    public void updateProfile(String nickname, String bio, String profileUrl) {
+        if (nickname != null) this.nickname = nickname;
+        if (bio != null) this.bio = bio;
+        if (profileUrl != null) this.profileUrl = profileUrl;
     }
 
     public void updateTotalWorkoutDays(int totalWorkoutDays) {

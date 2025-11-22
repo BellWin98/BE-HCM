@@ -11,6 +11,8 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 
 @Entity
 @Getter
@@ -30,8 +32,10 @@ public class WorkoutRecord {
     @JoinColumn(name = "workout_room_id", nullable = false)
     private WorkoutRoom workoutRoom;
 
-    @Column(nullable = false)
-    private String workoutType;
+    @ElementCollection(fetch = FetchType.EAGER)
+    @CollectionTable(name = "workout_type", joinColumns = @JoinColumn(name = "workout_record_id"))
+    @Column(name = "workout_type", nullable = false)
+    private List<String> workoutTypes = new ArrayList<>();
 
     @Column(nullable = false)
     private LocalDate workoutDate;
@@ -39,8 +43,10 @@ public class WorkoutRecord {
     @Column(nullable = false)
     private Integer duration; // minutes
 
-    @Column(nullable = false)
-    private String imageUrl;
+    @ElementCollection(fetch = FetchType.EAGER)
+    @CollectionTable(name = "workout_image", joinColumns = @JoinColumn(name = "workout_record_id"))
+    @Column(name = "image_url", nullable = false, length = 512)
+    private List<String> imageUrls = new ArrayList<>();
 
     @CreatedDate
     @Column(nullable = false, updatable = false)
@@ -48,13 +54,13 @@ public class WorkoutRecord {
 
     @Builder
     public WorkoutRecord(Member member, WorkoutRoom workoutRoom, LocalDate workoutDate,
-                         String workoutType, Integer duration, String imageUrl) {
+                         List<String> workoutTypes, Integer duration, List<String> imageUrls) {
         this.member = member;
         this.workoutRoom = workoutRoom;
         this.workoutDate = workoutDate;
-        this.workoutType = workoutType;
+        this.workoutTypes = workoutTypes;
         this.duration = duration;
-        this.imageUrl = imageUrl;
+        this.imageUrls = imageUrls;
     }
 
     public boolean canDelete() {

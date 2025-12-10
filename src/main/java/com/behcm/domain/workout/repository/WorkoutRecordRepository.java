@@ -21,6 +21,37 @@ public interface WorkoutRecordRepository extends JpaRepository<WorkoutRecord, Lo
     Optional<WorkoutRecord> findByMemberAndWorkoutRoomAndWorkoutDate(Member member, WorkoutRoom workoutRoom, LocalDate today);
     boolean existsByMemberAndWorkoutRoomAndWorkoutDate(Member member, WorkoutRoom workoutRoom, LocalDate workoutDate);
 
-    @Query("SELECT COUNT(wr) FROM WorkoutRecord wr WHERE wr.member = :member AND wr.workoutRoom = :workoutRoom AND wr.workoutDate >= :startDate AND wr.workoutDate <= :endDate")
-    long countByMemberAndWorkoutRoomAndWorkoutDateBetween(@Param("member") Member member, @Param("workoutRoom") WorkoutRoom workoutRoom, @Param("startDate") LocalDate startDate, @Param("endDate") LocalDate endDate);
+//    @Query("SELECT COUNT(wr) FROM WorkoutRecord wr WHERE wr.member = :member AND wr.workoutRoom = :workoutRoom AND wr.workoutDate >= :startDate AND wr.workoutDate <= :endDate")
+    @Query(
+            """
+                select count(wr)
+                from WorkoutRecord wr
+                where wr.member = :member
+                and wr.workoutRoom = :workoutRoom
+                and wr.workoutDate >= :startDate and wr.workoutDate <= :endDate
+            """
+    )
+    long countByMemberAndWorkoutRoomAndWorkoutDateBetween(
+            @Param("member") Member member,
+            @Param("workoutRoom") WorkoutRoom workoutRoom,
+            @Param("startDate") LocalDate startDate,
+            @Param("endDate") LocalDate endDate
+    );
+
+    @Query(
+            """
+                select wr
+                from WorkoutRecord wr
+                where wr.member = :member
+                and wr.createdAt = (
+                    select max(wr2.createdAt)
+                    from WorkoutRecord wr2
+                    where wr2.member = wr.member
+                    and wr2.workoutDate = wr.workoutDate
+                )
+                order by wr.workoutDate desc
+            """
+    )
+    Page<WorkoutRecord> findAllByMemberPerWorkoutDate(Member member, Pageable pageable);
+
 }

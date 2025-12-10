@@ -62,8 +62,8 @@ public class MemberService {
     }
 
     public Page<WorkoutFeedItemResponse> getMemberWorkoutFeed(Member member, int page, int size) {
-        Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "workoutDate"));
-        return workoutRecordRepository.findAllByMember(member, pageable).map(WorkoutFeedItemResponse::from);
+        Pageable pageable = PageRequest.of(page, size);
+        return workoutRecordRepository.findAllByMemberPerWorkoutDate(member, pageable).map(WorkoutFeedItemResponse::from);
     }
 
     public WorkoutStatsResponse getMemberWorkoutStats(Member member) {

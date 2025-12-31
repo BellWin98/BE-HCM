@@ -52,3 +52,6 @@ springdoc:
     enabled: true
     path: /swagger-ui.html
   override-with-generic-response: false
+
+fcm:
+  service-account-file: hcm-firebase-account-key.json

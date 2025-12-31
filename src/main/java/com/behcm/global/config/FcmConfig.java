@@ -17,7 +17,7 @@ import java.io.InputStream;
 @Configuration
 public class FcmConfig {
 
-    @Value("${fcm.service-account-file:firebase-service-account.json}")
+    @Value("${fcm.service-account-file:hcm-firebase-account-key.json}")
     private String serviceAccountFile;
 
     @PostConstruct

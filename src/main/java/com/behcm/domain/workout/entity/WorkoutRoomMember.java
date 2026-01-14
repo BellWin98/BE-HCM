@@ -11,7 +11,10 @@ import java.time.LocalDateTime;
 
 @Entity
 @Table(uniqueConstraints = {
-        @UniqueConstraint(columnNames = {"member_id", "workout_room_id"})
+        @UniqueConstraint(columnNames = { "member_id", "workout_room_id" })
+}, indexes = {
+        @Index(name = "idx_workout_room_member_workout_room_joined_at", columnList = "workout_room_id,joined_at"),
+        @Index(name = "idx_workout_room_member_member", columnList = "member_id")
 })
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)

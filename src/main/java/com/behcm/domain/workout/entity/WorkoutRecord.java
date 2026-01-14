@@ -15,6 +15,12 @@ import java.util.ArrayList;
 import java.util.List;
 
 @Entity
+@Table(
+        indexes = {
+                @Index(name = "idx_workout_record_member", columnList = "member_id"),
+                @Index(name = "idx_workout_record_member_room_date", columnList = "member_id,workout_room_id,workout_date")
+        }
+)
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @EntityListeners(AuditingEntityListener.class)

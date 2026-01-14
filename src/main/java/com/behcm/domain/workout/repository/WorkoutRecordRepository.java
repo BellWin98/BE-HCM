@@ -18,6 +18,10 @@ import java.util.Optional;
 public interface WorkoutRecordRepository extends JpaRepository<WorkoutRecord, Long> {
     List<WorkoutRecord> findAllByMember(Member member);
     Page<WorkoutRecord> findAllByMember(Member member, Pageable pageable);
+    
+    @Query("SELECT wr FROM WorkoutRecord wr WHERE wr.member IN :members ORDER BY wr.member.id, wr.workoutDate DESC")
+    List<WorkoutRecord> findAllByMembersIn(@Param("members") List<Member> members);
+    
     Optional<WorkoutRecord> findByMemberAndWorkoutRoomAndWorkoutDate(Member member, WorkoutRoom workoutRoom, LocalDate today);
     boolean existsByMemberAndWorkoutRoomAndWorkoutDate(Member member, WorkoutRoom workoutRoom, LocalDate workoutDate);
 

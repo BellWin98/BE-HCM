@@ -6,7 +6,6 @@ import com.behcm.domain.member.repository.MemberRepository;
 import com.behcm.domain.rest.dto.RestResponse;
 import com.behcm.domain.rest.repository.RestRepository;
 import com.behcm.domain.workout.dto.*;
-import com.behcm.domain.workout.entity.WorkoutRecord;
 import com.behcm.domain.workout.entity.WorkoutRoom;
 import com.behcm.domain.workout.entity.WorkoutRoomMember;
 import com.behcm.domain.workout.repository.WorkoutRecordRepository;
@@ -38,7 +37,8 @@ public class WorkoutRoomService {
     public WorkoutRoomResponse createWorkoutRoom(Member owner, CreateWorkoutRoomRequest request) {
 
         // 이미 다른 활성 중인 운동방에 참여 중인지 확인 (관리자는 제외)
-        if (owner.getRole() == MemberRole.USER && workoutRoomRepository.findActiveWorkoutRoomByMember(owner).isPresent()) {
+        if (owner.getRole() == MemberRole.USER
+                && workoutRoomRepository.findActiveWorkoutRoomByMember(owner).isPresent()) {
             throw new CustomException(ErrorCode.ALREADY_JOINED_WORKOUT_ROOM);
         }
 
@@ -81,24 +81,12 @@ public class WorkoutRoomService {
         // 모든 참여 방을 조회하려면 getJoinedWorkoutRooms() 메서드를 사용하세요.
         WorkoutRoom workoutRoom = workoutRoomRepository.findFirstByWorkoutRoomMembersMemberAndIsActiveTrue(member)
                 .orElseThrow(() -> new CustomException(ErrorCode.WORKOUT_ROOM_NOT_FOUND, "유저가 속한 운동방이 없습니다."));
-        List<WorkoutRoomMemberResponse> workoutRoomMembers = workoutRoomMemberRepository.findByWorkoutRoomOrderByJoinedAt(workoutRoom).stream()
-                .map(workoutRoomMember -> {
-                    List<WorkoutRecordResponse> workoutRecords = workoutRecordRepository.findAllByMember(workoutRoomMember.getMember()).stream()
-                            .map(WorkoutRecordResponse::from)
-                            .toList();
-                    List<RestResponse> restInfoList = restRepository.findAllByWorkoutRoomMember(workoutRoomMember).stream()
-                            .map(RestResponse::from)
-                            .toList();
-                    return WorkoutRoomMemberResponse.of(workoutRoomMember, workoutRecords, restInfoList);
-                })
-                .toList();
-        Optional<WorkoutRecord> currentMemberWorkoutRecordOpt = workoutRecordRepository.findByMemberAndWorkoutRoomAndWorkoutDate(member, workoutRoom, LocalDate.now());
-        WorkoutRecord currentMemberWorkoutRecord;
-        if (currentMemberWorkoutRecordOpt.isPresent()) {
-            currentMemberWorkoutRecord = currentMemberWorkoutRecordOpt.get();
-            return new WorkoutRoomDetailResponse(WorkoutRoomResponse.from(workoutRoom), workoutRoomMembers, WorkoutRecordResponse.from(currentMemberWorkoutRecord));
-        }
-        return new WorkoutRoomDetailResponse(WorkoutRoomResponse.from(workoutRoom), workoutRoomMembers, null);
+
+        List<WorkoutRoomMemberResponse> workoutRoomMembers = buildWorkoutRoomMembers(workoutRoom);
+        Optional<WorkoutRecordResponse> currentMemberWorkoutRecord = getCurrentMemberTodayWorkoutRecord(member,
+                workoutRoom);
+
+        return buildWorkoutRoomDetailResponse(workoutRoom, workoutRoomMembers, currentMemberWorkoutRecord);
     }
 
     @Transactional(readOnly = true)
@@ -112,24 +100,12 @@ public class WorkoutRoomService {
     public WorkoutRoomDetailResponse getJoinedWorkoutRoom(Long roomId, Member member) {
         WorkoutRoom workoutRoom = workoutRoomRepository.findById(roomId)
                 .orElseThrow(() -> new CustomException(ErrorCode.WORKOUT_ROOM_NOT_FOUND, "유저가 속한 운동방이 없습니다."));
-        List<WorkoutRoomMemberResponse> workoutRoomMembers = workoutRoomMemberRepository.findByWorkoutRoomOrderByJoinedAt(workoutRoom).stream()
-                .map(workoutRoomMember -> {
-                    List<WorkoutRecordResponse> workoutRecords = workoutRecordRepository.findAllByMember(workoutRoomMember.getMember()).stream()
-                            .map(WorkoutRecordResponse::from)
-                            .toList();
-                    List<RestResponse> restInfoList = restRepository.findAllByWorkoutRoomMember(workoutRoomMember).stream()
-                            .map(RestResponse::from)
-                            .toList();
-                    return WorkoutRoomMemberResponse.of(workoutRoomMember, workoutRecords, restInfoList);
-                })
-                .toList();
-        Optional<WorkoutRecord> currentMemberWorkoutRecordOpt = workoutRecordRepository.findByMemberAndWorkoutRoomAndWorkoutDate(member, workoutRoom, LocalDate.now());
-        WorkoutRecord currentMemberWorkoutRecord;
-        if (currentMemberWorkoutRecordOpt.isPresent()) {
-            currentMemberWorkoutRecord = currentMemberWorkoutRecordOpt.get();
-            return new WorkoutRoomDetailResponse(WorkoutRoomResponse.from(workoutRoom), workoutRoomMembers, WorkoutRecordResponse.from(currentMemberWorkoutRecord));
-        }
-        return new WorkoutRoomDetailResponse(WorkoutRoomResponse.from(workoutRoom), workoutRoomMembers, null);
+
+        List<WorkoutRoomMemberResponse> workoutRoomMembers = buildWorkoutRoomMembers(workoutRoom);
+        Optional<WorkoutRecordResponse> currentMemberWorkoutRecord = getCurrentMemberTodayWorkoutRecord(member,
+                workoutRoom);
+
+        return buildWorkoutRoomDetailResponse(workoutRoom, workoutRoomMembers, currentMemberWorkoutRecord);
     }
 
     @Transactional(readOnly = true)
@@ -145,7 +121,8 @@ public class WorkoutRoomService {
                 .orElseThrow(() -> new CustomException(ErrorCode.WORKOUT_ROOM_NOT_FOUND));
 
         // 다른 운동방에 참여 중인지 확인 (관리자의 경우, 여러 운동방에 참여 가능)
-        if (member.getRole() == MemberRole.USER && workoutRoomRepository.findActiveWorkoutRoomByMember(member).isPresent()) {
+        if (member.getRole() == MemberRole.USER
+                && workoutRoomRepository.findActiveWorkoutRoomByMember(member).isPresent()) {
             throw new CustomException(ErrorCode.ALREADY_JOINED_WORKOUT_ROOM);
         }
 
@@ -178,5 +155,58 @@ public class WorkoutRoomService {
     @Transactional(readOnly = true)
     public boolean isMemberInWorkoutRoom(Member member) {
         return !workoutRoomMemberRepository.findWorkoutRoomMembersByMember(member).isEmpty();
+    }
+
+    /**
+     * 운동방의 모든 멤버와 각 멤버의 운동 기록, 휴식 정보를 조회하여 응답 리스트를 생성합니다.
+     *
+     * @param workoutRoom 운동방 엔티티
+     * @return 운동방 멤버 응답 리스트
+     */
+    private List<WorkoutRoomMemberResponse> buildWorkoutRoomMembers(WorkoutRoom workoutRoom) {
+        return workoutRoomMemberRepository.findByWorkoutRoomOrderByJoinedAt(workoutRoom).stream()
+                .map(workoutRoomMember -> {
+                    List<WorkoutRecordResponse> workoutRecords = workoutRecordRepository
+                            .findAllByMember(workoutRoomMember.getMember()).stream()
+                            .map(WorkoutRecordResponse::from)
+                            .toList();
+                    List<RestResponse> restInfoList = restRepository.findAllByWorkoutRoomMember(workoutRoomMember)
+                            .stream()
+                            .map(RestResponse::from)
+                            .toList();
+                    return WorkoutRoomMemberResponse.of(workoutRoomMember, workoutRecords, restInfoList);
+                })
+                .toList();
+    }
+
+    /**
+     * 현재 멤버의 오늘 날짜 운동 기록을 조회합니다.
+     *
+     * @param member      멤버 엔티티
+     * @param workoutRoom 운동방 엔티티
+     * @return 오늘 날짜의 운동 기록 응답 (없으면 빈 Optional)
+     */
+    private Optional<WorkoutRecordResponse> getCurrentMemberTodayWorkoutRecord(Member member, WorkoutRoom workoutRoom) {
+        return workoutRecordRepository.findByMemberAndWorkoutRoomAndWorkoutDate(member, workoutRoom, LocalDate.now())
+                .map(WorkoutRecordResponse::from);
+    }
+
+    /**
+     * 운동방 상세 응답 객체를 생성합니다.
+     *
+     * @param workoutRoom   운동방 엔티티
+     * @param members       운동방 멤버 응답 리스트
+     * @param currentRecord 현재 멤버의 오늘 운동 기록 응답 (Optional)
+     * @return 운동방 상세 응답 객체
+     */
+    private WorkoutRoomDetailResponse buildWorkoutRoomDetailResponse(
+            WorkoutRoom workoutRoom,
+            List<WorkoutRoomMemberResponse> members,
+            Optional<WorkoutRecordResponse> currentRecord) {
+        WorkoutRecordResponse currentMemberWorkoutRecord = currentRecord.orElse(null);
+        return new WorkoutRoomDetailResponse(
+                WorkoutRoomResponse.from(workoutRoom),
+                members,
+                currentMemberWorkoutRecord);
     }
 }

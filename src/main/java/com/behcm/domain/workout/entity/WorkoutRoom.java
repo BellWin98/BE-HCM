@@ -13,6 +13,12 @@ import java.util.ArrayList;
 import java.util.List;
 
 @Entity
+@Table(
+        indexes = {
+                @Index(name = "idx_workout_room_active_end_date", columnList = "is_active,end_date"),
+                @Index(name = "idx_workout_room_entry_code", columnList = "entry_code")
+        }
+)
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class WorkoutRoom extends BaseTimeEntity {

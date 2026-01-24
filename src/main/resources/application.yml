@@ -11,7 +11,7 @@ server:
 
 spring:
   profiles:
-    active: prod
+    active: local
     include: secret
   servlet:
     multipart:
@@ -52,3 +52,6 @@ springdoc:
     enabled: true
     path: /swagger-ui.html
   override-with-generic-response: false
+
+fcm:
+  service-account-file: hcm-firebase-account-key.json

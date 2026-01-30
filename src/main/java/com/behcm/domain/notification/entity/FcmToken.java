@@ -27,9 +27,6 @@ public class FcmToken extends BaseTimeEntity {
     @Column(nullable = false, length = 500, unique = true)
     private String token;
 
-    @Column(nullable = false)
-    private Boolean isActive = true;
-
     @Builder
     public FcmToken(Member member, String token) {
         this.member = member;
@@ -38,10 +35,5 @@ public class FcmToken extends BaseTimeEntity {
 
     public void updateToken(String token) {
         this.token = token;
-        this.isActive = true;
-    }
-
-    public void deactivate() {
-        this.isActive = false;
     }
 }

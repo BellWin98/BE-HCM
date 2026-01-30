@@ -54,4 +54,4 @@ springdoc:
   override-with-generic-response: false
 
 fcm:
-  service-account-file: hcm-firebase-account-key.json
+  key-path: hcm-firebase-account-key.json

@@ -3,8 +3,8 @@ package com.behcm.domain.notification.controller;
 import com.behcm.domain.member.entity.Member;
 import com.behcm.domain.notification.dto.FcmTokenRequest;
 import com.behcm.domain.notification.dto.NotifyChatRequest;
-import com.behcm.domain.notification.dto.NotifyWorkoutRequest;
-import com.behcm.domain.notification.service.NotificationService;
+import com.behcm.domain.notification.dto.NotifyRequest;
+import com.behcm.domain.notification.service.NotificationFacade;
 import com.behcm.global.common.ApiResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -20,7 +20,7 @@ import org.springframework.web.bind.annotation.*;
 @Tag(name = "Notification", description = "푸시 알림 API")
 public class NotificationController {
 
-    private final NotificationService notificationService;
+    private final NotificationFacade notificationFacade;
 
     @PostMapping("/fcm/token")
     @Operation(summary = "FCM 토큰 등록", description = "사용자의 FCM 토큰을 등록하거나 갱신합니다.")
@@ -28,29 +28,42 @@ public class NotificationController {
             @Valid @RequestBody FcmTokenRequest request,
             @AuthenticationPrincipal Member member
     ) {
-        notificationService.registerFcmToken(member, request);
+        notificationFacade.registerFcmToken(member, request.getToken());
         return ResponseEntity.ok(ApiResponse.success(null, "FCM 토큰이 등록되었습니다."));
     }
 
-    @PostMapping("/rooms/{roomId}/workout")
-    @Operation(summary = "운동 인증 알림", description = "운동 인증 시 같은 방의 다른 멤버들에게 푸시 알림을 전송합니다.")
-    public ResponseEntity<ApiResponse<String>> notifyWorkout(
+    @PostMapping("/rooms/{roomId}")
+    @Operation(summary = "알림", description = "운동 인증 또는 채팅 발송 시 같은 방의 다른 멤버들에게 푸시 알림을 전송합니다.")
+    public ResponseEntity<ApiResponse<String>> notifyRoomMembers(
             @PathVariable Long roomId,
-            @Valid @RequestBody NotifyWorkoutRequest request,
+            @Valid @RequestBody NotifyRequest request,
             @AuthenticationPrincipal Member member
     ) {
-        notificationService.notifyWorkout(member, roomId, request);
+        String title;
+        String body;
+        String type = request.getType();
+        if (type.equals("WORKOUT")) {
+            title = member.getNickname() + "님이 운동을 인증했어요";
+            body = request.getBody();
+        } else {
+            title = member.getNickname() + "님이 메시지를 보냈어요";
+            body = truncateMessage(request.getBody());
+        }
+
+        notificationFacade.notifyRoomMembers(
+                roomId, member, title, body,"/rooms/" + roomId, request.getType()
+        );
         return ResponseEntity.ok(ApiResponse.success(null, "운동 인증 알림이 전송되었습니다."));
     }
 
-    @PostMapping("/rooms/{roomId}/chat")
-    @Operation(summary = "채팅 메시지 알림", description = "채팅 메시지 발송 시 같은 방의 다른 멤버들에게 푸시 알림을 전송합니다.")
-    public ResponseEntity<ApiResponse<String>> notifyChat(
-            @PathVariable Long roomId,
-            @Valid @RequestBody NotifyChatRequest request,
-            @AuthenticationPrincipal Member member
-    ) {
-        notificationService.notifyChat(member, roomId, request);
-        return ResponseEntity.ok(ApiResponse.success(null, "채팅 알림이 전송되었습니다."));
+    /**
+     * 메시지 길이 제한 (너무 긴 메시지는 생략)
+     */
+    private String truncateMessage(String message) {
+        int maxLength = 50;
+        if (message.length() > maxLength) {
+            return message.substring(0, maxLength) + "...";
+        }
+        return message;
     }
 }

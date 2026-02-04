@@ -20,6 +20,9 @@ spring:
       host: localhost
       port: 6379
 
+fcm:
+  key-path: fcm-key.json
+
 # 로깅 설정
 logging:
   level:

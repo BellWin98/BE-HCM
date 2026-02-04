@@ -1,11 +1,11 @@
 spring:
   config:
     activate:
-      on-profile: prod
+      on-profile: dev
   datasource:
-    url: ENC(42WYIfUytCVQfEbhbpYW0DglBLb9py1sBvOJ8tMFCcwTYRetUcDQZjRxnfHOpR0laALK7BpiAxc3rC24QdD4fwP31b/uQxDb7ug+kwOWzf+gihjznRgToCPxNMY2tVthqwEvrqN9CtU/Tl7YlwBQjs4avOtYdlNSv/zGFYguLyU2LHg+4T6WQbCLX4Zvff4agNM9TQjpLCw=)
-    username: ENC(KECJYP3aLTAaS/1ffwfn2Q==)
-    password: ENC(dH70a8PAfeYkwJ/fS9oTCyQ7nIM9QfYhlVqbVF+T/0A=)
+    url: ENC(w43r+JK4IxkLaz67OZbo9/Sw9jvs0dLStb+GUsc+yZdWLeFiuMEvbAishy3kMxWHaqOnbpCVxNg/Yx9grYShknzUlNYOYJ/IUC8BzTPXUX2XkUXmdvXykvRP+VtD584xFLL+Vb4LrpY2xb/ja0gtnfhqG5w5YhudkA3+6b5eO1a3e6SBXSiALZEYAQHHLUk4VkH2+G1pPB1qfKqODtFxFA==)
+    username: ENC(lVSrqCpmTW5Z7LsDVhoNIQ==)
+    password: ENC(xGO3ZGAnd1V6vd8YK0vE621ooscZjt+EGrK+v183NKU=)
     driver-class-name: org.mariadb.jdbc.Driver
   jpa:
     properties:
@@ -17,9 +17,9 @@ spring:
     show-sql: false
   data:
     redis:
-      host: ENC(+mNfUF8iXbnTe2oQ58Z2WA==)
+      host: ENC(biGY1NB/OG+9fMjwd9xydQ==)
       port: 6379
-      password: ENC(fFn96KY60L7dV8VvoBEASYnsAHjA4BPN)
+      password: ENC(f/q6GpGysypGkQk/Mswp9J3L2U3SLMwp)
 
 cloud:
   aws:
@@ -34,5 +34,5 @@ cloud:
 # 로깅 설정
 logging:
   level:
-    root: WARN
+    root: INFO
     com.behcm: INFO

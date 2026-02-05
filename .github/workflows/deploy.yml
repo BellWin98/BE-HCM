@@ -55,14 +55,6 @@ jobs:
           key: ${{ github.ref == 'refs/heads/main' && secrets.EC2_SSH_KEY || secrets.DEV_EC2_SSH_KEY }}
           envs: IMAGE_TAG, DOCKER_COMPOSE_PATH
           script: |
-#            sudo docker stop hcm:${{ env.IMAGE_TAG }} || true
-#            sudo docker rm -f $(sudo docker ps --filter 'status=exited' -a -q) || true
             sudo docker pull ${{ secrets.DOCKER_REPO }}/hcm:${{ env.IMAGE_TAG }}
-#            sudo docker rmi $(docker images -f "dangling=true" -q)
-                    
-            # 구동 중인 컨테이너 중 해당 이미지 태그를 사용하는 것만 교체
-            # (기존 스크립트의 로직을 유지하면서 태그만 동적으로 처리)
             sudo docker-compose -f $DOCKER_COMPOSE_PATH up -d
-            
-            # 사용하지 않는 이미지 정리
             sudo docker image prune -f

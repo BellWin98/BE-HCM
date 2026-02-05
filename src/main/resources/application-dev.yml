@@ -32,7 +32,7 @@ cloud:
       static: ap-northeast-2
 
 fcm:
-  key-path: /app/config/fcm-key.json # 컨테이너 내부 절대 경로로 지정
+  key-path: ${FCM_KEY_PATH:/app/config/fcm-key.json}
 
 # 로깅 설정
 logging:

@@ -11,7 +11,7 @@ server:
 
 spring:
   profiles:
-    active: local
+    active: dev
     include: secret
   servlet:
     multipart:

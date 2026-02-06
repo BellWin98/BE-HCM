@@ -20,8 +20,15 @@ spring:
       host: localhost
       port: 6379
 
-fcm:
-  key-path: fcm-key.json
+cloud:
+  aws:
+    credentials:
+      access-key: ENC(vZ/NolroRR+tqNJoGqwNtr920TySD+JKw5C+b6fGoeY=)
+      secret-key: ENC(yTqkdKxGuimUAOyoRJdsxTOW0tqT1+JBIm7LW/H/DFw9QTgHGueiHVkl0CyFcatK9WwO+lVC6yc=)
+    s3:
+      bucket: ENC(LBQ0Oiwmr4kfUXFudgnSPCzrVao1uhk9)
+    region:
+      static: ap-northeast-2
 
 # 로깅 설정
 logging:

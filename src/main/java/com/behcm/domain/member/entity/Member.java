@@ -107,4 +107,8 @@ public class Member extends BaseTimeEntity implements UserDetails {
     public boolean isEnabled() {
         return true;
     }
+
+    public void changeRole(MemberRole role) {
+        this.role = role;
+    }
 }

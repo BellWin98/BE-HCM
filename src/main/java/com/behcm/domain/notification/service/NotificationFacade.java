@@ -27,6 +27,7 @@ public class NotificationFacade {
 
     public void registerFcmToken(Member member, String token) {
         fcmService.saveFcmToken(member, token);
+        log.info("토큰 등록 완료 - member: {}, token: {}", member.getEmail(), token);
     }
 
     public void notifyRoomMembers(Long roomId, Member member, String title, String body, String path, String type) {
@@ -39,6 +40,8 @@ public class NotificationFacade {
                         .map(FcmToken::getToken).orElse(null))
                 .filter(Objects::nonNull)
                 .toList();
+
+        log.info("roomId: {}, token count: {}, ", roomId, tokens.size());
 
         fcmService.sendGroupNotification(tokens, title, body, path, type);
     }

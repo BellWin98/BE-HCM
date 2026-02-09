@@ -40,6 +40,7 @@ public class FcmService {
                                 .build())
                         .build();
                 FirebaseMessaging.getInstance().send(message);
+                log.info("알림 발송 성공 (token: {}, title: {}, body: {}, type: {}, path: {})", token, title, body, type, path);
             } catch (Exception e) {
                 log.error("FCM 발송 실패 (token: {}): {}", token, e.getMessage());
             }

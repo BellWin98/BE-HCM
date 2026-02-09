@@ -3,6 +3,9 @@ name: CI/CD Pipeline
 on:
   push:
     branches: [ "main", "dev" ]
+  pull_request:
+    branches: [ "main", "dev" ]
+
   workflow_dispatch:
 
 permissions:
@@ -65,7 +68,7 @@ jobs:
         uses: docker/build-push-action@v5
         with:
           context: .
-          push: true
+          push: ${{ github.event_name != 'pull_request' }}
           tags: |
             ${{ env.DOCKER_IMAGE }}:${{ steps.meta.outputs.TAG }}
             ${{ env.DOCKER_IMAGE }}:${{ steps.meta.outputs.SHA }}
@@ -75,6 +78,8 @@ jobs:
   cd:
     needs: ci # CI Job이 성공해야만 실행됨
     runs-on: ubuntu-latest
+
+    if: ${{ github.event_name != 'pull_request' }} # PR이벤트 아닐때만 실행
 
     # 동적으로 환경(Environment) 선택
     # main 브랜치면 production 환경, 아니면 development 환경의 변수(Secrets)를 가져옴

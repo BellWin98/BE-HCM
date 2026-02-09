@@ -31,9 +31,6 @@ cloud:
     region:
       static: ap-northeast-2
 
-fcm:
-  key-path: ${FCM_KEY_PATH:/app/config/fcm-key.json}
-
 # 로깅 설정
 logging:
   level:

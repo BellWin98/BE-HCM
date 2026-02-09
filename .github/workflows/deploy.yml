@@ -81,28 +81,6 @@ jobs:
     environment: ${{ github.ref == 'refs/heads/main' && 'production' || 'development' }}
 
     steps:
-      # [디버깅용] 배포 전 시크릿 확인 단계 (확인 후 삭제하세요)
-      - name: Debug Secrets & Environment
-        run: |
-          echo "Current Branch Ref: ${{ github.ref }}"
-          
-          # 1. EC2_HOST 변수 확인
-          if [ -z "${{ secrets.EC2_HOST }}" ]; then
-            echo "❌ ERROR: EC2_HOST 시크릿이 비어있습니다!"
-          else
-            echo "✅ EC2_HOST 시크릿이 로드되었습니다."
-            echo "   값(마스킹됨): ${{ secrets.EC2_HOST }}"
-            # 값의 앞 2글자만 살짝 힌트로 보여주기 (보안 주의)
-            val="${{ secrets.EC2_HOST }}"
-            echo "   힌트: ${val:0:2}*****"
-          fi
-          
-          # 2. SSH KEY 변수 확인
-          if [ -z "${{ secrets.EC2_SSH_KEY }}" ]; then
-            echo "❌ ERROR: EC2_SSH_KEY 시크릿이 비어있습니다!"
-          else
-             echo "✅ EC2_SSH_KEY 시크릿이 로드되었습니다."
-          fi
       - name: Deploy to EC2
         uses: appleboy/ssh-action@master
         env:

@@ -55,6 +55,8 @@ jobs:
           key: ${{ github.ref == 'refs/heads/main' && secrets.EC2_SSH_KEY || secrets.DEV_EC2_SSH_KEY }}
           envs: IMAGE_TAG, DOCKER_COMPOSE_PATH
           script: |
+            sudo docker stop hcm || true
+            sudo docker rm -f $(sudo docker ps --filter 'status=exited' -a -q) || true
             sudo docker pull ${{ secrets.DOCKER_REPO }}/hcm:${{ env.IMAGE_TAG }}
+            sudo docker rmi $(docker images -f "dangling=true" -q)
             sudo docker-compose -f $DOCKER_COMPOSE_PATH up -d
-            sudo docker image prune -f

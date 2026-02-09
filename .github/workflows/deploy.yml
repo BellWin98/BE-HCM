@@ -95,6 +95,8 @@ jobs:
           key: ${{ secrets.EC2_SSH_KEY }}
           envs: DOCKER_REPO, IMAGE_TAG, DOCKER_COMPOSE_PATH
           script: |
+            sudo docker stop hcm || true
+            sudo docker rm -f $(sudo docker ps --filter 'status=exited' -a -q) || true
+            sudo docker image prune -f
             sudo docker pull $DOCKER_REPO/hcm:$IMAGE_TAG
             sudo docker-compose -f $DOCKER_COMPOSE_PATH up -d
-            sudo docker image prune -f

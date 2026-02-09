@@ -35,4 +35,4 @@ cloud:
 logging:
   level:
     root: INFO
-    com.behcm: INFO
+    com.behcm: DEBUG

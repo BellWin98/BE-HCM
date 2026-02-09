@@ -2,7 +2,6 @@ package com.behcm.domain.notification.controller;
 
 import com.behcm.domain.member.entity.Member;
 import com.behcm.domain.notification.dto.FcmTokenRequest;
-import com.behcm.domain.notification.dto.NotifyChatRequest;
 import com.behcm.domain.notification.dto.NotifyRequest;
 import com.behcm.domain.notification.service.NotificationFacade;
 import com.behcm.global.common.ApiResponse;

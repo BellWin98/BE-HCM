@@ -38,19 +38,8 @@ public class NotificationController {
             @Valid @RequestBody NotifyRequest request,
             @AuthenticationPrincipal Member member
     ) {
-        String title;
-        String body;
-        String type = request.getType();
-        if (type.equals("WORKOUT")) {
-            title = member.getNickname() + "님이 운동을 인증했어요";
-            body = request.getBody();
-        } else {
-            title = member.getNickname() + "님이 메시지를 보냈어요";
-            body = truncateMessage(request.getBody());
-        }
-
         notificationFacade.notifyRoomMembers(
-                roomId, member, title, body,"/rooms/" + roomId, request.getType()
+                roomId, member, request.getTitle(), truncateMessage(request.getBody()),"/rooms/" + roomId
         );
         return ResponseEntity.ok(ApiResponse.success(null, "운동 인증 알림이 전송되었습니다."));
     }

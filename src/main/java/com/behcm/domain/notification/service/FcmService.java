@@ -29,7 +29,8 @@ public class FcmService {
     }
 
     @Async
-    public void sendGroupNotification(List<String> tokens, String title, String body, String path, String type) {
+    public void sendGroupNotification(Long senderId, List<String> tokens, String title, String body, String path) {
+        log.debug("알림 - title: {}, body: {}", title, body);
         for (String token : tokens) {
             try {
                 Message message = Message.builder()
@@ -38,9 +39,10 @@ public class FcmService {
                                 .setTitle(title)
                                 .setBody(body)
                                 .build())
+                        .putData("senderId", String.valueOf(senderId))
                         .build();
                 FirebaseMessaging.getInstance().send(message);
-                log.info("알림 발송 성공 (token: {}, title: {}, body: {}, type: {}, path: {})", token, title, body, type, path);
+                log.debug("알림 발송 성공 (token: {})", token);
             } catch (Exception e) {
                 log.error("FCM 발송 실패 (token: {}): {}", token, e.getMessage());
             }

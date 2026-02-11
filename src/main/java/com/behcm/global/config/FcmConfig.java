@@ -15,7 +15,7 @@ import java.io.InputStream;
 
 @Slf4j
 @Configuration
-@Profile(("dev"))
+@Profile({"dev", "prod"})
 public class FcmConfig {
 
     @Value("${fcm.key-path}")

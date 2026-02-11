@@ -31,11 +31,9 @@ public class NotificationFacade {
         log.debug("토큰 등록 완료 - member: {}, token: {}", member.getEmail(), token);
     }
 
-    public void notifyRoomMembers(Long roomId, Member member, String title, String body, String path) {
+    public void notifyRoomMembers(Long roomId, Member member, String title, String body, String type, String path) {
         WorkoutRoom workoutRoom = workoutRoomRepository.findByIdAndIsActiveTrue(roomId)
                 .orElseThrow(() -> new CustomException(ErrorCode.WORKOUT_ROOM_NOT_FOUND));
-
-        log.debug("member: {}", member.getNickname());
 
         List<Member> targetMembers = workoutRoom.getWorkoutRoomMembers().stream()
                 .map(WorkoutRoomMember::getMember)
@@ -44,8 +42,6 @@ public class NotificationFacade {
 
         List<String> fcmTokens = fcmTokenRepository.findFcmTokensByMembers(targetMembers);
 
-        log.debug("roomId: {}, targetMembers: {}, token count: {}", roomId, targetMembers.size(), fcmTokens.size());
-
-        fcmService.sendGroupNotification(member.getId(), fcmTokens, title, body, path);
+        fcmService.sendGroupNotification(member.getId(), fcmTokens, title, body, type + "-" + roomId, path);
     }
 }

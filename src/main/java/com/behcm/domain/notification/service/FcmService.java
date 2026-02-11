@@ -27,19 +27,15 @@ public class FcmService {
     }
 
     @Async
-    public void sendGroupNotification(Long senderId, List<String> tokens, String title, String body, String path) {
-        log.debug("알림 - title: {}, body: {}", title, body);
+    public void sendGroupNotification(Long senderId, List<String> tokens, String title, String body, String tag, String path) {
         for (String token : tokens) {
             try {
                 Message message = Message.builder()
                         .setToken(token)
-/*                        .setNotification(Notification.builder()
-                                .setTitle(title)
-                                .setBody(body)
-                                .build())*/
                         .putData("title", title)
                         .putData("body", body)
                         .putData("senderId", String.valueOf(senderId))
+                        .putData("tag", tag)
                         .setAndroidConfig(AndroidConfig.builder()
                                 .setTtl(0)
                                 .setPriority(AndroidConfig.Priority.HIGH)

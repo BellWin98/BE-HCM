@@ -39,7 +39,7 @@ public class NotificationController {
             @AuthenticationPrincipal Member member
     ) {
         notificationFacade.notifyRoomMembers(
-                roomId, member, request.getTitle(), truncateMessage(request.getBody()),"/rooms/" + roomId
+                roomId, member, request.getTitle(), truncateMessage(request.getBody()), request.getType(),"/rooms/" + roomId
         );
         return ResponseEntity.ok(ApiResponse.success(null, "운동 인증 알림이 전송되었습니다."));
     }

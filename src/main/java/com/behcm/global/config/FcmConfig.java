@@ -22,21 +22,25 @@ public class FcmConfig {
     private String path;
 
     @PostConstruct
-    public void init() throws IOException {
+    public void init() {
 /*        FirebaseOptions options = FirebaseOptions.builder()
                 .setCredentials(GoogleCredentials.fromStream(new ClassPathResource(path).getInputStream()))
                 .build();*/
 
-        // ClassPathResource 대신 환경에 따라 외부 파일을 읽을 수 있도록 구성
-        InputStream serviceAccount = new FileInputStream(path);
+        try {
+            // ClassPathResource 대신 환경에 따라 외부 파일을 읽을 수 있도록 구성
+            InputStream serviceAccount = new FileInputStream(path);
 
-        FirebaseOptions options = FirebaseOptions.builder()
-                .setCredentials(GoogleCredentials.fromStream(serviceAccount))
-                .build();
+            FirebaseOptions options = FirebaseOptions.builder()
+                    .setCredentials(GoogleCredentials.fromStream(serviceAccount))
+                    .build();
 
-        if (FirebaseApp.getApps().isEmpty()) {
-            FirebaseApp.initializeApp(options);
-            log.info("FCM FirebaseApp initialized successfully.");
+            if (FirebaseApp.getApps().isEmpty()) {
+                FirebaseApp.initializeApp(options);
+                log.info("FCM FirebaseApp initialized successfully.");
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
         }
     }
 }

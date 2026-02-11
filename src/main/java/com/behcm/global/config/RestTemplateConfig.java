@@ -51,7 +51,7 @@ public class RestTemplateConfig {
     }
 
     @Bean
-    @Profile("prod")
+    @Profile({"dev", "prod"})
     public RestTemplate prodRestTemplate() {
         return new RestTemplateBuilder()
                 .connectTimeout(Duration.ofSeconds(5))

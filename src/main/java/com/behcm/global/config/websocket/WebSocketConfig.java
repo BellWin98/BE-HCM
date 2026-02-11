@@ -21,7 +21,7 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
         // '/ws' 경로로 지정하고, CORS 문제를 해결하기 위해 setAllowedOriginPatterns("*")를 추가합니다.
         registry
                 .addEndpoint("/wss")
-                .setAllowedOriginPatterns("http://localhost:*", "https://localhost:*", "https://hcm-red.vercel.app")
+                .setAllowedOriginPatterns("http://localhost:*", "https://localhost:*", "https://hcm-red.vercel.app", "https://hcm-blue.vercel.app")
                 .withSockJS(); // SockJS는 WebSocket을 지원하지 않는 브라우저에서도 유사한 경험을 제공합니다.
     }
 

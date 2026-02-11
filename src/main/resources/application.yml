@@ -11,7 +11,7 @@ server:
 
 spring:
   profiles:
-    active: prod
+    active: local
     include: secret
   servlet:
     multipart:
@@ -44,6 +44,9 @@ jasypt:
     string-output-type: base64
     key-obtention-iterations: 1000
     password: ${JASYPT_ENCRYPTOR_PASSWORD}
+
+fcm:
+  key-path: ${FCM_KEY_PATH:/app/config/fcm-key.json}
 
 springdoc:
   api-docs:

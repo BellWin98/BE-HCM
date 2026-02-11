@@ -14,7 +14,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Profile;
 
-@Profile({"local", "prod"})
+@Profile({"local", "dev", "prod"})
 @Configuration
 @Slf4j
 public class JasyptConfig {

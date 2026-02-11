@@ -21,6 +21,16 @@ spring:
       port: 6379
       password: ENC(fFn96KY60L7dV8VvoBEASYnsAHjA4BPN)
 
+cloud:
+  aws:
+    credentials:
+      access-key: ENC(+l4c0mplvKPCS0nvLyzdMy/wrlhgrhnnZQ9C7DOBJJM=)
+      secret-key: ENC(YA+/sMt2h4nNy/sNpp1ZOXeQp1XN5+8EXMWuyM9XeNebyDgr3ZubBtKTTGLDs7k/byX5rC5RIX8=)
+    s3:
+      bucket: ENC(lb9nVofzWL0UXlY8FD9X0Nj8wy5lj2P7)
+    region:
+      static: ap-northeast-2
+
 # 로깅 설정
 logging:
   level:

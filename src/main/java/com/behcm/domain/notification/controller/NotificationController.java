@@ -10,6 +10,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
@@ -29,6 +30,19 @@ public class NotificationController {
     ) {
         notificationFacade.registerFcmToken(member, request.getToken());
         return ResponseEntity.ok(ApiResponse.success(null, "FCM 토큰이 등록되었습니다."));
+    }
+
+    @PostMapping("/admin")
+    @Operation(summary = "알림", description = "ADMIN 유저가 운동 인증 시 속한 모든 방의 멤버들에게 푸시 알림을 전송합니다.")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<ApiResponse<String>> notifyRoomMembersForAdmin(
+            @Valid @RequestBody NotifyRequest request,
+            @AuthenticationPrincipal Member member
+    ) {
+        notificationFacade.notifyRoomMembersForAdmin(
+                member, request.getTitle(), truncateMessage(request.getBody()), request.getType(),""
+        );
+        return ResponseEntity.ok(ApiResponse.success(null, "운동 인증 알림이 전송되었습니다."));
     }
 
     @PostMapping("/rooms/{roomId}")

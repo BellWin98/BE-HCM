@@ -44,4 +44,9 @@ public class NotificationFacade {
 
         fcmService.sendGroupNotification(member.getId(), fcmTokens, title, body, type + "-" + roomId, path);
     }
+
+    public void notifyRoomMembersForAdmin(Member member, String title, String body, String type, String path) {
+        List<String> fcmTokens = fcmTokenRepository.findFcmTokensByAdminMember(member);
+        fcmService.sendGroupNotification(member.getId(), fcmTokens, title, body, type + "-" + member.getId(), path);
+    }
 }

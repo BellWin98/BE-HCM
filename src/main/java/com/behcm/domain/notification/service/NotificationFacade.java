@@ -4,6 +4,7 @@ import com.behcm.domain.member.entity.Member;
 import com.behcm.domain.notification.entity.FcmToken;
 import com.behcm.domain.notification.repository.FcmTokenRepository;
 import com.behcm.domain.workout.entity.WorkoutRoom;
+import com.behcm.domain.workout.entity.WorkoutRoomMember;
 import com.behcm.domain.workout.repository.WorkoutRoomRepository;
 import com.behcm.global.exception.CustomException;
 import com.behcm.global.exception.ErrorCode;
@@ -36,15 +37,15 @@ public class NotificationFacade {
 
         log.debug("member: {}", member.getNickname());
 
-        List<String> tokens = workoutRoom.getWorkoutRoomMembers().stream()
-                .filter(workoutRoomMember -> !workoutRoomMember.getMember().equals(member))
-                .map(workoutRoomMember -> fcmTokenRepository.findByMember(workoutRoomMember.getMember())
-                        .map(FcmToken::getToken).orElse(null))
-                .filter(Objects::nonNull)
+        List<Member> targetMembers = workoutRoom.getWorkoutRoomMembers().stream()
+                .map(WorkoutRoomMember::getMember)
+                .filter(m -> !m.getId().equals(member.getId()))
                 .toList();
 
-        log.debug("roomId: {}, token count: {}", roomId, tokens.size());
+        List<String> fcmTokens = fcmTokenRepository.findFcmTokensByMembers(targetMembers);
 
-        fcmService.sendGroupNotification(member.getId(), tokens, title, body, path);
+        log.debug("roomId: {}, targetMembers: {}, token count: {}", roomId, targetMembers.size(), fcmTokens.size());
+
+        fcmService.sendGroupNotification(member.getId(), fcmTokens, title, body, path);
     }
 }

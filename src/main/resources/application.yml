@@ -36,6 +36,29 @@ spring:
           auth: true
           starttls:
             enable: true
+  security:
+    oauth2:
+      client:
+        registration:
+          google:
+            client-id: ENC(1ZBXmsTDqAJRn6h3ukf32kSUaSYbVcpobK4AW1ARqNIF3cbkSXYolZjNNWUweU2iWCCaG+3BPNVv+qz3vFPrRvFoj9w33bVnUvvIKpleDb5+3LeozyvYqQ==)
+            client-secret: ENC(sENN0dcoZCoOVfBUIbyCHCGZnt+gZwClz/YGxM8nf7ihfPgaTvuPEHWzIcs13Kul)
+            scope: openid, profile, email
+          kakao:
+            provider: kakao
+            client-id: ENC(VcM1gMky6ozzmCSpUcIepk9llykUfkmOuqc9y0+efe2sthkM/Ug1X7v6tyxtjzqp)
+            client-secret: ENC(q68jlsACTlm9tgGTX5C6Q8s+NSJGJL66PxEKlyO53aBAxV99goo2YUNUsp7BdCYV)
+            scope: profile_nickname, account_email
+            client-name: Kakao
+            authorization-grant-type: authorization_code
+            client-authentication-method: client_secret_post
+            redirect-uri: "{baseUrl}/login/oauth2/code/{registrationId}"
+        provider:
+          kakao:
+            authorization-uri: https://kauth.kakao.com/oauth/authorize
+            token-uri: https://kauth.kakao.com/oauth/token
+            user-info-uri: https://kapi.kakao.com/v2/user/me
+            user-name-attribute: id
 
 jasypt:
   encryptor:

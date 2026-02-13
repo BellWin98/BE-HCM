@@ -1,3 +1,6 @@
+server:
+  forward-headers-strategy: native
+
 spring:
   config:
     activate:
@@ -13,7 +16,7 @@ spring:
         format_sql: false
         highlight_sql: false
     hibernate:
-      ddl-auto: create
+      ddl-auto: update
     show-sql: false
   data:
     redis:

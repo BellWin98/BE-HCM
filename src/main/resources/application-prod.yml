@@ -1,3 +1,6 @@
+server:
+  forward-headers-strategy: native
+
 spring:
   config:
     activate:
@@ -30,6 +33,10 @@ cloud:
       bucket: ENC(lb9nVofzWL0UXlY8FD9X0Nj8wy5lj2P7)
     region:
       static: ap-northeast-2
+
+# 프론트엔드 URL (OAuth 콜백 리다이렉트용)
+app:
+  frontend-url: https://hcm-red.vercel.app
 
 # 로깅 설정
 logging:

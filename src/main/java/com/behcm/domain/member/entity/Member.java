@@ -46,13 +46,22 @@ public class Member extends BaseTimeEntity implements UserDetails {
     @Column(nullable = false)
     private Long totalPenalty = 0L;
 
+    @Column(length = 20)
+    private String oauthProvider;
+
+    @Column(length = 100)
+    private String oauthProviderId;
+
     @Builder
-    public Member(String email, String password, String nickname, String profileUrl, MemberRole role) {
+    public Member(String email, String password, String nickname, String profileUrl, MemberRole role,
+                  String oauthProvider, String oauthProviderId) {
         this.email = email;
         this.password = password;
         this.nickname = nickname;
         this.profileUrl = profileUrl;
         this.role = role != null ? role : MemberRole.USER;
+        this.oauthProvider = oauthProvider;
+        this.oauthProviderId = oauthProviderId;
     }
 
     public void updateNickname(String nickname) {
@@ -75,6 +84,11 @@ public class Member extends BaseTimeEntity implements UserDetails {
 
     public void updateTotalPenalty(long totalPenalty) {
         this.totalPenalty = totalPenalty;
+    }
+
+    public void updateOAuthInfo(String oauthProvider, String oauthProviderId) {
+        this.oauthProvider = oauthProvider;
+        this.oauthProviderId = oauthProviderId;
     }
 
     // UserDetails interface methods

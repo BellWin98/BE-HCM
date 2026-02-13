@@ -30,6 +30,10 @@ cloud:
     region:
       static: ap-northeast-2
 
+# 프론트엔드 URL (OAuth 콜백 리다이렉트용)
+app:
+  frontend-url: http://localhost:3000
+
 # 로깅 설정
 logging:
   level:

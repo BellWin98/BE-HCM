@@ -23,6 +23,8 @@ public interface MemberRepository extends JpaRepository<Member, Long> {
 
     boolean existsByNickname(String nickname);
 
+    Optional<Member> findByOauthProviderAndOauthProviderId(String oauthProvider, String oauthProviderId);
+
     @Query("SELECT m FROM Member m " +
             "WHERE (:role IS NULL OR m.role = :role) " +
             "AND (:query IS NULL OR LOWER(m.nickname) LIKE LOWER(CONCAT('%', :query, '%')) " +

@@ -31,6 +31,10 @@ cloud:
     region:
       static: ap-northeast-2
 
+# 프론트엔드 URL (OAuth 콜백 리다이렉트용)
+app:
+  frontend-url: ENC(DyEg7sB4UndxN0L/z/Uv4Pn2Td0qXzWmat1WDcD8/iD6bmHL/tSO0w==)
+
 # 로깅 설정
 logging:
   level:

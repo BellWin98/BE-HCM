@@ -43,7 +43,6 @@ spring:
           google:
             client-id: ENC(1ZBXmsTDqAJRn6h3ukf32kSUaSYbVcpobK4AW1ARqNIF3cbkSXYolZjNNWUweU2iWCCaG+3BPNVv+qz3vFPrRvFoj9w33bVnUvvIKpleDb5+3LeozyvYqQ==)
             client-secret: ENC(sENN0dcoZCoOVfBUIbyCHCGZnt+gZwClz/YGxM8nf7ihfPgaTvuPEHWzIcs13Kul)
-            redirect-uri: "{baseUrl}/login/oauth2/code/google"
             scope: openid, profile, email
           kakao:
             provider: kakao
@@ -53,7 +52,7 @@ spring:
             client-name: Kakao
             authorization-grant-type: authorization_code
             client-authentication-method: client_secret_post
-            redirect-uri: "{baseUrl}/login/oauth2/code/kakao"
+            redirect-uri: "{baseUrl}/login/oauth2/code/{registrationId}"
         provider:
           kakao:
             authorization-uri: https://kauth.kakao.com/oauth/authorize

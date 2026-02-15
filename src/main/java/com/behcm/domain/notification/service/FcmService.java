@@ -40,6 +40,9 @@ public class FcmService {
                                 .setTtl(0)
                                 .setPriority(AndroidConfig.Priority.HIGH)
                                 .build())
+                        .setWebpushConfig(WebpushConfig.builder()
+                                .putHeader("Urgency", "high") // 백그라운드에서 깨우기 위함
+                                .build())
                         .build();
                 FirebaseMessaging.getInstance().send(message);
                 log.debug("알림 발송 성공 (token: {})", token);

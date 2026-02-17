@@ -30,7 +30,7 @@ public class StockService {
         params.put("ACNT_PRDT_CD", properties.getAccountProductCode());
         params.put("AFHR_FLPR_YN", "N");
         params.put("OFL_YN", "");
-        params.put("INQR_DVSN", "02");
+        params.put("INQR_DVSN", "01");
         params.put("UNPR_DVSN", "01");
         params.put("FUND_STTL_ICLD_YN", "N");
         params.put("FNCG_AMT_AUTO_RDPT_YN", "N");
@@ -80,24 +80,114 @@ public class StockService {
     }
 
     public TradingProfitLossResponse getTradingProfitLoss(TradingProfitLossRequest request) {
+        // 1. 요청 파라미터 (Query Params) 설정
         Map<String, String> params = new HashMap<>();
         params.put("CANO", properties.getAccountNumber());
-        params.put("SORT_DVSN", "00");
         params.put("ACNT_PRDT_CD", properties.getAccountProductCode());
         params.put("PDNO", "");
+        params.put("PRDT_TYPE_CD", "");
+        params.put("SMRT_INQRY_DVSN_CD", "01"); // 01: 전체
+        params.put("PD_DVSN_CD", "01");
+        params.put("SORT_DVSN", "00"); // 00: 상품번호순
         params.put("INQR_STRT_DT", request.getStartDate().replace("-", ""));
         params.put("INQR_END_DT", request.getEndDate().replace("-", ""));
-        params.put("CTX_AREA_NK100", "");
         params.put("CBLC_DVSN", "00");
+
+        // 초기 연속키는 빈 값으로 시작
         params.put("CTX_AREA_FK100", "");
+        params.put("CTX_AREA_NK100", "");
+        // 2. 요청 헤더 (Headers) 설정용 Map
+        // 초기 조회 시 tr_cont는 빈 값 (또는 생략)
+        Map<String, String> headers = new HashMap<>();
+        headers.put("tr_cont", "");
+        List<TradingProfitLossDto> allTrades = new ArrayList<>();
+        JsonNode lastResponse = null;
+        // 3. 반복 조회 루프 (Pagination)
+        while (true) {
+            // API 호출 (headers 맵을 추가로 전달한다고 가정)
+            // Client의 callApiWithParams 메서드가 헤더를 받을 수 있도록 수정되어야 합니다.
+            JsonNode response = koreaInvestmentClient.callApiWithParams(
+                    "/uapi/domestic-stock/v1/trading/inquire-period-trade-profit",
+                    "TTTC8715R",
+                    params,
+                    headers
+            );
 
-        JsonNode response = koreaInvestmentClient.callApiWithParams(
-            "/uapi/domestic-stock/v1/trading/inquire-period-trade-profit",
-            "TTTC8715R",
-            params
-        );
+            lastResponse = response; // 마지막 응답 저장 (output2 집계 데이터용)
+            // 4. output1 (개별 내역) 파싱 및 전체 리스트에 누적
+            JsonNode output1 = response.get("output1");
+            if (output1 != null && output1.isArray()) {
+                for (JsonNode trade : output1) {
+                    // 매수/매도 구분 로직 (buy_qty가 0이면 매도, 아니면 매수)
+                    boolean isBuy = !trade.path("buy_qty").asText("0").equals("0");
 
-        return parseTradingProfitLossResponse(response, request);
+                    TradingProfitLossDto tradeDto = TradingProfitLossDto.builder()
+                            .stockCode(trade.path("pdno").asText())
+                            .stockName(trade.path("prdt_name").asText())
+                            .tradeDate(trade.path("trad_dt").asText())
+                            .tradeType(isBuy ? "BUY" : "SELL")
+                            .quantity(Integer.parseInt(isBuy ? trade.path("buy_qty").asText("0") : trade.path("sll_qty").asText("0")))
+                            .price(new BigDecimal(isBuy ? trade.path("pchs_unpr").asText("0") : trade.path("sll_pric").asText("0")))
+                            .amount(new BigDecimal(isBuy ? trade.path("buy_amt").asText("0") : trade.path("sll_amt").asText("0")))
+                            .profitLoss(new BigDecimal(trade.path("rlzt_pfls").asText("0")))
+                            .profitLossRate(new BigDecimal(trade.path("pfls_rt").asText("0")))
+                            .fee(new BigDecimal(trade.path("fee").asText("0")))
+                            .tax(new BigDecimal(trade.path("tl_tax").asText("0"))) // null safe 처리
+                            .build();
+                    allTrades.add(tradeDto);
+                }
+            }
+            // 5. 연속 데이터 확인 (Response Body의 ctx 값 확인)
+            String ctxAreaNk = response.path("ctx_area_nk100").asText().trim();
+            String ctxAreaFk = response.path("ctx_area_fk100").asText().trim();
+            // 다음 데이터가 없으면(키 값이 비어있으면) 루프 종료
+            if (ctxAreaNk.isEmpty() && ctxAreaFk.isEmpty()) {
+                break;
+            }
+            // 6. 다음 페이지 조회를 위한 파라미터 및 헤더 업데이트
+            // 파라미터에 연속 키 세팅
+            params.put("CTX_AREA_NK100", ctxAreaNk);
+            params.put("CTX_AREA_FK100", ctxAreaFk);
+
+            // **중요: 다음 조회 시 헤더에 tr_cont = "N" 설정**
+            headers.put("tr_cont", "N");
+            // (선택사항) API 호출 제한 고려하여 짧은 대기 시간 추가
+            try {
+                Thread.sleep(50);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+        }
+        // 7. 최종 결과 생성 (output2 합계 데이터 및 전체 리스트 반환)
+        return parseTradingProfitLossResponse(lastResponse, request, allTrades);
+    }
+
+    private TradingProfitLossResponse parseTradingProfitLossResponse(JsonNode response, TradingProfitLossRequest request, List<TradingProfitLossDto> allTrades) {
+        JsonNode output2 = (response != null && response.has("output2")) ? response.get("output2") : null;
+
+        // output2가 배열로 오는 경우 첫 번째 요소 사용
+        if (output2 != null && output2.isArray() && !output2.isEmpty()) {
+            output2 = output2.get(0);
+        }
+        // Null Safe 하게 값 추출
+        BigDecimal totalBuyAmount = new BigDecimal(output2 != null ? output2.path("buy_excc_amt_smtl").asText("0") : "0");
+        BigDecimal totalSellAmount = new BigDecimal(output2 != null ? output2.path("sll_excc_amt_smtl").asText("0") : "0");
+        BigDecimal totalProfitLoss = new BigDecimal(output2 != null ? output2.path("tot_rlzt_pfls").asText("0") : "0");
+        BigDecimal totalProfitLossRate = new BigDecimal(output2 != null ? output2.path("tot_pftrt").asText("0") : "0");
+        BigDecimal totalFee = new BigDecimal(output2 != null ? output2.path("tot_fee").asText("0") : "0");
+        BigDecimal totalTax = new BigDecimal(output2 != null ? output2.path("tot_tltx").asText("0") : "0");
+        String period = String.format("%s ~ %s", request.getStartDate(), request.getEndDate());
+        return TradingProfitLossResponse.builder()
+                .period(period)
+                .totalBuyAmount(totalBuyAmount)
+                .totalSellAmount(totalSellAmount)
+                .totalProfitLoss(totalProfitLoss)
+                .totalProfitLossRate(totalProfitLossRate)
+                .totalFee(totalFee)
+                .totalTax(totalTax)
+                .tradeCount(allTrades.size()) // 전체 누적 개수
+                .trades(allTrades)            // 전체 누적 리스트
+                .build();
     }
 
     private StockPortfolioResponse parsePortfolioResponse(JsonNode response) {

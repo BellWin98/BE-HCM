@@ -79,14 +79,21 @@ public class KoreaInvestmentClient {
     }
 
     public JsonNode callApi(String endpoint, String transactionId) {
-        return callApiWithRetry(endpoint, transactionId, null, false);
+        return callApiWithRetry(endpoint, transactionId, null, new HashMap<>(), false);
     }
 
     public JsonNode callApiWithParams(String endpoint, String transactionId, Map<String, String> params) {
-        return callApiWithRetry(endpoint, transactionId, params, false);
+        return callApiWithRetry(endpoint, transactionId, params, new HashMap<>(), false);
     }
 
-    private JsonNode callApiWithRetry(String endpoint, String transactionId, Map<String, String> params, boolean isRetry) {
+    public JsonNode callApiWithParams(String endpoint, String transactionId, Map<String, String> params, Map<String, String> customHeaders) {
+        return callApiWithRetry(endpoint, transactionId, params, customHeaders, false);
+    }
+
+    private JsonNode callApiWithRetry(
+            String endpoint, String transactionId, Map<String, String> params,
+            Map<String, String> customHeaders, boolean isRetry
+    ) {
         String url = buildUrl(endpoint, params);
 
         HttpHeaders headers = new HttpHeaders();
@@ -97,6 +104,10 @@ public class KoreaInvestmentClient {
         headers.set("tr_id", transactionId);
         headers.set("custtype", "P");
 
+        if (customHeaders != null && !customHeaders.isEmpty()) {
+            customHeaders.forEach(headers::set);
+        }
+
         HttpEntity<String> request = new HttpEntity<>(headers);
 
         try {
@@ -104,14 +115,14 @@ public class KoreaInvestmentClient {
             JsonNode responseJson = objectMapper.readTree(response.getBody());
 
             if (isTokenExpiredResponse(responseJson)) {
-                return handleTokenExpiry(endpoint, transactionId, params, isRetry);
+                return handleTokenExpiry(endpoint, transactionId, params, customHeaders, isRetry);
             }
 
             return responseJson;
         } catch (HttpClientErrorException e) {
             if (e.getStatusCode() == HttpStatus.UNAUTHORIZED && !isRetry) {
                 log.warn("Received 401 Unauthorized, attempting token refresh");
-                return handleTokenExpiry(endpoint, transactionId, params, isRetry);
+                return handleTokenExpiry(endpoint, transactionId, params, customHeaders, isRetry);
             }
             log.error("Failed to call Korea Investment API: {}", url, e);
             throw new RuntimeException("Failed to call Korea Investment API", e);
@@ -141,7 +152,7 @@ public class KoreaInvestmentClient {
         return false;
     }
 
-    private JsonNode handleTokenExpiry(String endpoint, String transactionId, Map<String, String> params, boolean isRetry) {
+    private JsonNode handleTokenExpiry(String endpoint, String transactionId, Map<String, String> params, Map<String, String> customHeaders, boolean isRetry) {
         if (isRetry) {
             log.error("Token refresh failed, cannot retry again");
             throw new RuntimeException("Token refresh failed after retry");
@@ -150,7 +161,7 @@ public class KoreaInvestmentClient {
         log.info("Token expired, clearing cache and fetching new token");
         clearTokenCache();
 
-        return callApiWithRetry(endpoint, transactionId, params, true);
+        return callApiWithRetry(endpoint, transactionId, params, customHeaders, true);
     }
 
     private void clearTokenCache() {

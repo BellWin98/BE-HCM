@@ -32,7 +32,7 @@ public class WorkoutRoom extends BaseTimeEntity {
     @Column(nullable = false, length = 10)
     private String entryCode;
 
-    @Column(nullable = false)
+//    @Column(nullable = false)
     private LocalDate startDate;
     private LocalDate endDate;
 

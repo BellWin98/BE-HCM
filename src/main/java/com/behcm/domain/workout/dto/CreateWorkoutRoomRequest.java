@@ -20,7 +20,7 @@ public class CreateWorkoutRoomRequest {
     @Min(value = 1000, message = "회당 벌금은 1000원 이상이어야 합니다.")
     private Long penaltyPerMiss;
 
-    @NotNull(message = "시작일은 필수입니다.")
+//    @NotNull(message = "시작일은 필수입니다.")
     private LocalDate startDate;
     private LocalDate endDate;
 

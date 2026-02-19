@@ -1,8 +1,6 @@
 package com.behcm.domain.workout.service;
 
 import com.behcm.domain.member.entity.Member;
-import com.behcm.domain.member.entity.MemberRole;
-import com.behcm.domain.member.repository.MemberRepository;
 import com.behcm.domain.rest.dto.RestResponse;
 import com.behcm.domain.rest.repository.RestRepository;
 import com.behcm.domain.workout.dto.*;
@@ -20,6 +18,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
+import java.security.SecureRandom;
 import java.util.List;
 import java.util.Optional;
 
@@ -29,35 +28,35 @@ import java.util.Optional;
 @Transactional
 public class WorkoutRoomService {
 
+    private static final int ENTRY_CODE_LENGTH = 8;
+    private static final int ENTRY_CODE_MAX_GENERATION_ATTEMPTS = 30;
+    private static final char[] ENTRY_CODE_CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789".toCharArray();
+    private static final SecureRandom SECURE_RANDOM = new SecureRandom();
+
     private final WorkoutRoomRepository workoutRoomRepository;
     private final WorkoutRoomMemberRepository workoutRoomMemberRepository;
     private final WorkoutRecordRepository workoutRecordRepository;
-    private final MemberRepository memberRepository;
     private final RestRepository restRepository;
 
     public WorkoutRoomResponse createWorkoutRoom(Member owner, CreateWorkoutRoomRequest request) {
-
-        // 이미 다른 활성 중인 운동방에 참여 중인지 확인 (관리자는 제외)
-        if (owner.getRole() == MemberRole.USER && workoutRoomRepository.findActiveWorkoutRoomByMember(owner).isPresent()) {
-            throw new CustomException(ErrorCode.ALREADY_JOINED_WORKOUT_ROOM);
-        }
+        // NOTE: 다중 방 참여/생성을 허용합니다. (같은 방 중복 참여는 WorkoutRoomMember의 UNIQUE 제약으로 방지)
 
         // 날짜 검증
-        if (request.getStartDate().isBefore(LocalDate.now())) {
+/*        if (request.getStartDate().isBefore(LocalDate.now())) {
             throw new CustomException(ErrorCode.INVALID_INPUT, "시작 날짜는 오늘 이후여야 합니다.");
         }
         if (request.getEndDate() != null) {
             if (request.getEndDate().isBefore(request.getStartDate())) {
                 throw new CustomException(ErrorCode.INVALID_INPUT, "종료 날짜는 시작 날짜보다 뒤여야 합니다.");
             }
-        }
+        }*/
 
         WorkoutRoom workoutRoom = WorkoutRoom.builder()
                 .name(request.getName())
                 .minWeeklyWorkouts(request.getMinWeeklyWorkouts())
                 .penaltyPerMiss(request.getPenaltyPerMiss())
-                .startDate(request.getStartDate())
-                .endDate(request.getEndDate() != null ? request.getEndDate() : null)
+                // .startDate(request.getStartDate())
+                // .endDate(request.getEndDate() != null ? request.getEndDate() : null)
                 .maxMembers(request.getMaxMembers())
                 .entryCode(request.getEntryCode())
                 .owner(owner)
@@ -135,7 +134,7 @@ public class WorkoutRoomService {
     @Transactional(readOnly = true)
     public List<WorkoutRoomResponse> getWorkoutRooms() {
         return workoutRoomRepository.findActiveRooms().stream()
-                .map(WorkoutRoomResponse::from)
+                .map(WorkoutRoomResponse::fromWithoutEntryCode)
                 .toList();
     }
 
@@ -143,11 +142,6 @@ public class WorkoutRoomService {
 
         WorkoutRoom workoutRoom = workoutRoomRepository.findById(workoutRoomId)
                 .orElseThrow(() -> new CustomException(ErrorCode.WORKOUT_ROOM_NOT_FOUND));
-
-        // 다른 운동방에 참여 중인지 확인 (관리자의 경우, 여러 운동방에 참여 가능)
-        if (member.getRole() == MemberRole.USER && workoutRoomRepository.findActiveWorkoutRoomByMember(member).isPresent()) {
-            throw new CustomException(ErrorCode.ALREADY_JOINED_WORKOUT_ROOM);
-        }
 
         if (!workoutRoom.getEntryCode().equals(entryCode)) {
             throw new CustomException(ErrorCode.INVALID_ENTRY_CODE);
@@ -163,7 +157,7 @@ public class WorkoutRoomService {
 
         // 이미 해당 운동방에 참여중인지 확인
         if (workoutRoomMemberRepository.existsByMemberAndWorkoutRoom(member, workoutRoom)) {
-            throw new CustomException(ErrorCode.ALREADY_JOINED_WORKOUT_ROOM, "이미 동일한 운동방에 참여 중입니다.");
+            throw new CustomException(ErrorCode.ALREADY_JOINED_THIS_WORKOUT_ROOM);
         }
 
         WorkoutRoomMember workoutRoomMember = WorkoutRoomMember.builder()
@@ -175,8 +169,69 @@ public class WorkoutRoomService {
         return WorkoutRoomResponse.from(workoutRoom);
     }
 
+    public WorkoutRoomResponse joinWorkoutRoomByCode(String entryCode, Member member) {
+        WorkoutRoom workoutRoom = workoutRoomRepository.findByEntryCodeAndIsActiveTrue(entryCode)
+                .orElseThrow(() -> new CustomException(ErrorCode.WORKOUT_ROOM_NOT_FOUND));
+
+        if (!workoutRoom.canJoin()) {
+            if (!workoutRoom.getIsActive()) {
+                throw new CustomException(ErrorCode.WORKOUT_ROOM_NOT_FOUND, "비활성화된 방입니다.");
+            }
+            if (workoutRoom.getCurrentMemberCount() >= workoutRoom.getMaxMembers()) {
+                throw new CustomException(ErrorCode.WORKOUT_ROOM_FULL);
+            }
+        }
+
+        if (workoutRoomMemberRepository.existsByMemberAndWorkoutRoom(member, workoutRoom)) {
+            throw new CustomException(ErrorCode.ALREADY_JOINED_THIS_WORKOUT_ROOM);
+        }
+
+        WorkoutRoomMember workoutRoomMember = WorkoutRoomMember.builder()
+                .member(member)
+                .workoutRoom(workoutRoom)
+                .build();
+        workoutRoomMemberRepository.save(workoutRoomMember);
+
+        return WorkoutRoomResponse.from(workoutRoom);
+    }
+
+    public WorkoutRoomResponse regenerateEntryCode(Long roomId, Member currentMember) {
+        WorkoutRoom workoutRoom = workoutRoomRepository.findByIdAndIsActiveTrue(roomId)
+                .orElseThrow(() -> new CustomException(ErrorCode.WORKOUT_ROOM_NOT_FOUND));
+
+        if (!workoutRoom.isOwner(currentMember)) {
+            throw new CustomException(ErrorCode.NOT_WORKOUT_ROOM_OWNER);
+        }
+
+        String newEntryCode = generateUniqueEntryCode(workoutRoom.getEntryCode());
+        workoutRoom.updateEntryCode(newEntryCode);
+
+        return WorkoutRoomResponse.from(workoutRoom);
+    }
+
     @Transactional(readOnly = true)
     public boolean isMemberInWorkoutRoom(Member member) {
         return !workoutRoomMemberRepository.findWorkoutRoomMembersByMember(member).isEmpty();
+    }
+
+    private String generateUniqueEntryCode(String currentEntryCode) {
+        for (int attempt = 0; attempt < ENTRY_CODE_MAX_GENERATION_ATTEMPTS; attempt++) {
+            String candidate = generateEntryCode();
+            if (candidate.equals(currentEntryCode)) {
+                continue;
+            }
+            if (!workoutRoomRepository.existsByEntryCode(candidate)) {
+                return candidate;
+            }
+        }
+        throw new CustomException(ErrorCode.INTERNAL_SERVER_ERROR, "입장 코드 생성에 실패했습니다.");
+    }
+
+    private String generateEntryCode() {
+        char[] buf = new char[ENTRY_CODE_LENGTH];
+        for (int i = 0; i < ENTRY_CODE_LENGTH; i++) {
+            buf[i] = ENTRY_CODE_CHARS[SECURE_RANDOM.nextInt(ENTRY_CODE_CHARS.length)];
+        }
+        return new String(buf);
     }
 }

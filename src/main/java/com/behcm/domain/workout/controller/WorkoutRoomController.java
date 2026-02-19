@@ -2,6 +2,7 @@ package com.behcm.domain.workout.controller;
 
 import com.behcm.domain.member.entity.Member;
 import com.behcm.domain.workout.dto.CreateWorkoutRoomRequest;
+import com.behcm.domain.workout.dto.JoinWorkoutRoomByCodeRequest;
 import com.behcm.domain.workout.dto.WorkoutRoomDetailResponse;
 import com.behcm.domain.workout.dto.WorkoutRoomResponse;
 import com.behcm.domain.workout.service.WorkoutRoomService;
@@ -76,6 +77,24 @@ public class WorkoutRoomController {
             @AuthenticationPrincipal Member member
     ) {
         WorkoutRoomResponse response = workoutRoomService.joinWorkoutRoom(workoutRoomId, entryCode, member);
+        return ResponseEntity.ok(ApiResponse.success(response));
+    }
+
+    @PostMapping("/join")
+    public ResponseEntity<ApiResponse<WorkoutRoomResponse>> joinWorkoutRoomByCode(
+            @Valid @RequestBody JoinWorkoutRoomByCodeRequest request,
+            @AuthenticationPrincipal Member member
+    ) {
+        WorkoutRoomResponse response = workoutRoomService.joinWorkoutRoomByCode(request.getEntryCode(), member);
+        return ResponseEntity.ok(ApiResponse.success(response));
+    }
+
+    @PostMapping("/{roomId}/regenerate-entry-code")
+    public ResponseEntity<ApiResponse<WorkoutRoomResponse>> regenerateEntryCode(
+            @PathVariable Long roomId,
+            @AuthenticationPrincipal Member member
+    ) {
+        WorkoutRoomResponse response = workoutRoomService.regenerateEntryCode(roomId, member);
         return ResponseEntity.ok(ApiResponse.success(response));
     }
 }

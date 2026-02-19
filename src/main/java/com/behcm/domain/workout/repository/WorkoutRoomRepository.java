@@ -49,4 +49,6 @@ public interface WorkoutRoomRepository extends JpaRepository<WorkoutRoom, Long> 
     Page<WorkoutRoom> searchAdminRooms(@Param("query") String query,
                                        @Param("active") Boolean active,
                                        Pageable pageable);
+
+    List<WorkoutRoom> findByOwner(Member owner);
 }

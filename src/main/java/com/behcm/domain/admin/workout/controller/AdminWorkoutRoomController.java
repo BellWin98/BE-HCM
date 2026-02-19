@@ -13,6 +13,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -57,6 +58,14 @@ public class AdminWorkoutRoomController {
     ) {
         WorkoutRoomResponse response = adminWorkoutRoomService.updateRoomSettings(roomId, request);
         return ResponseEntity.ok(ApiResponse.success(response));
+    }
+
+    @DeleteMapping("/{roomId}")
+    public ResponseEntity<ApiResponse<String>> deleteRoom(
+            @PathVariable Long roomId
+    ) {
+        adminWorkoutRoomService.deleteRoom(roomId);
+        return ResponseEntity.ok(ApiResponse.success(null, "운동방이 삭제되었습니다."));
     }
 }
 

@@ -26,4 +26,6 @@ public interface FcmTokenRepository extends JpaRepository<FcmToken, Long> {
             """
     )
     List<String> findFcmTokensByAdminMember(@Param("member") Member member);
+
+    void deleteByMember(Member member);
 }

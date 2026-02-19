@@ -1,6 +1,7 @@
 package com.behcm.domain.chat.repository;
 
 import com.behcm.domain.chat.entity.ChatMessage;
+import com.behcm.domain.member.entity.Member;
 import com.behcm.domain.workout.entity.WorkoutRoom;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Slice;
@@ -27,4 +28,8 @@ public interface ChatMessageRepository extends JpaRepository<ChatMessage, Long> 
 
     // 특정 채팅방의 가장 최근 메시지 1개를 조회
     ChatMessage findFirstByWorkoutRoomOrderByIdDesc(WorkoutRoom workoutRoom);
+
+    void deleteBySender(Member sender);
+
+    void deleteByWorkoutRoom(WorkoutRoom workoutRoom);
 }

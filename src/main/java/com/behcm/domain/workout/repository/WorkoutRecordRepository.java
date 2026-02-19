@@ -54,4 +54,10 @@ public interface WorkoutRecordRepository extends JpaRepository<WorkoutRecord, Lo
     )
     Page<WorkoutRecord> findAllByMemberPerWorkoutDate(Member member, Pageable pageable);
 
+    void deleteByMember(Member member);
+
+    void deleteByWorkoutRoom(WorkoutRoom workoutRoom);
+
+    List<WorkoutRecord> findAllByWorkoutRoom(WorkoutRoom workoutRoom);
+
 }

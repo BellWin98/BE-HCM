@@ -3,6 +3,7 @@ package com.behcm.domain.admin.member.controller;
 import com.behcm.domain.admin.member.dto.AdminMemberResponse;
 import com.behcm.domain.admin.member.dto.UpdateMemberRoleRequest;
 import com.behcm.domain.admin.member.service.AdminMemberService;
+import com.behcm.domain.member.entity.Member;
 import com.behcm.domain.member.entity.MemberRole;
 import com.behcm.global.common.ApiResponse;
 import lombok.RequiredArgsConstructor;
@@ -11,6 +12,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
@@ -44,6 +46,15 @@ public class AdminMemberController {
     ) {
         AdminMemberResponse response = adminMemberService.updateMemberRole(memberId, request.getRole());
         return ResponseEntity.ok(ApiResponse.success(response));
+    }
+
+    @DeleteMapping("/{memberId}")
+    public ResponseEntity<ApiResponse<String>> deleteMember(
+            @PathVariable Long memberId,
+            @AuthenticationPrincipal Member member
+    ) {
+        adminMemberService.deleteMember(memberId, member);
+        return ResponseEntity.ok(ApiResponse.success(null, "회원이 삭제되었습니다."));
     }
 }
 

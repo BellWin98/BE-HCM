@@ -8,4 +8,6 @@ import java.util.List;
 
 public interface RestRepository extends JpaRepository<Rest, Long> {
     List<Rest> findAllByWorkoutRoomMember(WorkoutRoomMember workoutRoomMember);
+
+    void deleteByWorkoutRoomMember(WorkoutRoomMember workoutRoomMember);
 }

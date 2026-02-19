@@ -28,7 +28,8 @@ public class CreateWorkoutRoomRequest {
     @Min(value = 2, message = "최대 인원은 2명 이상이어야 합니다.")
     private Integer maxMembers;
 
-    @NotEmpty(message = "방 비밀번호는 필수입니다.")
-    @Size(min = 2, max = 8, message = "방 비밀번호는 2~8자리이어야 합니다.")
+    @NotEmpty(message = "방 입장 코드는 필수입니다.")
+    @Size(min = 6, max = 10, message = "방 입장 코드는 6~10자리여야 합니다.")
+    @Pattern(regexp = "^[A-Za-z0-9]{6,10}$", message = "방 입장 코드는 영문/숫자 조합만 가능합니다.")
     private String entryCode;
 }

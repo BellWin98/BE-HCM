@@ -27,6 +27,10 @@ public interface WorkoutRoomRepository extends JpaRepository<WorkoutRoom, Long> 
 
     Optional<WorkoutRoom> findByEntryCode(String entryCode);
 
+    boolean existsByEntryCode(String entryCode);
+
+    Optional<WorkoutRoom> findByEntryCodeAndIsActiveTrue(String entryCode);
+
     Optional<WorkoutRoom> findByIdAndIsActiveTrue(Long roomId);
 
     @Query(

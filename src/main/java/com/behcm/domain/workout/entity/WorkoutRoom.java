@@ -29,7 +29,7 @@ public class WorkoutRoom extends BaseTimeEntity {
     @Column(nullable = false)
     private Long penaltyPerMiss;
 
-    @Column(nullable = false, length = 10)
+    @Column(nullable = false, length = 10, unique = true)
     private String entryCode;
 
 //    @Column(nullable = false)
@@ -74,6 +74,10 @@ public class WorkoutRoom extends BaseTimeEntity {
         this.startDate = startDate;
         this.endDate = endDate;
         this.maxMembers = maxMembers;
+        this.entryCode = entryCode;
+    }
+
+    public void updateEntryCode(String entryCode) {
         this.entryCode = entryCode;
     }
 

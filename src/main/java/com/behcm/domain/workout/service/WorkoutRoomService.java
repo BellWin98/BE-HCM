@@ -214,6 +214,20 @@ public class WorkoutRoomService {
         return !workoutRoomMemberRepository.findWorkoutRoomMembersByMember(member).isEmpty();
     }
 
+    @Transactional(readOnly = true)
+    public boolean areMembersInSameRoom(Member member1, Member member2) {
+        List<WorkoutRoomMember> member1Rooms = workoutRoomMemberRepository.findWorkoutRoomMembersByMember(member1);
+        List<WorkoutRoomMember> member2Rooms = workoutRoomMemberRepository.findWorkoutRoomMembersByMember(member2);
+
+        // 두 멤버가 모두 속한 활성화된 방이 있는지 확인
+        return member1Rooms.stream()
+                .filter(wrm -> wrm.getWorkoutRoom().getIsActive())
+                .anyMatch(wrm1 -> member2Rooms.stream()
+                        .filter(wrm -> wrm.getWorkoutRoom().getIsActive())
+                        .anyMatch(wrm2 -> wrm1.getWorkoutRoom().getId().equals(wrm2.getWorkoutRoom().getId()))
+                );
+    }
+
     private String generateUniqueEntryCode(String currentEntryCode) {
         for (int attempt = 0; attempt < ENTRY_CODE_MAX_GENERATION_ATTEMPTS; attempt++) {
             String candidate = generateEntryCode();

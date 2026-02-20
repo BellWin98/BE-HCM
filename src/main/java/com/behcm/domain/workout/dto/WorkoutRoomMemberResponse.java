@@ -12,6 +12,7 @@ import java.util.List;
 @Builder
 public class WorkoutRoomMemberResponse {
     private Long id;
+    private Long memberId;
     private String nickname;
     private String profileUrl;
     private Integer totalWorkouts;
@@ -29,6 +30,7 @@ public class WorkoutRoomMemberResponse {
     ) {
         return WorkoutRoomMemberResponse.builder()
                 .id(workoutRoomMember.getId())
+                .memberId(workoutRoomMember.getMember().getId())
                 .nickname(workoutRoomMember.getNickname())
                 .profileUrl(workoutRoomMember.getMember().getProfileUrl())
                 .totalWorkouts(workoutRoomMember.getTotalWorkouts())

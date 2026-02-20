@@ -66,6 +66,18 @@ public class MemberController {
         return ResponseEntity.ok(ApiResponse.success(response));
     }
 
+    @GetMapping("/{memberId}/workout-feed")
+    @Operation(summary = "타 유저 운동 피드 조회", description = "특정 유저의 운동 기록 피드를 조회합니다. 같은 운동방 멤버만 조회 가능합니다.")
+    public ResponseEntity<ApiResponse<Page<WorkoutFeedItemResponse>>> getOtherMemberWorkoutFeed(
+            @PathVariable Long memberId,
+            @AuthenticationPrincipal Member currentMember,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size
+    ) {
+        Page<WorkoutFeedItemResponse> response = memberService.getOtherMemberWorkoutFeed(currentMember, memberId, page, size);
+        return ResponseEntity.ok(ApiResponse.success(response));
+    }
+
     @GetMapping("/workout-stats")
     @Operation(summary = "사용자 운동 통계 조회", description = "사용자의 운동 통계 정보를 조회합니다.")
     public ResponseEntity<ApiResponse<WorkoutStatsResponse>> getMemberWorkoutStats(@AuthenticationPrincipal Member member) {

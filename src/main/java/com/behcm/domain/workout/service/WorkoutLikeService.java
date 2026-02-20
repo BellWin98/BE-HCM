@@ -18,11 +18,17 @@ public class WorkoutLikeService {
 
     private final WorkoutLikeRepository workoutLikeRepository;
     private final WorkoutRecordRepository workoutRecordRepository;
+    private final WorkoutRoomService workoutRoomService;
 
     @Transactional
     public void likeWorkout(Member member, Long workoutId) {
         WorkoutRecord workoutRecord = workoutRecordRepository.findById(workoutId)
                 .orElseThrow(() -> new CustomException(ErrorCode.WORKOUT_RECORD_NOT_FOUND));
+
+        // 같은 방 멤버인지 확인
+        if (!workoutRoomService.areMembersInSameRoom(member, workoutRecord.getMember())) {
+            throw new CustomException(ErrorCode.NOT_SAME_ROOM_MEMBER);
+        }
 
         // 이미 좋아요를 눌렀는지 확인
         if (workoutLikeRepository.existsByMemberIdAndWorkoutRecordId(member.getId(), workoutId)) {
@@ -41,6 +47,11 @@ public class WorkoutLikeService {
     public void unlikeWorkout(Member member, Long workoutId) {
         WorkoutRecord workoutRecord = workoutRecordRepository.findById(workoutId)
                 .orElseThrow(() -> new CustomException(ErrorCode.WORKOUT_RECORD_NOT_FOUND));
+
+        // 같은 방 멤버인지 확인
+        if (!workoutRoomService.areMembersInSameRoom(member, workoutRecord.getMember())) {
+            throw new CustomException(ErrorCode.NOT_SAME_ROOM_MEMBER);
+        }
 
         // 좋아요를 누른 적이 있는지 확인
         if (!workoutLikeRepository.existsByMemberIdAndWorkoutRecordId(member.getId(), workoutId)) {

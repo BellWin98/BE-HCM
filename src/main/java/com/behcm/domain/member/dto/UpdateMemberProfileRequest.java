@@ -8,7 +8,7 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 public class UpdateMemberProfileRequest {
 
-    @Size(min = 2, max = 10, message = "닉네임은 2-10자 사이여야 합니다.")
+    @Size(min = 2, max = 5, message = "닉네임은 2-5자 사이여야 합니다.")
     private String nickname;
 
     private String bio;

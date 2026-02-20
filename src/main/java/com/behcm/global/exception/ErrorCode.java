@@ -42,6 +42,11 @@ public enum ErrorCode {
     CANNOT_DELETE_WORKOUT(HttpStatus.BAD_REQUEST, "당일 운동만 삭제할 수 있습니다."),
     ALREADY_LIKED(HttpStatus.BAD_REQUEST, "이미 좋아요를 눌렀습니다."),
     LIKE_NOT_FOUND(HttpStatus.NOT_FOUND, "좋아요를 누른 적이 없습니다."),
+    COMMENT_NOT_FOUND(HttpStatus.NOT_FOUND, "댓글을 찾을 수 없습니다."),
+    NOT_COMMENT_OWNER(HttpStatus.FORBIDDEN, "댓글 작성자가 아닙니다."),
+    COMMENT_CONTENT_REQUIRED(HttpStatus.BAD_REQUEST, "댓글 내용을 입력해주세요."),
+    COMMENT_TOO_LONG(HttpStatus.BAD_REQUEST, "댓글은 500자 이하여야 합니다."),
+    NOT_SAME_ROOM_MEMBER(HttpStatus.FORBIDDEN, "같은 운동방 멤버가 아닙니다."),
 
     // Chat
     CHAT_MESSAGE_NOT_FOUND(HttpStatus.NOT_FOUND, "채팅 메시지를 찾을 수 없습니다."),

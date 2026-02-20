@@ -13,6 +13,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 @RestController
 @RequiredArgsConstructor
@@ -31,6 +32,16 @@ public class MemberController {
     @Operation(summary = "사용자 프로필 조회", description = "현재 로그인한 사용자의 프로필 정보를 조회합니다.")
     public ResponseEntity<ApiResponse<MemberProfileResponse>> getMemberProfile(@AuthenticationPrincipal Member member) {
         MemberProfileResponse response = memberService.getMemberProfile(member);
+        return ResponseEntity.ok(ApiResponse.success(response));
+    }
+
+    @PostMapping("/profile/image")
+    @Operation(summary = "프로필 이미지 업로드", description = "프로필 사진을 업로드하고 URL을 반환합니다. image/jpeg, image/png, image/webp, 최대 5MB.")
+    public ResponseEntity<ApiResponse<ProfileImageUploadResponse>> uploadProfileImage(
+            @AuthenticationPrincipal Member member,
+            @RequestParam("image") MultipartFile image
+    ) {
+        ProfileImageUploadResponse response = memberService.uploadProfileImage(member, image);
         return ResponseEntity.ok(ApiResponse.success(response));
     }
 

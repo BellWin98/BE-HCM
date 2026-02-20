@@ -2,6 +2,7 @@ package com.behcm.domain.member.service;
 
 import com.behcm.domain.member.dto.MemberProfileResponse;
 import com.behcm.domain.member.dto.MemberSettingsResponse;
+import com.behcm.domain.member.dto.ProfileImageUploadResponse;
 import com.behcm.domain.member.dto.UpdateMemberProfileRequest;
 import com.behcm.domain.member.dto.UpdateMemberSettingsRequest;
 import com.behcm.domain.member.entity.Member;
@@ -13,12 +14,14 @@ import com.behcm.domain.workout.dto.WorkoutStatsResponse;
 import com.behcm.domain.workout.entity.WorkoutRecord;
 import com.behcm.domain.workout.repository.WorkoutLikeRepository;
 import com.behcm.domain.workout.repository.WorkoutRecordRepository;
+import com.behcm.global.config.aws.S3Service;
 import com.behcm.global.exception.CustomException;
 import com.behcm.global.exception.ErrorCode;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.*;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.time.LocalDate;
 import java.time.YearMonth;
@@ -36,6 +39,12 @@ public class MemberService {
     private final WorkoutRecordRepository workoutRecordRepository;
     private final WorkoutLikeRepository workoutLikeRepository;
     private final MemberSettingsRepository memberSettingsRepository;
+    private final S3Service s3Service;
+
+    public ProfileImageUploadResponse uploadProfileImage(Member member, MultipartFile image) {
+        String profileUrl = s3Service.uploadProfileImage(image);
+        return ProfileImageUploadResponse.of(profileUrl);
+    }
 
     public MemberProfileResponse getMemberProfile(Member member) {
         List<WorkoutRecord> workoutRecords = workoutRecordRepository.findAllByMember(member);
@@ -48,7 +57,9 @@ public class MemberService {
 
     @Transactional
     public MemberProfileResponse updateMemberProfile(Member member, UpdateMemberProfileRequest request) {
-        if (!member.getNickname().equals(request.getNickname()) && memberRepository.existsByNickname(request.getNickname())) {
+        if (request.getNickname() != null
+                && !request.getNickname().equals(member.getNickname())
+                && memberRepository.existsByNickname(request.getNickname())) {
             throw new CustomException(ErrorCode.NICKNAME_ALREADY_EXISTS);
         }
         member.updateProfile(request.getNickname(), request.getBio(), request.getProfileUrl());

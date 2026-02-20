@@ -69,7 +69,7 @@ After the user confirms the push, call MCP tool **create_pull_request**:
   - `title` (string): same as the issue title (or slightly more descriptive)
   - `body` (string): `Closes #{issue_number}\n\n## Description\n{summary_of_changes}`
   - `head` (string): branch name, e.g. `feature/issue-{issue_number}`
-  - `base` (string): `main` (or `develop` — ask if unsure)
+  - `base` (string): `dev`
 
 ---
 

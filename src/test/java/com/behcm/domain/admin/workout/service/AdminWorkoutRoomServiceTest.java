@@ -189,8 +189,6 @@ class AdminWorkoutRoomServiceTest {
                 .build();
 
         AdminUpdateRoomRequest request = new AdminUpdateRoomRequest();
-        request.setStartDate(LocalDate.now().plusDays(2));
-        request.setEndDate(LocalDate.now().plusDays(20));
         request.setMaxMembers(20);
         request.setMinWeeklyWorkouts(5);
         request.setPenaltyPerMiss(2000L);
@@ -208,69 +206,6 @@ class AdminWorkoutRoomServiceTest {
 
         verify(workoutRoomRepository).findById(1L);
         verify(workoutRoomRepository).save(room);
-    }
-
-    @Test
-    @DisplayName("updateRoomSettings는 시작 날짜가 오늘보다 이전이면 CustomException(INVALID_INPUT)을 던진다")
-    void updateRoomSettings_whenStartDateBeforeToday_throwsCustomException() {
-        // given
-        WorkoutRoom room = WorkoutRoom.builder()
-                .name("Room 1")
-                .minWeeklyWorkouts(3)
-                .penaltyPerMiss(1000L)
-                .startDate(LocalDate.now().plusDays(1))
-                .endDate(LocalDate.now().plusDays(10))
-                .maxMembers(10)
-                .entryCode("ENTRY01")
-                .owner(null)
-                .build();
-
-        AdminUpdateRoomRequest request = new AdminUpdateRoomRequest();
-        request.setStartDate(LocalDate.now().minusDays(1));
-        request.setEndDate(LocalDate.now().plusDays(10));
-        request.setMaxMembers(10);
-        request.setMinWeeklyWorkouts(3);
-        request.setPenaltyPerMiss(1000L);
-
-        given(workoutRoomRepository.findById(1L)).willReturn(Optional.of(room));
-
-        // when & then
-        assertThatThrownBy(() -> adminWorkoutRoomService.updateRoomSettings(1L, request))
-                .isInstanceOf(CustomException.class)
-                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.INVALID_INPUT);
-    }
-
-    @Test
-    @DisplayName("updateRoomSettings는 종료 날짜가 시작 날짜보다 이전이면 CustomException(INVALID_INPUT)을 던진다")
-    void updateRoomSettings_whenEndDateBeforeStartDate_throwsCustomException() {
-        // given
-        WorkoutRoom room = WorkoutRoom.builder()
-                .name("Room 1")
-                .minWeeklyWorkouts(3)
-                .penaltyPerMiss(1000L)
-                .startDate(LocalDate.now().plusDays(1))
-                .endDate(LocalDate.now().plusDays(10))
-                .maxMembers(10)
-                .entryCode("ENTRY01")
-                .owner(null)
-                .build();
-
-        LocalDate startDate = LocalDate.now().plusDays(5);
-        LocalDate endDate = LocalDate.now().plusDays(1);
-
-        AdminUpdateRoomRequest request = new AdminUpdateRoomRequest();
-        request.setStartDate(startDate);
-        request.setEndDate(endDate);
-        request.setMaxMembers(10);
-        request.setMinWeeklyWorkouts(3);
-        request.setPenaltyPerMiss(1000L);
-
-        given(workoutRoomRepository.findById(1L)).willReturn(Optional.of(room));
-
-        // when & then
-        assertThatThrownBy(() -> adminWorkoutRoomService.updateRoomSettings(1L, request))
-                .isInstanceOf(CustomException.class)
-                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.INVALID_INPUT);
     }
 }
 

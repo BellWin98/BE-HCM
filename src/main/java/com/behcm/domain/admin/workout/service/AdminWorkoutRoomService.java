@@ -27,7 +27,6 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDate;
 import java.util.List;
 
 @Service
@@ -75,22 +74,12 @@ public class AdminWorkoutRoomService {
         WorkoutRoom workoutRoom = workoutRoomRepository.findById(roomId)
                 .orElseThrow(() -> new CustomException(ErrorCode.WORKOUT_ROOM_NOT_FOUND));
 
-        LocalDate startDate = request.getStartDate();
-        LocalDate endDate = request.getEndDate();
-
-        if (startDate.isBefore(LocalDate.now())) {
-            throw new CustomException(ErrorCode.INVALID_INPUT, "시작 날짜는 오늘 이후여야 합니다.");
-        }
-        if (endDate != null && endDate.isBefore(startDate)) {
-            throw new CustomException(ErrorCode.INVALID_INPUT, "종료 날짜는 시작 날짜보다 뒤여야 합니다.");
-        }
-
         workoutRoom.updateRoomSettings(
                 workoutRoom.getName(),
                 request.getMinWeeklyWorkouts(),
                 request.getPenaltyPerMiss(),
-                startDate,
-                endDate,
+                workoutRoom.getStartDate(),
+                workoutRoom.getEndDate(),
                 request.getMaxMembers(),
                 workoutRoom.getEntryCode()
         );

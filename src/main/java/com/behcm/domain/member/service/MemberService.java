@@ -78,7 +78,22 @@ public class MemberService {
 
     public Page<WorkoutFeedItemResponse> getMemberWorkoutFeed(Member member, int page, int size) {
         Pageable pageable = PageRequest.of(page, size);
-        return workoutRecordRepository.findAllByMemberPerWorkoutDate(member, pageable).map(WorkoutFeedItemResponse::from);
+        Page<WorkoutRecord> workoutRecords = workoutRecordRepository.findAllByMemberPerWorkoutDate(member, pageable);
+
+        // 좋아요한 workout record ID 목록 조회 (배치 쿼리로 N+1 방지)
+        List<Long> workoutRecordIds = workoutRecords.getContent().stream()
+                .map(WorkoutRecord::getId)
+                .toList();
+        List<Long> likedWorkoutRecordIds = workoutLikeRepository.findLikedWorkoutRecordIdsByMemberIdAndWorkoutRecordIds(
+                member.getId(), workoutRecordIds);
+
+        // 각 WorkoutRecord에 대해 좋아요 수, 댓글 수, 좋아요 여부 계산
+        return workoutRecords.map(workoutRecord -> {
+            Long likes = workoutLikeRepository.countByWorkoutRecordId(workoutRecord.getId());
+            Long comments = workoutCommentRepository.countByWorkoutRecordId(workoutRecord.getId());
+            Boolean isLiked = likedWorkoutRecordIds.contains(workoutRecord.getId());
+            return WorkoutFeedItemResponse.from(workoutRecord, likes, comments, isLiked);
+        });
     }
 
     public Page<WorkoutFeedItemResponse> getOtherMemberWorkoutFeed(Member currentMember, Long targetMemberId, int page, int size) {

@@ -122,8 +122,6 @@ class AdminWorkoutRoomControllerTest {
     void updateRoomSettings_withAdminRole_returnsOk() throws Exception {
         // given
         AdminUpdateRoomRequest request = new AdminUpdateRoomRequest();
-        request.setStartDate(LocalDate.now().plusDays(1));
-        request.setEndDate(LocalDate.now().plusDays(10));
         request.setMaxMembers(20);
         request.setMinWeeklyWorkouts(5);
         request.setPenaltyPerMiss(2000L);
@@ -133,8 +131,8 @@ class AdminWorkoutRoomControllerTest {
                 .name("Room 1")
                 .minWeeklyWorkouts(5)
                 .penaltyPerMiss(2000L)
-                .startDate(request.getStartDate())
-                .endDate(request.getEndDate())
+                .startDate(LocalDate.now().plusDays(1))
+                .endDate(LocalDate.now().plusDays(10))
                 .maxMembers(20)
                 .currentMembers(1)
                 .isActive(true)

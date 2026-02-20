@@ -39,5 +39,6 @@ public class StockPortfolioResponse {
         private BigDecimal profitLoss;
         private BigDecimal profitLossRate;
         private String sector;
+        private BigDecimal dayChangeRate; // 전일 대비 변동률 (%)
     }
 }

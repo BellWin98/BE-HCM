@@ -80,6 +80,9 @@ public class StockService {
     }
 
     public TradingProfitLossResponse getTradingProfitLoss(TradingProfitLossRequest request) {
+        log.debug("Trading profit loss request - startDate: {}, endDate: {}, periodType: {}", 
+                request.getStartDate(), request.getEndDate(), request.getPeriodType());
+        
         // 1. 요청 파라미터 (Query Params) 설정
         Map<String, String> params = new HashMap<>();
         params.put("CANO", properties.getAccountNumber());
@@ -124,7 +127,7 @@ public class StockService {
                     TradingProfitLossDto tradeDto = TradingProfitLossDto.builder()
                             .stockCode(trade.path("pdno").asText())
                             .stockName(trade.path("prdt_name").asText())
-                            .tradeDate(trade.path("trad_dt").asText())
+                            .tradeDate(formatTradeDate(trade.path("trad_dt").asText()))
                             .tradeType(isBuy ? "BUY" : "SELL")
                             .quantity(Integer.parseInt(isBuy ? trade.path("buy_qty").asText("0") : trade.path("sll_qty").asText("0")))
                             .price(new BigDecimal(isBuy ? trade.path("pchs_unpr").asText("0") : trade.path("sll_pric").asText("0")))
@@ -158,7 +161,10 @@ public class StockService {
                 Thread.currentThread().interrupt();
             }
         }
-        // 7. 최종 결과 생성 (output2 합계 데이터 및 전체 리스트 반환)
+        // 7. 거래 내역 날짜순 정렬 (최신순)
+        allTrades.sort((a, b) -> b.getTradeDate().compareTo(a.getTradeDate()));
+        
+        // 8. 최종 결과 생성 (output2 합계 데이터 및 전체 리스트 반환)
         return parseTradingProfitLossResponse(lastResponse, request, allTrades);
     }
 
@@ -188,6 +194,23 @@ public class StockService {
                 .tradeCount(allTrades.size()) // 전체 누적 개수
                 .trades(allTrades)            // 전체 누적 리스트
                 .build();
+    }
+
+    /**
+     * 거래일자를 YYYYMMDD 형식에서 YYYY-MM-DD 형식으로 변환
+     * @param dateStr YYYYMMDD 형식의 날짜 문자열
+     * @return YYYY-MM-DD 형식의 날짜 문자열, 변환 불가능한 경우 원본 반환
+     */
+    private String formatTradeDate(String dateStr) {
+        if (dateStr == null || dateStr.length() != 8) {
+            return dateStr;
+        }
+        try {
+            return dateStr.substring(0, 4) + "-" + dateStr.substring(4, 6) + "-" + dateStr.substring(6, 8);
+        } catch (Exception e) {
+            log.warn("Failed to format trade date: {}", dateStr, e);
+            return dateStr;
+        }
     }
 
     private StockPortfolioResponse parsePortfolioResponse(JsonNode response) {
@@ -289,54 +312,6 @@ public class StockService {
             .listedDate("")
             .listedShares(0L)
             .description("")
-            .build();
-    }
-
-    private TradingProfitLossResponse parseTradingProfitLossResponse(JsonNode response, TradingProfitLossRequest request) {
-        JsonNode output1 = response.get("output1");
-        List<TradingProfitLossDto> trades = new ArrayList<>();
-
-        if (output1 != null && output1.isArray()) {
-            for (JsonNode trade : output1) {
-                TradingProfitLossDto tradeDto = TradingProfitLossDto.builder()
-                    .stockCode(trade.get("pdno").asText())
-                    .stockName(trade.get("prdt_name").asText())
-                    .tradeDate(trade.get("trad_dt").asText())
-                    .tradeType(trade.get("buy_qty").asText().equals("0") ? "SELL" : "BUY")
-                    .quantity(Integer.parseInt(trade.get("buy_qty").asText().equals("0") ? trade.get("sll_qty").asText() : trade.get("buy_qty").asText()))
-                    .price(new BigDecimal(trade.get("buy_qty").asText().equals("0") ? trade.get("sll_pric").asText() : trade.get("pchs_unpr").asText()))
-                    .amount(new BigDecimal(trade.get("buy_qty").asText().equals("0") ? trade.get("sll_amt").asText() : trade.get("buy_amt").asText()))
-                    .profitLoss(new BigDecimal(trade.get("rlzt_pfls").asText()))
-                    .profitLossRate(new BigDecimal(trade.get("pfls_rt").asText()))
-                    .fee(new BigDecimal(trade.get("fee").asText()))
-                    .tax(new BigDecimal(trade.get("tl_tax") != null ? trade.get("tl_tax").asText() : "0"))
-                    .build();
-
-                trades.add(tradeDto);
-            }
-        }
-
-        JsonNode output2 = response.get("output2");
-
-        BigDecimal totalBuyAmount = new BigDecimal(output2.get("buy_excc_amt_smtl").asText());
-        BigDecimal totalSellAmount = new BigDecimal(output2.get("sll_excc_amt_smtl").asText());
-        BigDecimal totalProfitLoss = new BigDecimal(output2.get("tot_rlzt_pfls").asText());
-        BigDecimal totalProfitLossRate = new BigDecimal(output2.get("tot_pftrt").asText());
-        BigDecimal totalFee = new BigDecimal(output2.get("tot_fee").asText());
-        BigDecimal totalTax = new BigDecimal(output2.get("tot_tltx").asText());
-
-        String period = String.format("%s ~ %s", request.getStartDate(), request.getEndDate());
-
-        return TradingProfitLossResponse.builder()
-            .period(period)
-            .totalBuyAmount(totalBuyAmount)
-            .totalSellAmount(totalSellAmount)
-            .totalProfitLoss(totalProfitLoss)
-            .totalProfitLossRate(totalProfitLossRate)
-            .totalFee(totalFee)
-            .totalTax(totalTax)
-            .tradeCount(trades.size())
-            .trades(trades)
             .build();
     }
 }

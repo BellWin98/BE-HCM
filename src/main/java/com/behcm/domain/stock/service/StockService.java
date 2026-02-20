@@ -15,6 +15,10 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 
 @Slf4j
 @Service
@@ -23,6 +27,11 @@ public class StockService {
 
     private final KoreaInvestmentClient koreaInvestmentClient;
     private final KoreaInvestmentProperties properties;
+    
+    // API 호출 제한: 초당 20개
+    private static final int API_CALLS_PER_SECOND = 20;
+    private static final long THROTTLE_DELAY_MS = 1000 / API_CALLS_PER_SECOND; // 50ms
+    private final ExecutorService executorService = Executors.newFixedThreadPool(10);
 
     public StockPortfolioResponse getStockPortfolio() {
         Map<String, String> params = new HashMap<>();
@@ -244,12 +253,16 @@ public class StockService {
                         .profitLoss(new BigDecimal(holding.get("evlu_pfls_amt").asText()))
                         .profitLossRate(new BigDecimal(holding.get("evlu_pfls_rt").asText()))
                         .sector("")
+                        .dayChangeRate(null) // 초기값은 null, 이후 조회하여 설정
                         .build();
 
                     holdings.add(holdingDto);
                 }
             }
         }
+        
+        // 각 종목의 전일 대비 변동률 조회 (병렬 처리)
+        fetchDayChangeRates(holdings);
 
         BigDecimal totalMarketValue = output2 != null ? new BigDecimal(output2.get(0).get("evlu_amt_smtl_amt").asText()) : BigDecimal.ZERO;
         BigDecimal totalBuyValue = output2 != null ? new BigDecimal(output2.get(0).get("pchs_amt_smtl_amt").asText()) : BigDecimal.ZERO;
@@ -289,6 +302,113 @@ public class StockService {
             .openPrice(new BigDecimal(output.get("stck_oprc").asText()))
             .marketType(output.get("mrkt_ctg").asText())
             .build();
+    }
+
+    /**
+     * 각 종목의 전일 대비 변동률을 병렬로 조회하여 설정합니다.
+     * API 호출 제한(초당 20개)을 준수하기 위해 쓰로틀링을 적용합니다.
+     */
+    private void fetchDayChangeRates(List<StockPortfolioResponse.StockHoldingDto> holdings) {
+        if (holdings == null || holdings.isEmpty()) {
+            return;
+        }
+
+        // stockCode를 키로 하는 Map 생성 (인덱스 추적용)
+        Map<String, Integer> stockCodeToIndex = new HashMap<>();
+        for (int i = 0; i < holdings.size(); i++) {
+            stockCodeToIndex.put(holdings.get(i).getStockCode(), i);
+        }
+
+        List<CompletableFuture<Void>> futures = new ArrayList<>();
+        final long[] lastCallTime = {System.currentTimeMillis()};
+        final Object lock = new Object();
+
+        for (String stockCode : stockCodeToIndex.keySet()) {
+            CompletableFuture<Void> future = CompletableFuture.runAsync(() -> {
+                try {
+                    // 쓰로틀링: 초당 20개 제한 준수 (호출 간격 50ms)
+                    synchronized (lock) {
+                        long currentTime = System.currentTimeMillis();
+                        long timeSinceLastCall = currentTime - lastCallTime[0];
+                        
+                        if (timeSinceLastCall < THROTTLE_DELAY_MS) {
+                            try {
+                                Thread.sleep(THROTTLE_DELAY_MS - timeSinceLastCall);
+                            } catch (InterruptedException e) {
+                                Thread.currentThread().interrupt();
+                                log.warn("Thread interrupted during throttling for stock {}", stockCode, e);
+                                return;
+                            }
+                        }
+                        lastCallTime[0] = System.currentTimeMillis();
+                    }
+
+                    // 현재가 조회 API 호출하여 전일 대비 변동률 가져오기
+                    JsonNode response = koreaInvestmentClient.callApiWithParams(
+                        "/uapi/domestic-stock/v1/quotations/inquire-price",
+                        "FHKST01010100",
+                        createPriceParams(stockCode)
+                    );
+
+                    JsonNode output = response.get("output");
+                    if (output != null && output.has("prdy_ctrt")) {
+                        BigDecimal dayChangeRate = new BigDecimal(output.get("prdy_ctrt").asText());
+                        // 소수점 첫째 자리까지 반올림
+                        dayChangeRate = dayChangeRate.setScale(1, RoundingMode.HALF_UP);
+                        
+                        // holding 객체의 dayChangeRate 필드 설정
+                        synchronized (holdings) {
+                            Integer index = stockCodeToIndex.get(stockCode);
+                            if (index != null && index < holdings.size()) {
+                                StockPortfolioResponse.StockHoldingDto holding = holdings.get(index);
+                                StockPortfolioResponse.StockHoldingDto updatedHolding = 
+                                    StockPortfolioResponse.StockHoldingDto.builder()
+                                        .stockCode(holding.getStockCode())
+                                        .stockName(holding.getStockName())
+                                        .quantity(holding.getQuantity())
+                                        .averagePrice(holding.getAveragePrice())
+                                        .currentPrice(holding.getCurrentPrice())
+                                        .marketValue(holding.getMarketValue())
+                                        .purchasePrice(holding.getPurchasePrice())
+                                        .profitLoss(holding.getProfitLoss())
+                                        .profitLossRate(holding.getProfitLossRate())
+                                        .sector(holding.getSector())
+                                        .dayChangeRate(dayChangeRate)
+                                        .build();
+                                holdings.set(index, updatedHolding);
+                                log.debug("Fetched dayChangeRate for {}: {}", stockCode, dayChangeRate);
+                            }
+                        }
+                    }
+                } catch (Exception e) {
+                    log.warn("Failed to fetch dayChangeRate for stock {}: {}", 
+                        stockCode, e.getMessage());
+                }
+            }, executorService);
+
+            futures.add(future);
+        }
+
+        // 모든 비동기 작업 완료 대기 (최대 30초)
+        CompletableFuture<Void> allFutures = CompletableFuture.allOf(
+            futures.toArray(new CompletableFuture[0])
+        );
+        
+        try {
+            allFutures.orTimeout(30, TimeUnit.SECONDS).join();
+        } catch (Exception e) {
+            log.warn("Some dayChangeRate fetches timed out or failed: {}", e.getMessage());
+        }
+    }
+
+    /**
+     * 현재가 조회 API 파라미터 생성
+     */
+    private Map<String, String> createPriceParams(String stockCode) {
+        Map<String, String> params = new HashMap<>();
+        params.put("FID_COND_MRKT_DIV_CODE", "J");
+        params.put("FID_INPUT_ISCD", stockCode);
+        return params;
     }
 
     private StockInfoResponse parseStockInfoResponse(JsonNode response, String stockCode) {

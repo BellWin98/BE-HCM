@@ -130,23 +130,47 @@ public class StockService {
             JsonNode output1 = response.get("output1");
             if (output1 != null && output1.isArray()) {
                 for (JsonNode trade : output1) {
-                    // 매수/매도 구분 로직 (buy_qty가 0이면 매도, 아니면 매수)
-                    boolean isBuy = !trade.path("buy_qty").asText("0").equals("0");
-
-                    TradingProfitLossDto tradeDto = TradingProfitLossDto.builder()
-                            .stockCode(trade.path("pdno").asText())
-                            .stockName(trade.path("prdt_name").asText())
-                            .tradeDate(formatTradeDate(trade.path("trad_dt").asText()))
-                            .tradeType(isBuy ? "BUY" : "SELL")
-                            .quantity(Integer.parseInt(isBuy ? trade.path("buy_qty").asText("0") : trade.path("sll_qty").asText("0")))
-                            .price(new BigDecimal(isBuy ? trade.path("pchs_unpr").asText("0") : trade.path("sll_pric").asText("0")))
-                            .amount(new BigDecimal(isBuy ? trade.path("buy_amt").asText("0") : trade.path("sll_amt").asText("0")))
-                            .profitLoss(new BigDecimal(trade.path("rlzt_pfls").asText("0")))
-                            .profitLossRate(new BigDecimal(trade.path("pfls_rt").asText("0")))
-                            .fee(new BigDecimal(trade.path("fee").asText("0")))
-                            .tax(new BigDecimal(trade.path("tl_tax").asText("0"))) // null safe 처리
-                            .build();
-                    allTrades.add(tradeDto);
+                    String stockCode = trade.path("pdno").asText();
+                    String stockName = trade.path("prdt_name").asText();
+                    String tradeDate = formatTradeDate(trade.path("trad_dt").asText());
+                    
+                    // 매수 내역 처리 (buy_qty가 0이 아니면 매수 DTO 생성)
+                    String buyQty = trade.path("buy_qty").asText("0");
+                    if (!buyQty.equals("0")) {
+                        TradingProfitLossDto buyDto = TradingProfitLossDto.builder()
+                                .stockCode(stockCode)
+                                .stockName(stockName)
+                                .tradeDate(tradeDate)
+                                .tradeType("BUY")
+                                .quantity(Integer.parseInt(buyQty))
+                                .price(new BigDecimal(trade.path("pchs_unpr").asText("0")))
+                                .amount(new BigDecimal(trade.path("buy_amt").asText("0")))
+                                .profitLoss(BigDecimal.ZERO) // 매수 시 손익 없음
+                                .profitLossRate(BigDecimal.ZERO) // 매수 시 손익률 없음
+                                .fee(new BigDecimal(trade.path("fee").asText("0")))
+                                .tax(BigDecimal.ZERO) // 매수 시 세금 없음
+                                .build();
+                        allTrades.add(buyDto);
+                    }
+                    
+                    // 매도 내역 처리 (sll_qty가 0이 아니면 매도 DTO 생성)
+                    String sllQty = trade.path("sll_qty").asText("0");
+                    if (!sllQty.equals("0")) {
+                        TradingProfitLossDto sellDto = TradingProfitLossDto.builder()
+                                .stockCode(stockCode)
+                                .stockName(stockName)
+                                .tradeDate(tradeDate)
+                                .tradeType("SELL")
+                                .quantity(Integer.parseInt(sllQty))
+                                .price(new BigDecimal(trade.path("sll_pric").asText("0")))
+                                .amount(new BigDecimal(trade.path("sll_amt").asText("0")))
+                                .profitLoss(new BigDecimal(trade.path("rlzt_pfls").asText("0")))
+                                .profitLossRate(new BigDecimal(trade.path("pfls_rt").asText("0")))
+                                .fee(new BigDecimal(trade.path("fee").asText("0")))
+                                .tax(new BigDecimal(trade.path("tl_tax").asText("0"))) // null safe 처리
+                                .build();
+                        allTrades.add(sellDto);
+                    }
                 }
             }
             // 5. 연속 데이터 확인 (Response Body의 ctx 값 확인)

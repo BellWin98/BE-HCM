@@ -25,6 +25,7 @@ public class MemberResponse {
                 .id(member.getId())
                 .email(member.getEmail())
                 .nickname(member.getNickname())
+                .profileUrl(member.getProfileUrl())
                 .role(member.getRole())
                 .totalWorkoutDays(member.getTotalWorkoutDays())
                 .totalPenalty(member.getTotalPenalty())

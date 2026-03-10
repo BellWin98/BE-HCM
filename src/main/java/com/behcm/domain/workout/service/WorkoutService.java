@@ -63,9 +63,9 @@ public class WorkoutService {
             }
         }
         member.updateTotalWorkoutDays(member.getTotalWorkoutDays() + 1);
-        memberRepository.save(member);
+        Member savedMember = memberRepository.save(member);
 
-        return new WorkoutResponse(workoutDate, request.getWorkoutTypes(), request.getDuration(), imageUrls);
+        return new WorkoutResponse(workoutDate, request.getWorkoutTypes(), request.getDuration(), imageUrls, savedMember.getTotalWorkoutDays());
     }
 
     private boolean isThisWeek(LocalDate targetDate) {

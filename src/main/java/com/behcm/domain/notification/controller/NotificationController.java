@@ -10,7 +10,6 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
@@ -32,30 +31,30 @@ public class NotificationController {
         return ResponseEntity.ok(ApiResponse.success(null, "FCM 토큰이 등록되었습니다."));
     }
 
-    @PostMapping("/admin")
-    @Operation(summary = "알림", description = "ADMIN 유저가 운동 인증 시 속한 모든 방의 멤버들에게 푸시 알림을 전송합니다.")
-    @PreAuthorize("hasRole('ADMIN')")
-    public ResponseEntity<ApiResponse<String>> notifyRoomMembersForAdmin(
+    @PostMapping("/rooms")
+    @Operation(summary = "유저가 속한 모든 방에 알림", description = "유저가 속한 모든 방의 멤버들에게 푸시 알림을 전송합니다.")
+    public ResponseEntity<ApiResponse<String>> notifyAllRoomMembers(
             @Valid @RequestBody NotifyRequest request,
             @AuthenticationPrincipal Member member
     ) {
-        notificationFacade.notifyRoomMembersForAdmin(
+        notificationFacade.notifyAllRoomMembers(
                 member, request.getTitle(), truncateMessage(request.getBody()), request.getType(),""
         );
-        return ResponseEntity.ok(ApiResponse.success(null, "운동 인증 알림이 전송되었습니다."));
+        return ResponseEntity.ok(ApiResponse.success(null, request.getType() + "알림이 전송되었습니다."));
     }
 
     @PostMapping("/rooms/{roomId}")
-    @Operation(summary = "알림", description = "운동 인증 또는 채팅 발송 시 같은 방의 다른 멤버들에게 푸시 알림을 전송합니다.")
-    public ResponseEntity<ApiResponse<String>> notifyRoomMembers(
+    @Operation(summary = "현재 유저가 속한 방에 알림", description = "현재 유저가 속한 방의 멤버들에게 푸시 알림을 전송합니다.")
+    public ResponseEntity<ApiResponse<String>> notifyRoomMembersForAdmin(
             @PathVariable Long roomId,
             @Valid @RequestBody NotifyRequest request,
             @AuthenticationPrincipal Member member
     ) {
         notificationFacade.notifyRoomMembers(
-                roomId, member, request.getTitle(), truncateMessage(request.getBody()), request.getType(),"/rooms/" + roomId
+                roomId, member, request.getTitle(),
+                truncateMessage(request.getBody()), request.getType(),""
         );
-        return ResponseEntity.ok(ApiResponse.success(null, "운동 인증 알림이 전송되었습니다."));
+        return ResponseEntity.ok(ApiResponse.success(null, request.getType() + "알림이 전송되었습니다."));
     }
 
     /**

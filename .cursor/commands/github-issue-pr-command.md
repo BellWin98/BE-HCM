@@ -10,14 +10,14 @@ When I ask to "ship it", "deploy feature", or "start github workflow" regarding 
 
 1. Analyze the current code changes and summarize them.
 2. Resolve **owner** and **repo**: run `git remote -v` and parse the origin URL (e.g. `https://github.com/BellWin98/BE-HCM.git` → owner: `BellWin98`, repo: `BE-HCM`).
-3. Call MCP tool **create_issue**:
+3. Call MCP tool **create_issue** (**모든 텍스트 필드 `title`, `body`는 반드시 한국어로 작성할 것**):
    - **Server**: `user-github`
    - **Tool**: `create_issue`
    - **Arguments**:
      - `owner` (string): repository owner
      - `repo` (string): repository name
-     - `title` (string): concise summary of the feature or fix
-     - `body` (string): detailed description of the implementation
+     - `title` (string): concise summary of the feature or fix **(Korean only)**
+     - `body` (string): detailed description of the implementation **(Korean only)**
 4. **IMPORTANT**: Remember the returned `number` (issue_number) from the response.
 
 ---
@@ -40,10 +40,10 @@ Use `fix/issue-{issue_number}` for bugfixes if appropriate.
 
 ```bash
 git add .
-git commit -m "feat: {issue_title} (#{issue_number})"
+git commit -m "feat: {issue_title_in_korean} (#{issue_number})"
 ```
 
-**Note**: The commit message MUST end with `(#{issue_number})`. Optionally use `git add <paths>` to commit only modified source files.
+**Note**: The commit message MUST end with `(#{issue_number})` and the message text (including `feat: {issue_title_in_korean}`) MUST be written in Korean. Optionally use `git add <paths>` to commit only modified source files.
 
 ---
 
@@ -63,11 +63,11 @@ git push -u origin feature/issue-{issue_number}
 
 - **Server**: `user-github`
 - **Tool**: `create_pull_request`
-- **Arguments**:
+- **Arguments** (**`title`, `body`는 반드시 한국어로 작성할 것**):
   - `owner` (string): same as Step 1
   - `repo` (string): same as Step 1
-  - `title` (string): same as the issue title (or slightly more descriptive)
-  - `body` (string): `Closes #{issue_number}\n\n## Description\n{summary_of_changes}`
+  - `title` (string): same as the issue title (or slightly more descriptive) **(Korean only)**
+  - `body` (string): `Closes #{issue_number}\n\n## Description\n{summary_of_changes_in_korean}` **(Korean only)**
   - `head` (string): branch name, e.g. `feature/issue-{issue_number}`
   - `base` (string): `dev` if the branch exists, otherwise `main`
 

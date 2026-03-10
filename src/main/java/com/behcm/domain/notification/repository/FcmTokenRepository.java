@@ -10,6 +10,7 @@ import java.util.List;
 import java.util.Optional;
 
 public interface FcmTokenRepository extends JpaRepository<FcmToken, Long> {
+
     Optional<FcmToken> findByMember(Member member);
 
     @Query("SELECT f.token FROM FcmToken f WHERE f.member IN :members")
@@ -25,7 +26,7 @@ public interface FcmTokenRepository extends JpaRepository<FcmToken, Long> {
                 and other.member != :member
             """
     )
-    List<String> findFcmTokensByAdminMember(@Param("member") Member member);
+    List<String> findFcmTokensByMember(@Param("member") Member member);
 
     void deleteByMember(Member member);
 }

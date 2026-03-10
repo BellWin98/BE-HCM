@@ -15,4 +15,5 @@ public class WorkoutResponse {
     private List<String> workoutTypes;
     private Integer duration;
     private List<String> imageUrls;
+    private Integer memberTotalWorkoutDays;
 }

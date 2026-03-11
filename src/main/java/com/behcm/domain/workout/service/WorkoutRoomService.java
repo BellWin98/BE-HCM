@@ -19,8 +19,11 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.security.SecureRandom;
+import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -85,24 +88,40 @@ public class WorkoutRoomService {
     public WorkoutRoomDetailResponse getJoinedWorkoutRoom(Long roomId, Member member) {
         WorkoutRoom workoutRoom = workoutRoomRepository.findById(roomId)
                 .orElseThrow(() -> new CustomException(ErrorCode.WORKOUT_ROOM_NOT_FOUND, "유저가 속한 운동방이 없습니다."));
-        List<WorkoutRoomMemberResponse> workoutRoomMembers = workoutRoomMemberRepository.findByWorkoutRoomOrderByJoinedAt(workoutRoom).stream()
+        List<WorkoutRoomMember> members = workoutRoomMemberRepository.findByWorkoutRoomOrderByJoinedAtFetchMember(workoutRoom);
+
+        final Map<Long, List<RestResponse>> restByWrmId;
+        final Map<Long, List<WorkoutRecordResponse>> recordsByMemberId;
+        if (!members.isEmpty()) {
+            List<Long> memberIds = members.stream()
+                    .map(wrm -> wrm.getMember().getId())
+                    .toList();
+            restByWrmId = restRepository.findAllByWorkoutRoomMemberIn(members).stream()
+                    .collect(Collectors.groupingBy(r -> r.getWorkoutRoomMember().getId()))
+                    .entrySet().stream()
+                    .collect(Collectors.toMap(Map.Entry::getKey, e -> e.getValue().stream().map(RestResponse::from).toList()));
+            recordsByMemberId = workoutRecordRepository.findByWorkoutRoomAndMemberIn(workoutRoom, memberIds).stream()
+                    .collect(Collectors.groupingBy(wr -> wr.getMember().getId()))
+                    .entrySet().stream()
+                    .collect(Collectors.toMap(Map.Entry::getKey, e -> e.getValue().stream().map(WorkoutRecordResponse::from).toList()));
+        } else {
+            restByWrmId = Collections.emptyMap();
+            recordsByMemberId = Collections.emptyMap();
+        }
+
+        List<WorkoutRoomMemberResponse> workoutRoomMembers = members.stream()
                 .map(workoutRoomMember -> {
-                    List<WorkoutRecordResponse> workoutRecords = workoutRecordRepository.findAllByMemberPerWorkoutDate(workoutRoomMember.getMember()).stream()
-                            .map(WorkoutRecordResponse::from)
-                            .toList();
-                    List<RestResponse> restInfoList = restRepository.findAllByWorkoutRoomMember(workoutRoomMember).stream()
-                            .map(RestResponse::from)
-                            .toList();
+                    List<WorkoutRecordResponse> workoutRecords = recordsByMemberId.getOrDefault(workoutRoomMember.getMember().getId(), List.of());
+                    List<RestResponse> restInfoList = restByWrmId.getOrDefault(workoutRoomMember.getId(), List.of());
                     return WorkoutRoomMemberResponse.of(workoutRoomMember, workoutRecords, restInfoList);
                 })
                 .toList();
+
         Optional<WorkoutRecord> currentMemberWorkoutRecordOpt = workoutRecordRepository.findByMemberAndWorkoutRoomAndWorkoutDate(member, workoutRoom, LocalDate.now());
-        WorkoutRecord currentMemberWorkoutRecord;
-        if (currentMemberWorkoutRecordOpt.isPresent()) {
-            currentMemberWorkoutRecord = currentMemberWorkoutRecordOpt.get();
-            return new WorkoutRoomDetailResponse(WorkoutRoomResponse.from(workoutRoom), workoutRoomMembers, WorkoutRecordResponse.from(currentMemberWorkoutRecord));
-        }
-        return new WorkoutRoomDetailResponse(WorkoutRoomResponse.from(workoutRoom), workoutRoomMembers, null);
+        return currentMemberWorkoutRecordOpt.map(workoutRecord -> new WorkoutRoomDetailResponse(
+                WorkoutRoomResponse.from(workoutRoom),
+                workoutRoomMembers,
+                WorkoutRecordResponse.from(workoutRecord))).orElseGet(() -> new WorkoutRoomDetailResponse(WorkoutRoomResponse.from(workoutRoom), workoutRoomMembers, null));
     }
 
     @Transactional(readOnly = true)

@@ -38,7 +38,6 @@ public class PenaltyService {
     private final RestRepository restRepository;
     private final PenaltyAccountRepository penaltyAccountRepository;
     private final PenaltyRepository penaltyRepository;
-    private final PaymentService paymentService;
 
     @Transactional
     public void calculateAndAssignPenalties() {
@@ -102,55 +101,10 @@ public class PenaltyService {
                 .ifPresent(penaltyAccountRepository::delete);
     }
 
-//    public PenaltyUnpaidSummary getPenaltyRecords(Long roomId) {
-//        List<Penalty> unpaidPenalties;
-//
-//        if (roomId != null) {
-//            unpaidPenalties = penaltyRepository.findUnpaidByRoomId(roomId);
-//        } else {
-//            unpaidPenalties = penaltyRepository.findAllUnpaid();
-//        }
-//
-//        List<PenaltyRecord> records = unpaidPenalties.stream()
-//                .map(PenaltyRecord::from)
-//                .collect(Collectors.toList());
-//
-//        return PenaltyUnpaidSummary.from(records);
-//    }
-
     public List<PenaltyRecord> getPenaltyRecords(Long roomId) {
         return penaltyRepository.findAllByWorkoutRoomId(roomId).stream()
                 .map(PenaltyRecord::from)
                 .toList();
-    }
-
-    @Transactional
-    public PayPenaltyResponse payPenalty(Long roomId, PayPenaltyRequest request) {
-        List<Penalty> penaltiesToPay = getPenaltiesToPay(roomId, request);
-
-        Long totalPenaltyAmount = penaltiesToPay.stream()
-                .mapToLong(Penalty::getPenaltyAmount)
-                .sum();
-
-        if (!request.getAmount().equals(totalPenaltyAmount)) {
-            throw new CustomException(ErrorCode.INVALID_REQUEST);
-        }
-
-        String orderId = generateOrderId();
-        PaymentService.PaymentResult paymentResult = paymentService.processPayment(request.getAmount(), orderId);
-
-        if (!paymentResult.isSuccess()) {
-            throw new CustomException(ErrorCode.PAYMENT_FAILED);
-        }
-
-        penaltiesToPay.forEach(Penalty::markAsPaid);
-        penaltyRepository.saveAll(penaltiesToPay);
-
-        return PayPenaltyResponse.builder()
-                .success(true)
-                .paidAmount(request.getAmount())
-                .paidAt(LocalDateTime.now().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME))
-                .build();
     }
 
     private void processWorkoutRoomPenalties(WorkoutRoom workoutRoom, LocalDate weekStart, LocalDate weekEnd) {
@@ -201,19 +155,5 @@ public class PenaltyService {
         return restPeriods.stream().anyMatch(rest ->
                 !(rest.getEndDate().isBefore(weekStart) || rest.getStartDate().isAfter(weekEnd))
         );
-    }
-
-    private List<Penalty> getPenaltiesToPay(Long roomId, PayPenaltyRequest request) {
-        if (request.getPenaltyRecordIds() != null && !request.getPenaltyRecordIds().isEmpty()) {
-            return penaltyRepository.findByIds(request.getPenaltyRecordIds());
-        } else if (roomId != null) {
-            return penaltyRepository.findUnpaidByRoomId(roomId);
-        } else {
-            return penaltyRepository.findAllUnpaid();
-        }
-    }
-
-    private String generateOrderId() {
-        return "PEN_" + System.currentTimeMillis() + "_" + UUID.randomUUID().toString().substring(0, 8).toUpperCase();
     }
 }

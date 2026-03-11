@@ -96,12 +96,4 @@ public class AuthService {
         
         return new AuthResponse(tokenResponse.getAccessToken(), tokenResponse.getRefreshToken(), MemberResponse.from(member));
     }
-
-    @Transactional(readOnly = true)
-    public MemberResponse getCurrentUser(String email) {
-        Member member = memberRepository.findByEmail(email)
-                .orElseThrow(() -> new CustomException(ErrorCode.MEMBER_NOT_FOUND));
-
-        return MemberResponse.from(member);
-    }
 }

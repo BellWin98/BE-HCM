@@ -12,6 +12,8 @@ import com.behcm.global.config.aws.S3Service;
 import com.behcm.global.exception.CustomException;
 import com.behcm.global.exception.ErrorCode;
 import lombok.RequiredArgsConstructor;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -38,6 +40,7 @@ public class MemberService {
         return ProfileImageUploadResponse.of(profileUrl);
     }
 
+    @Cacheable(value = "memberProfile", key = "#member.id")
     public MemberProfileResponse getMemberProfile(Member member) {
         List<WorkoutRecord> workoutRecords = workoutRecordRepository.findAllByMemberPerWorkoutDate(member);
 
@@ -48,6 +51,7 @@ public class MemberService {
     }
 
     @Transactional
+    @CacheEvict(value = "memberProfile", key = "#member.id")
     public MemberProfileResponse updateMemberProfile(Member member, UpdateMemberProfileRequest request) {
         if (request.getNickname() != null
                 && !request.getNickname().equals(member.getNickname())

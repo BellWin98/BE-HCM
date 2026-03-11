@@ -4,6 +4,7 @@ import com.behcm.domain.member.entity.Member;
 import com.behcm.domain.workout.entity.WorkoutRoom;
 import com.behcm.domain.workout.entity.WorkoutRoomMember;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -18,4 +19,8 @@ public interface WorkoutRoomMemberRepository extends JpaRepository<WorkoutRoomMe
     List<WorkoutRoomMember> findByWorkoutRoomOrderByJoinedAtFetchMember(@Param("workoutRoom") WorkoutRoom workoutRoom);
     boolean existsByMemberAndWorkoutRoom(Member member, WorkoutRoom workoutRoom);
     List<WorkoutRoomMember> findWorkoutRoomMembersByMember(Member member);
+
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("update WorkoutRoomMember wrm set wrm.weeklyWorkouts = 0 where wrm.weeklyWorkouts <> 0")
+    void resetWeeklyWorkouts();
 }

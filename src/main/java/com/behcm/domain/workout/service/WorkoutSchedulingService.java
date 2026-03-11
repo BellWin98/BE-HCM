@@ -1,7 +1,6 @@
 package com.behcm.domain.workout.service;
 
 import com.behcm.domain.penalty.service.PenaltyService;
-import com.behcm.domain.workout.entity.WorkoutRoomMember;
 import com.behcm.domain.workout.repository.WorkoutRoomMemberRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -34,7 +33,7 @@ public class WorkoutSchedulingService {
     private void resetWeeklyWorkouts() {
         log.info("Starting weekly workout reset");
 
-        workoutRoomMemberRepository.findAll().forEach(WorkoutRoomMember::resetWeeklyWorkouts);
+        workoutRoomMemberRepository.resetWeeklyWorkouts();
 
         log.info("Weekly workout reset completed");
     }

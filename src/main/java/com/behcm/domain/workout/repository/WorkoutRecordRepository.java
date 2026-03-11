@@ -54,6 +54,21 @@ public interface WorkoutRecordRepository extends JpaRepository<WorkoutRecord, Lo
 
     @Query(
             """
+                select wr.member.id, count(wr)
+                from WorkoutRecord wr
+                where wr.workoutRoom = :workoutRoom
+                and wr.workoutDate >= :startDate and wr.workoutDate <= :endDate
+                group by wr.member.id
+            """
+    )
+    List<Object[]> countByWorkoutRoomAndWorkoutDateBetweenGroupByMember(
+            @Param("workoutRoom") WorkoutRoom workoutRoom,
+            @Param("startDate") LocalDate startDate,
+            @Param("endDate") LocalDate endDate
+    );
+
+    @Query(
+            """
                 select wr
                 from WorkoutRecord wr
                 where wr.member = :member
@@ -84,5 +99,20 @@ public interface WorkoutRecordRepository extends JpaRepository<WorkoutRecord, Lo
             """
     )
     List<WorkoutRecord> findByWorkoutRoomAndMemberIn(@Param("workoutRoom") WorkoutRoom workoutRoom, @Param("memberIds") List<Long> memberIds);
+
+    @Query(
+            """
+                select wr
+                from WorkoutRecord wr
+                where wr.member = :member
+                and wr.workoutDate = :workoutDate
+                and wr.workoutRoom in :workoutRooms
+            """
+    )
+    List<WorkoutRecord> findByMemberAndWorkoutDateAndWorkoutRoomIn(
+            @Param("member") Member member,
+            @Param("workoutDate") LocalDate workoutDate,
+            @Param("workoutRooms") List<WorkoutRoom> workoutRooms
+    );
 
 }

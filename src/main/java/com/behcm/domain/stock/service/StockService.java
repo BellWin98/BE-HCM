@@ -56,20 +56,6 @@ public class StockService {
         return parsePortfolioResponse(response);
     }
 
-    public StockPriceResponse getStockPrice(String stockCode) {
-        Map<String, String> params = new HashMap<>();
-        params.put("FID_COND_MRKT_DIV_CODE", "J");
-        params.put("FID_INPUT_ISCD", stockCode);
-
-        JsonNode response = koreaInvestmentClient.callApiWithParams(
-            "/uapi/domestic-stock/v1/quotations/inquire-price",
-            "FHKST01010100",
-            params
-        );
-
-        return parseStockPriceResponse(response, stockCode);
-    }
-
     public StockInfoResponse getStockInfo(String stockCode) {
         Map<String, String> params = new HashMap<>();
         params.put("FID_COND_MRKT_DIV_CODE", "J");
@@ -82,10 +68,6 @@ public class StockService {
         );
 
         return parseStockInfoResponse(response, stockCode);
-    }
-
-    public void refreshStockData() {
-        log.info("Stock data refresh requested");
     }
 
     public TradingProfitLossResponse getTradingProfitLoss(TradingProfitLossRequest request) {

@@ -66,20 +66,6 @@ public class MemberController {
         return ResponseEntity.ok(ApiResponse.success(response));
     }
 
-    @GetMapping("/workout-stats")
-    @Operation(summary = "사용자 운동 통계 조회", description = "사용자의 운동 통계 정보를 조회합니다.")
-    public ResponseEntity<ApiResponse<WorkoutStatsResponse>> getMemberWorkoutStats(@AuthenticationPrincipal Member member) {
-        WorkoutStatsResponse response = memberService.getMemberWorkoutStats(member);
-        return ResponseEntity.ok(ApiResponse.success(response));
-    }
-
-    @GetMapping("/settings")
-    @Operation(summary = "사용자 설정 조회", description = "사용자의 설정 정보를 조회합니다.")
-    public ResponseEntity<ApiResponse<MemberSettingsResponse>> getMemberSettings(@AuthenticationPrincipal Member member) {
-        MemberSettingsResponse response = memberService.getMemberSettings(member);
-        return ResponseEntity.ok(ApiResponse.success(response));
-    }
-
     @PutMapping("/settings")
     @Operation(summary = "사용자 설정 수정", description = "사용자의 설정 정보를 수정합니다.")
     public ResponseEntity<ApiResponse<MemberSettingsResponse>> updateMemberSettings(

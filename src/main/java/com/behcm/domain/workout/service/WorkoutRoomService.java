@@ -75,32 +75,6 @@ public class WorkoutRoomService {
     }
 
     @Transactional(readOnly = true)
-    public WorkoutRoomDetailResponse getCurrentWorkoutRoom(Member member) {
-        // NOTE: ADMIN이 여러 운동방에 참여한 경우, 첫 번째 방만 반환됩니다.
-        // 모든 참여 방을 조회하려면 getJoinedWorkoutRooms() 메서드를 사용하세요.
-        WorkoutRoom workoutRoom = workoutRoomRepository.findFirstByWorkoutRoomMembersMemberAndIsActiveTrue(member)
-                .orElseThrow(() -> new CustomException(ErrorCode.WORKOUT_ROOM_NOT_FOUND, "유저가 속한 운동방이 없습니다."));
-        List<WorkoutRoomMemberResponse> workoutRoomMembers = workoutRoomMemberRepository.findByWorkoutRoomOrderByJoinedAt(workoutRoom).stream()
-                .map(workoutRoomMember -> {
-                    List<WorkoutRecordResponse> workoutRecords = workoutRecordRepository.findAllByMember(workoutRoomMember.getMember()).stream()
-                            .map(WorkoutRecordResponse::from)
-                            .toList();
-                    List<RestResponse> restInfoList = restRepository.findAllByWorkoutRoomMember(workoutRoomMember).stream()
-                            .map(RestResponse::from)
-                            .toList();
-                    return WorkoutRoomMemberResponse.of(workoutRoomMember, workoutRecords, restInfoList);
-                })
-                .toList();
-        Optional<WorkoutRecord> currentMemberWorkoutRecordOpt = workoutRecordRepository.findByMemberAndWorkoutRoomAndWorkoutDate(member, workoutRoom, LocalDate.now());
-        WorkoutRecord currentMemberWorkoutRecord;
-        if (currentMemberWorkoutRecordOpt.isPresent()) {
-            currentMemberWorkoutRecord = currentMemberWorkoutRecordOpt.get();
-            return new WorkoutRoomDetailResponse(WorkoutRoomResponse.from(workoutRoom), workoutRoomMembers, WorkoutRecordResponse.from(currentMemberWorkoutRecord));
-        }
-        return new WorkoutRoomDetailResponse(WorkoutRoomResponse.from(workoutRoom), workoutRoomMembers, null);
-    }
-
-    @Transactional(readOnly = true)
     public List<WorkoutRoomResponse> getJoinedWorkoutRooms(Member member) {
         return workoutRoomMemberRepository.findWorkoutRoomMembersByMember(member).stream()
                 .map(workoutRoomMember -> WorkoutRoomResponse.from(workoutRoomMember.getWorkoutRoom()))
@@ -113,7 +87,7 @@ public class WorkoutRoomService {
                 .orElseThrow(() -> new CustomException(ErrorCode.WORKOUT_ROOM_NOT_FOUND, "유저가 속한 운동방이 없습니다."));
         List<WorkoutRoomMemberResponse> workoutRoomMembers = workoutRoomMemberRepository.findByWorkoutRoomOrderByJoinedAt(workoutRoom).stream()
                 .map(workoutRoomMember -> {
-                    List<WorkoutRecordResponse> workoutRecords = workoutRecordRepository.findAllByMember(workoutRoomMember.getMember()).stream()
+                    List<WorkoutRecordResponse> workoutRecords = workoutRecordRepository.findAllByMemberPerWorkoutDate(workoutRoomMember.getMember()).stream()
                             .map(WorkoutRecordResponse::from)
                             .toList();
                     List<RestResponse> restInfoList = restRepository.findAllByWorkoutRoomMember(workoutRoomMember).stream()
@@ -136,37 +110,6 @@ public class WorkoutRoomService {
         return workoutRoomRepository.findActiveRooms().stream()
                 .map(WorkoutRoomResponse::fromWithoutEntryCode)
                 .toList();
-    }
-
-    public WorkoutRoomResponse joinWorkoutRoom(Long workoutRoomId, String entryCode, Member member) {
-
-        WorkoutRoom workoutRoom = workoutRoomRepository.findById(workoutRoomId)
-                .orElseThrow(() -> new CustomException(ErrorCode.WORKOUT_ROOM_NOT_FOUND));
-
-        if (!workoutRoom.getEntryCode().equals(entryCode)) {
-            throw new CustomException(ErrorCode.INVALID_ENTRY_CODE);
-        }
-
-        if (!workoutRoom.canJoin()) {
-            if (!workoutRoom.getIsActive()) {
-                throw new CustomException(ErrorCode.WORKOUT_ROOM_NOT_FOUND, "비활성화된 방입니다.");
-            } else if (workoutRoom.getCurrentMemberCount() >= workoutRoom.getMaxMembers()) {
-                throw new CustomException(ErrorCode.WORKOUT_ROOM_FULL);
-            }
-        }
-
-        // 이미 해당 운동방에 참여중인지 확인
-        if (workoutRoomMemberRepository.existsByMemberAndWorkoutRoom(member, workoutRoom)) {
-            throw new CustomException(ErrorCode.ALREADY_JOINED_THIS_WORKOUT_ROOM);
-        }
-
-        WorkoutRoomMember workoutRoomMember = WorkoutRoomMember.builder()
-                .member(member)
-                .workoutRoom(workoutRoom)
-                .build();
-        workoutRoomMemberRepository.save(workoutRoomMember);
-
-        return WorkoutRoomResponse.from(workoutRoom);
     }
 
     public WorkoutRoomResponse joinWorkoutRoomByCode(String entryCode, Member member) {
@@ -207,11 +150,6 @@ public class WorkoutRoomService {
         workoutRoom.updateEntryCode(newEntryCode);
 
         return WorkoutRoomResponse.from(workoutRoom);
-    }
-
-    @Transactional(readOnly = true)
-    public boolean isMemberInWorkoutRoom(Member member) {
-        return !workoutRoomMemberRepository.findWorkoutRoomMembersByMember(member).isEmpty();
     }
 
     private String generateUniqueEntryCode(String currentEntryCode) {

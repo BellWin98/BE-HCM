@@ -74,4 +74,15 @@ public interface WorkoutRecordRepository extends JpaRepository<WorkoutRecord, Lo
 
     List<WorkoutRecord> findAllByWorkoutRoom(WorkoutRoom workoutRoom);
 
+    @Query(
+            """
+                select wr from WorkoutRecord wr
+                where 1=1
+                and wr.workoutRoom = :workoutRoom
+                and wr.member.id in :memberIds
+                order by wr.workoutDate desc
+            """
+    )
+    List<WorkoutRecord> findByWorkoutRoomAndMemberIn(@Param("workoutRoom") WorkoutRoom workoutRoom, @Param("memberIds") List<Long> memberIds);
+
 }

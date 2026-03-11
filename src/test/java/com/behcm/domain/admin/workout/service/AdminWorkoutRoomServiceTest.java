@@ -151,7 +151,7 @@ class AdminWorkoutRoomServiceTest {
         given(workoutRoomRepository.findById(1L)).willReturn(Optional.of(room));
         given(workoutRoomMemberRepository.findByWorkoutRoomOrderByJoinedAt(room))
                 .willReturn(List.of(workoutRoomMember));
-        given(workoutRecordRepository.findAllByMember(workoutRoomMember.getMember()))
+        given(workoutRecordRepository.findAllByMemberPerWorkoutDate(workoutRoomMember.getMember()))
                 .willReturn(List.of(workoutRecord));
         given(restRepository.findAllByWorkoutRoomMember(workoutRoomMember))
                 .willReturn(List.of(rest));

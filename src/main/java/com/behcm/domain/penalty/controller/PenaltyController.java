@@ -39,10 +39,4 @@ public class PenaltyController {
         List<PenaltyRecord> response = penaltyService.getPenaltyRecords(roomId);
         return ResponseEntity.ok(ApiResponse.success(response));
     }
-
-    @PostMapping("/{roomId}/penalty/pay")
-    public ResponseEntity<ApiResponse<PayPenaltyResponse>> payPenalty(@PathVariable Long roomId, @RequestBody PayPenaltyRequest request) {
-        PayPenaltyResponse response = penaltyService.payPenalty(roomId, request);
-        return ResponseEntity.ok(ApiResponse.success(response));
-    }
 }

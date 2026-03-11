@@ -11,7 +11,6 @@ import com.behcm.domain.penalty.repository.PenaltyRepository;
 import com.behcm.domain.rest.repository.RestRepository;
 import com.behcm.domain.workout.entity.WorkoutRoom;
 import com.behcm.domain.workout.entity.WorkoutRoomMember;
-import com.behcm.domain.workout.repository.WorkoutLikeRepository;
 import com.behcm.domain.workout.repository.WorkoutRecordRepository;
 import com.behcm.domain.workout.repository.WorkoutRoomMemberRepository;
 import com.behcm.domain.workout.repository.WorkoutRoomRepository;
@@ -33,7 +32,6 @@ public class AdminMemberService {
     private final MemberRepository memberRepository;
     private final WorkoutRoomMemberRepository workoutRoomMemberRepository;
     private final WorkoutRecordRepository workoutRecordRepository;
-    private final WorkoutLikeRepository workoutLikeRepository;
     private final ChatMessageRepository chatMessageRepository;
     private final FcmTokenRepository fcmTokenRepository;
     private final MemberSettingsRepository memberSettingsRepository;
@@ -103,9 +101,6 @@ public class AdminMemberService {
         // WorkoutRecord 삭제
         workoutRecordRepository.deleteByMember(memberToDelete);
 
-        // WorkoutLike 삭제
-        workoutLikeRepository.deleteByMember(memberToDelete);
-
         // ChatMessage 삭제
         chatMessageRepository.deleteBySender(memberToDelete);
 
@@ -126,12 +121,6 @@ public class AdminMemberService {
         for (WorkoutRoomMember wrm : members) {
             List<com.behcm.domain.rest.entity.Rest> rests = restRepository.findAllByWorkoutRoomMember(wrm);
             restRepository.deleteAll(rests);
-        }
-
-        // WorkoutLike 삭제 (운동방의 운동 기록에 대한 좋아요 - WorkoutRecord 삭제 전에 처리)
-        List<com.behcm.domain.workout.entity.WorkoutRecord> workoutRecords = workoutRecordRepository.findAllByWorkoutRoom(workoutRoom);
-        for (com.behcm.domain.workout.entity.WorkoutRecord wr : workoutRecords) {
-            workoutLikeRepository.deleteByWorkoutRecord(wr);
         }
 
         // WorkoutRecord 삭제

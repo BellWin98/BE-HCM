@@ -31,10 +31,8 @@ import java.util.stream.Stream;
 public class ChatService {
 
     private final ChatMessageRepository chatMessageRepository;
-    private final WorkoutRoomRepository workoutRoomRepository;
     private final WorkoutRoomMemberRepository workoutRoomMemberRepository;
     private final SimpMessagingTemplate messagingTemplate;
-    private final RedisTemplate<String, Object> redisTemplate;
 
     public void sendMessage(Long roomId, Member sender, ChatMessageRequest request) {
         WorkoutRoomMember wrm = workoutRoomMemberRepository.findWorkoutRoomMembersByMember(sender).stream()
@@ -48,9 +46,6 @@ public class ChatService {
                 .content(request.getContent())
                 .messageType(request.getType())
                 .build();
-
-        // 보낸 사람은 자동으로 읽음 처리
-//        chatMessage.addReadBy(wrm.getNickname());
 
         ChatMessage savedChatMessage = chatMessageRepository.save(chatMessage);
         ChatMessageResponse response = ChatMessageResponse.from(savedChatMessage);

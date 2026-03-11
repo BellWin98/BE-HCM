@@ -1,34 +1,27 @@
 package com.behcm.domain.member.service;
 
-import com.behcm.domain.member.dto.MemberProfileResponse;
-import com.behcm.domain.member.dto.MemberSettingsResponse;
-import com.behcm.domain.member.dto.ProfileImageUploadResponse;
-import com.behcm.domain.member.dto.UpdateMemberProfileRequest;
-import com.behcm.domain.member.dto.UpdateMemberSettingsRequest;
+import com.behcm.domain.member.dto.*;
 import com.behcm.domain.member.entity.Member;
 import com.behcm.domain.member.entity.MemberSettings;
 import com.behcm.domain.member.repository.MemberRepository;
 import com.behcm.domain.member.repository.MemberSettingsRepository;
 import com.behcm.domain.workout.dto.WorkoutFeedItemResponse;
-import com.behcm.domain.workout.dto.WorkoutStatsResponse;
 import com.behcm.domain.workout.entity.WorkoutRecord;
-import com.behcm.domain.workout.repository.WorkoutLikeRepository;
 import com.behcm.domain.workout.repository.WorkoutRecordRepository;
 import com.behcm.global.config.aws.S3Service;
 import com.behcm.global.exception.CustomException;
 import com.behcm.global.exception.ErrorCode;
 import lombok.RequiredArgsConstructor;
-import org.springframework.data.domain.*;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.time.LocalDate;
-import java.time.YearMonth;
 import java.util.Comparator;
 import java.util.List;
-import java.util.Map;
-import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -37,7 +30,6 @@ public class MemberService {
 
     private final MemberRepository memberRepository;
     private final WorkoutRecordRepository workoutRecordRepository;
-    private final WorkoutLikeRepository workoutLikeRepository;
     private final MemberSettingsRepository memberSettingsRepository;
     private final S3Service s3Service;
 
@@ -47,7 +39,7 @@ public class MemberService {
     }
 
     public MemberProfileResponse getMemberProfile(Member member) {
-        List<WorkoutRecord> workoutRecords = workoutRecordRepository.findAllByMember(member);
+        List<WorkoutRecord> workoutRecords = workoutRecordRepository.findAllByMemberPerWorkoutDate(member);
 
         int currentStreak = calculateCurrentStreak(workoutRecords);
         int longestStreak = calculateLongestStreak(workoutRecords);
@@ -65,7 +57,7 @@ public class MemberService {
         member.updateProfile(request.getNickname(), request.getBio(), request.getProfileUrl());
         Member savedMember = memberRepository.save(member);
 
-        List<WorkoutRecord> workoutRecords = workoutRecordRepository.findAllByMember(savedMember);
+        List<WorkoutRecord> workoutRecords = workoutRecordRepository.findAllByMemberPerWorkoutDate(savedMember);
         int currentStreak = calculateCurrentStreak(workoutRecords);
         int longestStreak = calculateLongestStreak(workoutRecords);
 
@@ -75,68 +67,6 @@ public class MemberService {
     public Page<WorkoutFeedItemResponse> getMemberWorkoutFeed(Member member, int page, int size) {
         Pageable pageable = PageRequest.of(page, size);
         return workoutRecordRepository.findAllByMemberPerWorkoutDate(member, pageable).map(WorkoutFeedItemResponse::from);
-    }
-
-    public WorkoutStatsResponse getMemberWorkoutStats(Member member) {
-        List<WorkoutRecord> allRecords = workoutRecordRepository.findAllByMember(member);
-
-        int currentStreak = calculateCurrentStreak(allRecords);
-        int longestStreak = calculateLongestStreak(allRecords);
-
-        // 이번 주 운동 횟수
-        LocalDate today = LocalDate.now();
-        LocalDate startOfWeek = today.minusDays(today.getDayOfWeek().getValue() - 1);
-        LocalDate endOfWeek = startOfWeek.plusDays(6);
-        int weeklyProgress = (int) allRecords.stream()
-                .filter(record -> !record.getWorkoutDate().isBefore(startOfWeek) &&
-                                !record.getWorkoutDate().isAfter(endOfWeek))
-                .count();
-
-        // 이번 달 운동 횟수
-        YearMonth currentMonth = YearMonth.now();
-        LocalDate startOfMonth = currentMonth.atDay(1);
-        LocalDate endOfMonth = currentMonth.atEndOfMonth();
-        int monthlyWorkouts = (int) allRecords.stream()
-                .filter(record -> !record.getWorkoutDate().isBefore(startOfMonth) &&
-                                !record.getWorkoutDate().isAfter(endOfMonth))
-                .count();
-
-        // 가장 많이 한 운동 타입 (여러 운동 종류를 모두 고려)
-        String favoriteWorkoutType = allRecords.stream()
-                .flatMap(record -> record.getWorkoutTypes().stream())
-                .collect(Collectors.groupingBy(type -> type, Collectors.counting()))
-                .entrySet().stream()
-                .max(Map.Entry.comparingByValue())
-                .map(Map.Entry::getKey)
-                .orElse("NONE");
-
-        // 총 운동 시간
-        int totalDuration = allRecords.stream()
-                .mapToInt(WorkoutRecord::getDuration)
-                .sum();
-
-        return WorkoutStatsResponse.builder()
-                .totalWorkouts(allRecords.size())
-                .currentStreak(currentStreak)
-                .longestStreak(longestStreak)
-                .weeklyGoal(3) // 기본 주간 목표
-                .weeklyProgress(weeklyProgress)
-                .monthlyWorkouts(monthlyWorkouts)
-                .favoriteWorkoutType(favoriteWorkoutType)
-                .totalDuration(totalDuration)
-                .build();
-    }
-
-    public MemberSettingsResponse getMemberSettings(Member member) {
-        MemberSettings settings = memberSettingsRepository.findByMemberId(member.getId())
-                .orElseGet(() -> {
-                    MemberSettings newSettings = MemberSettings.builder()
-                            .member(member)
-                            .build();
-                    return memberSettingsRepository.save(newSettings);
-                });
-
-        return MemberSettingsResponse.from(settings);
     }
 
     @Transactional

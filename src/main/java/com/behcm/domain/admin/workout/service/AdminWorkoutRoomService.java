@@ -12,10 +12,8 @@ import com.behcm.domain.workout.dto.WorkoutRecordResponse;
 import com.behcm.domain.workout.dto.WorkoutRoomDetailResponse;
 import com.behcm.domain.workout.dto.WorkoutRoomMemberResponse;
 import com.behcm.domain.workout.dto.WorkoutRoomResponse;
-import com.behcm.domain.workout.entity.WorkoutRecord;
 import com.behcm.domain.workout.entity.WorkoutRoom;
 import com.behcm.domain.workout.entity.WorkoutRoomMember;
-import com.behcm.domain.workout.repository.WorkoutLikeRepository;
 import com.behcm.domain.workout.repository.WorkoutRecordRepository;
 import com.behcm.domain.workout.repository.WorkoutRoomMemberRepository;
 import com.behcm.domain.workout.repository.WorkoutRoomRepository;
@@ -42,7 +40,6 @@ public class AdminWorkoutRoomService {
     private final ChatMessageRepository chatMessageRepository;
     private final PenaltyAccountRepository penaltyAccountRepository;
     private final PenaltyRepository penaltyRepository;
-    private final WorkoutLikeRepository workoutLikeRepository;
 
     public Page<WorkoutRoomResponse> getRooms(String query, Boolean active, Pageable pageable) {
         String normalizedQuery = (query != null && !query.isBlank()) ? query : null;
@@ -56,7 +53,7 @@ public class AdminWorkoutRoomService {
 
         List<WorkoutRoomMemberResponse> workoutRoomMembers = workoutRoomMemberRepository.findByWorkoutRoomOrderByJoinedAt(workoutRoom).stream()
                 .map(workoutRoomMember -> {
-                    List<WorkoutRecordResponse> workoutRecords = workoutRecordRepository.findAllByMember(workoutRoomMember.getMember()).stream()
+                    List<WorkoutRecordResponse> workoutRecords = workoutRecordRepository.findAllByMemberPerWorkoutDate(workoutRoomMember.getMember()).stream()
                             .map(WorkoutRecordResponse::from)
                             .toList();
                     List<RestResponse> restInfoList = restRepository.findAllByWorkoutRoomMember(workoutRoomMember).stream()
@@ -110,12 +107,6 @@ public class AdminWorkoutRoomService {
         for (WorkoutRoomMember wrm : members) {
             List<Rest> rests = restRepository.findAllByWorkoutRoomMember(wrm);
             restRepository.deleteAll(rests);
-        }
-
-        // WorkoutLike 삭제 (운동방의 운동 기록에 대한 좋아요 - WorkoutRecord 삭제 전에 처리)
-        List<WorkoutRecord> workoutRecords = workoutRecordRepository.findAllByWorkoutRoom(workoutRoom);
-        for (WorkoutRecord wr : workoutRecords) {
-            workoutLikeRepository.deleteByWorkoutRecord(wr);
         }
 
         // WorkoutRecord 삭제

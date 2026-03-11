@@ -16,14 +16,10 @@ import java.util.Optional;
 public interface MemberRepository extends JpaRepository<Member, Long> {
 
     Optional<Member> findByEmail(String email);
-
-    Optional<Member> findByNickname(String nickname);
-
     boolean existsByEmail(String email);
-
     boolean existsByNickname(String nickname);
-
     Optional<Member> findByOauthProviderAndOauthProviderId(String oauthProvider, String oauthProviderId);
+    long countByRole(MemberRole role);
 
     @Query("SELECT m FROM Member m " +
             "WHERE (:role IS NULL OR m.role = :role) " +
@@ -32,9 +28,4 @@ public interface MemberRepository extends JpaRepository<Member, Long> {
     Page<Member> searchAdminMembers(@Param("query") String query,
                                     @Param("role") MemberRole role,
                                     Pageable pageable);
-
-    @Query("SELECT m FROM Member m WHERE m.nickname LIKE %:nickname%")
-    List<Member> findByNicknameContaining(@Param("nickname") String nickname);
-
-    long countByRole(MemberRole role);
 }

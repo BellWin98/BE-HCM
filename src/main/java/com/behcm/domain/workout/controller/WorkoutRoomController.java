@@ -31,14 +31,6 @@ public class WorkoutRoomController {
         return ResponseEntity.ok(ApiResponse.success(response));
     }
 
-    @GetMapping("/current")
-    public ResponseEntity<ApiResponse<WorkoutRoomDetailResponse>> getCurrentWorkoutRoom(
-            @AuthenticationPrincipal Member member
-    ) {
-        WorkoutRoomDetailResponse response = workoutRoomService.getCurrentWorkoutRoom(member);
-        return ResponseEntity.ok(ApiResponse.success(response));
-    }
-
     @GetMapping("/joined")
     public ResponseEntity<ApiResponse<List<WorkoutRoomResponse>>> getJoinedWorkoutRooms(
             @AuthenticationPrincipal Member member
@@ -56,27 +48,9 @@ public class WorkoutRoomController {
         return ResponseEntity.ok(ApiResponse.success(response));
     }
 
-    @GetMapping("/validate")
-    public ResponseEntity<Boolean> isMemberInWorkoutRoom(
-            @AuthenticationPrincipal Member member
-    ) {
-        boolean response = workoutRoomService.isMemberInWorkoutRoom(member);
-        return ResponseEntity.ok(response);
-    }
-
     @GetMapping
     public ResponseEntity<ApiResponse<List<WorkoutRoomResponse>>> getWorkoutRooms() {
         List<WorkoutRoomResponse> response = workoutRoomService.getWorkoutRooms();
-        return ResponseEntity.ok(ApiResponse.success(response));
-    }
-
-    @PostMapping("/join/{workoutRoomId}")
-    public ResponseEntity<ApiResponse<WorkoutRoomResponse>> joinWorkoutRoom(
-            @PathVariable Long workoutRoomId,
-            @RequestParam String entryCode,
-            @AuthenticationPrincipal Member member
-    ) {
-        WorkoutRoomResponse response = workoutRoomService.joinWorkoutRoom(workoutRoomId, entryCode, member);
         return ResponseEntity.ok(ApiResponse.success(response));
     }
 

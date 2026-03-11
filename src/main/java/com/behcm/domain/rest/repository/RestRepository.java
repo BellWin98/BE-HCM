@@ -10,5 +10,10 @@ import java.util.List;
 @Repository
 public interface RestRepository extends JpaRepository<Rest, Long> {
     List<Rest> findAllByWorkoutRoomMember(WorkoutRoomMember workoutRoomMember);
+
     List<Rest> findAllByWorkoutRoomMemberIn(List<WorkoutRoomMember> workoutRoomMembers);
+
+    void deleteAllByWorkoutRoomMemberIn(List<WorkoutRoomMember> workoutRoomMembers);
+
+    void deleteAllByWorkoutRoomMember(WorkoutRoomMember workoutRoomMember);
 }

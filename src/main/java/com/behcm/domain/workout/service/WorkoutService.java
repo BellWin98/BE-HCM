@@ -13,6 +13,8 @@ import com.behcm.global.config.aws.S3Service;
 import com.behcm.global.exception.CustomException;
 import com.behcm.global.exception.ErrorCode;
 import lombok.RequiredArgsConstructor;
+import org.springframework.cache.CacheManager;
+import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -31,21 +33,33 @@ public class WorkoutService {
     private final WorkoutRoomMemberRepository workoutRoomMemberRepository;
     private final MemberRepository memberRepository;
     private final S3Service s3Service;
+    private final CacheManager cacheManager;
 
+    @CacheEvict(value = "workoutRoomDetail", allEntries = true)
     public WorkoutResponse authenticateWorkout(Member member, WorkoutRequest request) {
         LocalDate workoutDate = LocalDate.parse(request.getWorkoutDate(), DateTimeFormatter.ISO_LOCAL_DATE);
         List<WorkoutRoomMember> wrms = workoutRoomMemberRepository.findWorkoutRoomMembersByMember(member);
         if (wrms.isEmpty()) {
             throw new CustomException(ErrorCode.WORKOUT_ROOM_NOT_FOUND);
         }
+
+        // 멤버가 참여 중인 모든 방에 대해, 해당 날짜에 이미 운동 인증이 존재하는지 한 번의 쿼리로 검사
+        List<WorkoutRoom> workoutRooms = wrms.stream()
+                .map(WorkoutRoomMember::getWorkoutRoom)
+                .toList();
+        List<WorkoutRecord> existingRecords = workoutRecordRepository.findByMemberAndWorkoutDateAndWorkoutRoomIn(
+                member,
+                workoutDate,
+                workoutRooms
+        );
+        if (!existingRecords.isEmpty()) {
+            throw new CustomException(ErrorCode.WORKOUT_ALREADY_AUTHENTICATED);
+        }
+
         // 여러 이미지 S3에 업로드
         List<String> imageUrls = s3Service.uploadImages(request.getImages());
         for (WorkoutRoomMember wrm : wrms) {
             WorkoutRoom workoutRoom = wrm.getWorkoutRoom();
-            // 중복 운동 인증 체크
-            if (workoutRecordRepository.existsByMemberAndWorkoutRoomAndWorkoutDate(member, workoutRoom, workoutDate)) {
-                throw new CustomException(ErrorCode.WORKOUT_ALREADY_AUTHENTICATED);
-            }
             // 운동 기록 저장
             WorkoutRecord workoutRecord = WorkoutRecord.builder()
                     .member(member)

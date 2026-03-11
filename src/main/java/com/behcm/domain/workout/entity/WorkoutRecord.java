@@ -15,6 +15,15 @@ import java.util.ArrayList;
 import java.util.List;
 
 @Entity
+@Table(
+        name = "workout_record",
+        uniqueConstraints = {
+                @UniqueConstraint(
+                        name = "uk_workout_record_member_room_date",
+                        columnNames = {"member_id", "workout_room_id", "workout_date"}
+                )
+        }
+)
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @EntityListeners(AuditingEntityListener.class)

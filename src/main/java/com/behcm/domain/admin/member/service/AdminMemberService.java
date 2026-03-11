@@ -78,25 +78,18 @@ public class AdminMemberService {
         // 회원이 소유한 운동방 처리 (운동방 삭제)
         List<WorkoutRoom> ownedRooms = workoutRoomRepository.findByOwner(memberToDelete);
         for (WorkoutRoom room : ownedRooms) {
-            // 운동방의 모든 관련 데이터 삭제
+            // 운동방의 모든 관련 데이터 bulk delete 후 방 삭제
             deleteWorkoutRoomData(room);
             workoutRoomRepository.delete(room);
         }
 
-        // 회원이 참여한 운동방 멤버십 조회 및 관련 데이터 삭제
+        // 회원이 참여한 운동방 멤버십 및 관련 데이터 bulk delete
         List<WorkoutRoomMember> workoutRoomMembers = workoutRoomMemberRepository.findWorkoutRoomMembersByMember(memberToDelete);
-        for (WorkoutRoomMember wrm : workoutRoomMembers) {
-            // Penalty 삭제
-            List<com.behcm.domain.penalty.entity.Penalty> penalties = penaltyRepository.findAllByWorkoutRoomId(wrm.getWorkoutRoom().getId());
-            penaltyRepository.deleteAll(penalties);
-
-            // Rest 삭제
-            List<com.behcm.domain.rest.entity.Rest> rests = restRepository.findAllByWorkoutRoomMember(wrm);
-            restRepository.deleteAll(rests);
+        if (!workoutRoomMembers.isEmpty()) {
+            restRepository.deleteAllByWorkoutRoomMemberIn(workoutRoomMembers);
+            penaltyRepository.deleteAllByWorkoutRoomMemberIn(workoutRoomMembers);
+            workoutRoomMemberRepository.deleteAll(workoutRoomMembers);
         }
-
-        // WorkoutRoomMember 삭제
-        workoutRoomMemberRepository.deleteAll(workoutRoomMembers);
 
         // WorkoutRecord 삭제
         workoutRecordRepository.deleteByMember(memberToDelete);
@@ -116,11 +109,11 @@ public class AdminMemberService {
     }
 
     private void deleteWorkoutRoomData(WorkoutRoom workoutRoom) {
-        // WorkoutRoomMember의 Rest 삭제
+        // 방에 속한 멤버 기반으로 Rest / Penalty bulk delete
         List<WorkoutRoomMember> members = workoutRoomMemberRepository.findByWorkoutRoomOrderByJoinedAt(workoutRoom);
-        for (WorkoutRoomMember wrm : members) {
-            List<com.behcm.domain.rest.entity.Rest> rests = restRepository.findAllByWorkoutRoomMember(wrm);
-            restRepository.deleteAll(rests);
+        if (!members.isEmpty()) {
+            restRepository.deleteAllByWorkoutRoomMemberIn(members);
+            penaltyRepository.deleteAllByWorkoutRoomMemberIn(members);
         }
 
         // WorkoutRecord 삭제
@@ -128,10 +121,6 @@ public class AdminMemberService {
 
         // ChatMessage 삭제
         chatMessageRepository.deleteByWorkoutRoom(workoutRoom);
-
-        // Penalty 삭제
-        List<com.behcm.domain.penalty.entity.Penalty> penalties = penaltyRepository.findAllByWorkoutRoomId(workoutRoom.getId());
-        penaltyRepository.deleteAll(penalties);
     }
 }
 

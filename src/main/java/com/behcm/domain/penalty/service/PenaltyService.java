@@ -20,11 +20,9 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.DayOfWeek;
 import java.time.LocalDate;
-import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
 import java.time.temporal.TemporalAdjusters;
 import java.util.List;
-import java.util.UUID;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 @Service
@@ -111,15 +109,30 @@ public class PenaltyService {
         log.info("Processing penalties for workout room: {} (ID: {})", workoutRoom.getName(), workoutRoom.getId());
 
         List<WorkoutRoomMember> members = workoutRoom.getWorkoutRoomMembers();
+        if (members.isEmpty()) {
+            log.info("No members in workout room {} (ID: {}), skipping penalty calculation", workoutRoom.getName(), workoutRoom.getId());
+            return;
+        }
+
+        Map<Long, Integer> actualWorkoutsByMemberId = workoutRecordRepository
+                .countByWorkoutRoomAndWorkoutDateBetweenGroupByMember(workoutRoom, weekStart, weekEnd)
+                .stream()
+                .collect(Collectors.toMap(
+                        row -> (Long) row[0],
+                        row -> ((Long) row[1]).intValue()
+                ));
+
+        List<Rest> restPeriods = restRepository.findAllByWorkoutRoomMemberIn(members);
+        Map<Long, List<Rest>> restByWorkoutRoomMemberId = restPeriods.stream()
+                .collect(Collectors.groupingBy(rest -> rest.getWorkoutRoomMember().getId()));
 
         for (WorkoutRoomMember member : members) {
-            if (isMemberOnBreak(member, weekStart, weekEnd)) {
+            if (isMemberOnBreak(member, weekStart, weekEnd, restByWorkoutRoomMemberId)) {
                 log.debug("Skipping penalty calculation for member {} - on break", member.getNickname());
                 continue;
             }
 
-            int actualWorkouts = (int) workoutRecordRepository.countByMemberAndWorkoutRoomAndWorkoutDateBetween(
-                    member.getMember(), workoutRoom, weekStart, weekEnd);
+            int actualWorkouts = actualWorkoutsByMemberId.getOrDefault(member.getMember().getId(), 0);
 
             int requiredWorkouts = workoutRoom.getMinWeeklyWorkouts();
 
@@ -149,8 +162,9 @@ public class PenaltyService {
         }
     }
 
-    private boolean isMemberOnBreak(WorkoutRoomMember member, LocalDate weekStart, LocalDate weekEnd) {
-        List<Rest> restPeriods = restRepository.findAllByWorkoutRoomMember(member);
+    private boolean isMemberOnBreak(WorkoutRoomMember member, LocalDate weekStart, LocalDate weekEnd,
+                                    Map<Long, List<Rest>> restByWorkoutRoomMemberId) {
+        List<Rest> restPeriods = restByWorkoutRoomMemberId.getOrDefault(member.getId(), List.of());
 
         return restPeriods.stream().anyMatch(rest ->
                 !(rest.getEndDate().isBefore(weekStart) || rest.getStartDate().isAfter(weekEnd))

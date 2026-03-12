@@ -25,7 +25,7 @@ public class RestService {
     private final WorkoutRoomMemberRepository workoutRoomMemberRepository;
 
     public void registerRestDay(Member member, RestRequest request) {
-        List<WorkoutRoomMember> wrms = workoutRoomMemberRepository.findWorkoutRoomMembersByMember(member);
+        List<WorkoutRoomMember> wrms = workoutRoomMemberRepository.findByMember(member);
         if (wrms.isEmpty()) {
             throw new CustomException(ErrorCode.WORKOUT_ROOM_NOT_FOUND);
         }

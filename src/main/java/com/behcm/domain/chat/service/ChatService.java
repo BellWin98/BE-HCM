@@ -1,25 +1,29 @@
 package com.behcm.domain.chat.service;
 
 import com.behcm.domain.chat.dto.ChatHistoryResponse;
+import com.behcm.domain.chat.dto.ChatImageUploadResponse;
 import com.behcm.domain.chat.dto.ChatMessageRequest;
 import com.behcm.domain.chat.dto.ChatMessageResponse;
 import com.behcm.domain.chat.entity.ChatMessage;
+import com.behcm.domain.chat.entity.MessageType;
 import com.behcm.domain.chat.repository.ChatMessageRepository;
 import com.behcm.domain.member.entity.Member;
 import com.behcm.domain.workout.entity.WorkoutRoom;
 import com.behcm.domain.workout.entity.WorkoutRoomMember;
 import com.behcm.domain.workout.repository.WorkoutRoomMemberRepository;
 import com.behcm.domain.workout.repository.WorkoutRoomRepository;
+import com.behcm.global.config.aws.S3Service;
 import com.behcm.global.exception.CustomException;
 import com.behcm.global.exception.ErrorCode;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Slice;
-import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
+import org.springframework.util.StringUtils;
 
 import java.util.Comparator;
 import java.util.List;
@@ -32,19 +36,41 @@ public class ChatService {
 
     private final ChatMessageRepository chatMessageRepository;
     private final WorkoutRoomMemberRepository workoutRoomMemberRepository;
+    private final WorkoutRoomRepository workoutRoomRepository;
+    private final S3Service s3Service;
     private final SimpMessagingTemplate messagingTemplate;
 
-    public void sendMessage(Long roomId, Member sender, ChatMessageRequest request) {
-        WorkoutRoomMember wrm = workoutRoomMemberRepository.findWorkoutRoomMembersByMember(sender).stream()
-                .filter(workoutRoomMember -> workoutRoomMember.getWorkoutRoom().getId().equals(roomId))
-                .findFirst()
-                .orElseThrow(() -> new CustomException(ErrorCode.NOT_WORKOUT_ROOM_MEMBER));
+    public ChatImageUploadResponse uploadChatImage(Member member, Long roomId, MultipartFile file) {
+        WorkoutRoom workoutRoom = workoutRoomRepository.findByIdAndIsActiveTrue(roomId)
+                .orElseThrow(() -> new CustomException(ErrorCode.WORKOUT_ROOM_NOT_FOUND));
+        if (!workoutRoomMemberRepository.existsByMemberAndWorkoutRoom(member, workoutRoom)) {
+            throw new CustomException(ErrorCode.NOT_WORKOUT_ROOM_MEMBER);
+        }
+        String imageUrl = s3Service.uploadChatImage(file, workoutRoom.getId());
+        return ChatImageUploadResponse.of(imageUrl);
+    }
 
+    public void sendMessage(Long roomId, Member sender, ChatMessageRequest request) {
+        WorkoutRoom workoutRoom = workoutRoomRepository.findByIdAndIsActiveTrue(roomId)
+                .orElseThrow(() -> new CustomException(ErrorCode.WORKOUT_ROOM_NOT_FOUND));
+        if (!workoutRoomMemberRepository.existsByMemberAndWorkoutRoom(sender, workoutRoom)) {
+            throw new CustomException(ErrorCode.NOT_WORKOUT_ROOM_MEMBER);
+        }
+        if (request.getType() == MessageType.IMAGE) {
+            if (!StringUtils.hasText(request.getImageUrl())) {
+                throw new CustomException(ErrorCode.INVALID_INPUT, "이미지 URL이 필요합니다.");
+            }
+        }
+
+        String imageUrl = (request.getType() == MessageType.IMAGE)
+                ? request.getImageUrl().trim()
+                : null;
         ChatMessage chatMessage = ChatMessage.builder()
                 .sender(sender)
-                .workoutRoom(wrm.getWorkoutRoom())
-                .content(request.getContent())
+                .workoutRoom(workoutRoom)
+                .content(request.getContent() != null ? request.getContent() : "")
                 .messageType(request.getType())
+                .imageUrl(imageUrl)
                 .build();
 
         ChatMessage savedChatMessage = chatMessageRepository.save(chatMessage);
@@ -55,9 +81,9 @@ public class ChatService {
 
     @Transactional(readOnly = true)
     public ChatHistoryResponse getChatHistory(Member member, Long roomId, Long cursorId, int size) {
-        WorkoutRoomMember wrm = workoutRoomMemberRepository.findWorkoutRoomMembersByMember(member).stream()
-                .filter(workoutRoomMember -> workoutRoomMember.getWorkoutRoom().getId().equals(roomId))
-                .findFirst()
+        WorkoutRoom workoutRoom = workoutRoomRepository.findByIdAndIsActiveTrue(roomId)
+                .orElseThrow(() -> new CustomException(ErrorCode.WORKOUT_ROOM_NOT_FOUND));
+        WorkoutRoomMember wrm = workoutRoomMemberRepository.findByWorkoutRoomAndMember(workoutRoom, member)
                 .orElseThrow(() -> new CustomException(ErrorCode.NOT_WORKOUT_ROOM_MEMBER));
 
         // 1. 초기 로드: cursorId가 null 일 때
@@ -79,9 +105,9 @@ public class ChatService {
     }
 
     public void updateLastReadMessage(Member member, Long roomId) {
-        WorkoutRoomMember wrm = workoutRoomMemberRepository.findWorkoutRoomMembersByMember(member).stream()
-                .filter(workoutRoomMember -> workoutRoomMember.getWorkoutRoom().getId().equals(roomId))
-                .findFirst()
+        WorkoutRoom workoutRoom = workoutRoomRepository.findByIdAndIsActiveTrue(roomId)
+                .orElseThrow(() -> new CustomException(ErrorCode.WORKOUT_ROOM_NOT_FOUND));
+        WorkoutRoomMember wrm = workoutRoomMemberRepository.findByWorkoutRoomAndMember(workoutRoom, member)
                 .orElseThrow(() -> new CustomException(ErrorCode.NOT_WORKOUT_ROOM_MEMBER));
 
         // 현재 채팅방의 가장 최신 메시지를 찾음
@@ -93,9 +119,9 @@ public class ChatService {
     }
 
     public void markAsRead(Long roomId, Long messageId, Member member) {
-        WorkoutRoomMember wrm = workoutRoomMemberRepository.findWorkoutRoomMembersByMember(member).stream()
-                .filter(workoutRoomMember -> workoutRoomMember.getWorkoutRoom().getId().equals(roomId))
-                .findFirst()
+        WorkoutRoom workoutRoom = workoutRoomRepository.findByIdAndIsActiveTrue(roomId)
+                .orElseThrow(() -> new CustomException(ErrorCode.WORKOUT_ROOM_NOT_FOUND));
+        WorkoutRoomMember wrm = workoutRoomMemberRepository.findByWorkoutRoomAndMember(workoutRoom, member)
                 .orElseThrow(() -> new CustomException(ErrorCode.NOT_WORKOUT_ROOM_MEMBER));
         ChatMessage chatMessage = chatMessageRepository.findById(messageId)
                 .orElseThrow(() -> new CustomException(ErrorCode.CHAT_MESSAGE_NOT_FOUND));

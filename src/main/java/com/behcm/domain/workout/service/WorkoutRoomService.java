@@ -80,7 +80,7 @@ public class WorkoutRoomService {
 
     @Transactional(readOnly = true)
     public List<WorkoutRoomResponse> getJoinedWorkoutRooms(Member member) {
-        return workoutRoomMemberRepository.findWorkoutRoomMembersByMember(member).stream()
+        return workoutRoomMemberRepository.findByMember(member).stream()
                 .map(workoutRoomMember -> WorkoutRoomResponse.from(workoutRoomMember.getWorkoutRoom()))
                 .toList();
     }

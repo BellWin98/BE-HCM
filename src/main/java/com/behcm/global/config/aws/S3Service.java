@@ -74,6 +74,40 @@ public class S3Service {
         return false;
     }
 
+    /**
+     * 채팅 이미지 업로드. image/jpeg, image/png, image/webp만 허용, 최대 5MB.
+     * S3 키: chat/rooms/{roomId}/{yyyy/MM/dd}/{uuid}.{ext}
+     */
+    public String uploadChatImage(MultipartFile file, Long roomId) {
+        if (file == null || file.isEmpty()) {
+            throw new CustomException(ErrorCode.INVALID_FILE);
+        }
+        String contentType = file.getContentType();
+        if (contentType == null || !isAllowedProfileContentType(contentType)) {
+            throw new CustomException(ErrorCode.INVALID_FILE_TYPE);
+        }
+        if (file.getSize() > PROFILE_IMAGE_MAX_SIZE_BYTES) {
+            throw new CustomException(ErrorCode.FILE_TOO_LARGE);
+        }
+        String originalFilename = file.getOriginalFilename();
+        if (originalFilename == null || !originalFilename.contains(".")) {
+            throw new CustomException(ErrorCode.INVALID_FILE_TYPE);
+        }
+        String fileName = generateFileName(originalFilename);
+        String filePath = "chat/rooms/" + roomId + "/" + getFolderName();
+        String key = filePath + "/" + fileName;
+        try (InputStream inputStream = file.getInputStream()) {
+            ObjectMetadata objectMetadata = new ObjectMetadata();
+            objectMetadata.setContentLength(file.getSize());
+            objectMetadata.setContentType(contentType);
+            amazonS3Client.putObject(new PutObjectRequest(bucket, key, inputStream, objectMetadata));
+            return getFileUrl(key);
+        } catch (IOException e) {
+            log.error("S3 채팅 이미지 업로드 실패: {}", e.getMessage(), e);
+            throw new CustomException(ErrorCode.FILE_UPLOAD_FAILED);
+        }
+    }
+
     public String uploadImage(MultipartFile file) {
         if (file == null || file.isEmpty()) {
             throw new CustomException(ErrorCode.INVALID_FILE);

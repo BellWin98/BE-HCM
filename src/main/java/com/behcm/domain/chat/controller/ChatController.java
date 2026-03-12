@@ -1,6 +1,7 @@
 package com.behcm.domain.chat.controller;
 
 import com.behcm.domain.chat.dto.ChatHistoryResponse;
+import com.behcm.domain.chat.dto.ChatImageUploadResponse;
 import com.behcm.domain.chat.dto.ChatMessageRequest;
 import com.behcm.domain.chat.service.ChatService;
 import com.behcm.domain.member.entity.Member;
@@ -15,6 +16,7 @@ import org.springframework.messaging.simp.stomp.StompHeaderAccessor;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 @Slf4j
 @RestController
@@ -44,6 +46,17 @@ public class ChatController {
             @AuthenticationPrincipal Member member
     ) {
         chatService.markAsRead(roomId, messageId, member);
+    }
+
+    // 채팅 이미지 업로드
+    @PostMapping("/api/chat/rooms/{roomId}/images")
+    public ResponseEntity<ApiResponse<ChatImageUploadResponse>> uploadChatImage(
+            @PathVariable Long roomId,
+            @RequestParam("file") MultipartFile file,
+            @AuthenticationPrincipal Member member
+    ) {
+        ChatImageUploadResponse response = chatService.uploadChatImage(member, roomId, file);
+        return ResponseEntity.ok(ApiResponse.success(response));
     }
 
     // 채팅방의 이전 대화 기록을 가져오는 API

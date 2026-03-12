@@ -84,7 +84,7 @@ public class AdminMemberService {
         }
 
         // 회원이 참여한 운동방 멤버십 및 관련 데이터 bulk delete
-        List<WorkoutRoomMember> workoutRoomMembers = workoutRoomMemberRepository.findWorkoutRoomMembersByMember(memberToDelete);
+        List<WorkoutRoomMember> workoutRoomMembers = workoutRoomMemberRepository.findByMember(memberToDelete);
         if (!workoutRoomMembers.isEmpty()) {
             restRepository.deleteAllByWorkoutRoomMemberIn(workoutRoomMembers);
             penaltyRepository.deleteAllByWorkoutRoomMemberIn(workoutRoomMembers);

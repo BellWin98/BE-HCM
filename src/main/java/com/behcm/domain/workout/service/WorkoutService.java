@@ -57,7 +57,7 @@ public class WorkoutService {
         }
 
         // 여러 이미지 S3에 업로드
-        List<String> imageUrls = s3Service.uploadImages(request.getImages());
+        List<String> imageUrls = s3Service.uploadWorkoutImages(request.getImages());
         for (WorkoutRoomMember wrm : wrms) {
             WorkoutRoom workoutRoom = wrm.getWorkoutRoom();
             // 운동 기록 저장

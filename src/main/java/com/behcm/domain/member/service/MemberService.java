@@ -40,7 +40,7 @@ public class MemberService {
         return ProfileImageUploadResponse.of(profileUrl);
     }
 
-    @Cacheable(value = "memberProfile", key = "#member.id")
+//    @Cacheable(value = "memberProfile", key = "#member.id")
     public MemberProfileResponse getMemberProfile(Member member) {
         List<WorkoutRecord> workoutRecords = workoutRecordRepository.findAllByMemberPerWorkoutDate(member);
 
@@ -51,7 +51,7 @@ public class MemberService {
     }
 
     @Transactional
-    @CacheEvict(value = "memberProfile", key = "#member.id")
+//    @CacheEvict(value = "memberProfile", key = "#member.id")
     public MemberProfileResponse updateMemberProfile(Member member, UpdateMemberProfileRequest request) {
         if (request.getNickname() != null
                 && !request.getNickname().equals(member.getNickname())

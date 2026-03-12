@@ -86,7 +86,7 @@ public class WorkoutRoomService {
     }
 
     @Transactional(readOnly = true)
-    @Cacheable(value = "workoutRoomDetail", key = "#roomId + '-' + #member.id")
+//    @Cacheable(value = "workoutRoomDetail", key = "#roomId + '-' + #member.id")
     public WorkoutRoomDetailResponse getJoinedWorkoutRoom(Long roomId, Member member) {
         WorkoutRoom workoutRoom = workoutRoomRepository.findById(roomId)
                 .orElseThrow(() -> new CustomException(ErrorCode.WORKOUT_ROOM_NOT_FOUND, "유저가 속한 운동방이 없습니다."));

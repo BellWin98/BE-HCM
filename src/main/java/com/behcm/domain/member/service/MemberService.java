@@ -6,14 +6,13 @@ import com.behcm.domain.member.entity.MemberSettings;
 import com.behcm.domain.member.repository.MemberRepository;
 import com.behcm.domain.member.repository.MemberSettingsRepository;
 import com.behcm.domain.workout.dto.WorkoutFeedItemResponse;
+import com.behcm.domain.workout.enums.PeriodType;
 import com.behcm.domain.workout.entity.WorkoutRecord;
 import com.behcm.domain.workout.repository.WorkoutRecordRepository;
 import com.behcm.global.config.aws.S3Service;
 import com.behcm.global.exception.CustomException;
 import com.behcm.global.exception.ErrorCode;
 import lombok.RequiredArgsConstructor;
-import org.springframework.cache.annotation.CacheEvict;
-import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -22,6 +21,8 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.time.LocalDate;
+import java.time.DayOfWeek;
+import java.time.YearMonth;
 import java.util.Comparator;
 import java.util.List;
 
@@ -68,9 +69,35 @@ public class MemberService {
         return MemberProfileResponse.from(savedMember, currentStreak, longestStreak);
     }
 
-    public Page<WorkoutFeedItemResponse> getMemberWorkoutFeed(Member member, int page, int size) {
+    public Page<WorkoutFeedItemResponse> getMemberWorkoutFeed(Member member, int page, int size, PeriodType periodType) {
         Pageable pageable = PageRequest.of(page, size);
-        return workoutRecordRepository.findAllByMemberPerWorkoutDate(member, pageable).map(WorkoutFeedItemResponse::from);
+
+        PeriodType effectivePeriodType = periodType == null ? PeriodType.ALL : periodType;
+        LocalDate today = LocalDate.now();
+
+        LocalDate startDate;
+        LocalDate endDate;
+
+        if (effectivePeriodType == PeriodType.WEEK) {
+            LocalDate weekStart = today.with(DayOfWeek.MONDAY);
+            if (today.getDayOfWeek().getValue() < DayOfWeek.MONDAY.getValue()) {
+                weekStart = today.minusDays(today.getDayOfWeek().getValue() + (7 - DayOfWeek.MONDAY.getValue()));
+            }
+            startDate = weekStart;
+            endDate = weekStart.plusDays(6);
+        } else {
+            YearMonth currentMonth = YearMonth.from(today);
+            startDate = currentMonth.atDay(1);
+            endDate = currentMonth.atEndOfMonth();
+        }
+
+        if (effectivePeriodType == PeriodType.ALL) {
+            return workoutRecordRepository.findAllByMemberPerWorkoutDate(member, pageable)
+                    .map(WorkoutFeedItemResponse::from);
+        }
+
+        return workoutRecordRepository.findAllByMemberPerWorkoutDateAndWorkoutDateBetween(member, startDate, endDate, pageable)
+                .map(WorkoutFeedItemResponse::from);
     }
 
     @Transactional

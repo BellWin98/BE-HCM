@@ -31,7 +31,23 @@ public interface WorkoutRecordRepository extends JpaRepository<WorkoutRecord, Lo
                 order by wr.workoutDate desc
             """
     )
-    List<WorkoutRecord> findAllByMemberPerWorkoutDate(Member member);
+    List<WorkoutRecord> findAllByMemberPerWorkoutDate(@Param("member") Member member);
+
+    @Query(
+            """
+                select wr
+                from WorkoutRecord wr
+                where wr.member = :member
+                and wr.createdAt = (
+                    select max(wr2.createdAt)
+                    from WorkoutRecord wr2
+                    where wr2.member = wr.member
+                    and wr2.workoutDate = wr.workoutDate
+                )
+                order by wr.workoutDate desc
+            """
+    )
+    Page<WorkoutRecord> findAllByMemberPerWorkoutDate(@Param("member") Member member, Pageable pageable);
 
     Optional<WorkoutRecord> findByMemberAndWorkoutRoomAndWorkoutDate(Member member, WorkoutRoom workoutRoom, LocalDate today);
     boolean existsByMemberAndWorkoutRoomAndWorkoutDate(Member member, WorkoutRoom workoutRoom, LocalDate workoutDate);
@@ -72,6 +88,7 @@ public interface WorkoutRecordRepository extends JpaRepository<WorkoutRecord, Lo
                 select wr
                 from WorkoutRecord wr
                 where wr.member = :member
+                and wr.workoutDate >= :startDate and wr.workoutDate <= :endDate
                 and wr.createdAt = (
                     select max(wr2.createdAt)
                     from WorkoutRecord wr2
@@ -81,7 +98,12 @@ public interface WorkoutRecordRepository extends JpaRepository<WorkoutRecord, Lo
                 order by wr.workoutDate desc
             """
     )
-    Page<WorkoutRecord> findAllByMemberPerWorkoutDate(Member member, Pageable pageable);
+    Page<WorkoutRecord> findAllByMemberPerWorkoutDateAndWorkoutDateBetween(
+            @Param("member") Member member,
+            @Param("startDate") LocalDate startDate,
+            @Param("endDate") LocalDate endDate,
+            Pageable pageable
+    );
 
     void deleteByMember(Member member);
 

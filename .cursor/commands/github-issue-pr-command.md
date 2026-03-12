@@ -10,10 +10,11 @@ When I ask to "ship it", "deploy feature", or "start github workflow" regarding 
 
 1. Analyze the current code changes and summarize them.
 2. Resolve **owner** and **repo**: run `git remote -v` and parse the origin URL (e.g. `https://github.com/BellWin98/BE-HCM.git` → owner: `BellWin98`, repo: `BE-HCM`).
-3. Call MCP tool **create_issue** (**모든 텍스트 필드 `title`, `body`는 반드시 한국어로 작성할 것**):
+3. Call MCP tool **issue_write** (**모든 텍스트 필드 `title`, `body`는 반드시 한국어로 작성할 것**):
    - **Server**: `user-github`
-   - **Tool**: `create_issue`
+   - **Tool**: `issue_write`
    - **Arguments**:
+     - `method` (string): create
      - `owner` (string): repository owner
      - `repo` (string): repository name
      - `title` (string): concise summary of the feature or fix **(Korean only)**

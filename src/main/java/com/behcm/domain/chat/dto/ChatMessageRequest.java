@@ -7,4 +7,5 @@ import lombok.Data;
 public class ChatMessageRequest {
     private MessageType type;
     private String content;
+    private String imageUrl;
 }

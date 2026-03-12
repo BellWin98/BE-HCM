@@ -11,8 +11,6 @@ import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 import java.time.LocalDateTime;
-import java.util.HashSet;
-import java.util.Set;
 
 @Entity
 @Getter
@@ -32,11 +30,6 @@ public class ChatMessage {
     private MessageType messageType;
 
     private String imageUrl;
-
-/*    @ElementCollection(fetch = FetchType.EAGER)
-    @CollectionTable(name = "chat_message_read_by", joinColumns = @JoinColumn(name = "chat_message_id"))
-    @Column(name = "member_nickname")
-    private Set<String> readBy = new HashSet<>();*/
 
     @CreatedDate
     @Column(updatable = false)
@@ -58,8 +51,4 @@ public class ChatMessage {
         this.workoutRoom = workoutRoom;
         this.sender = sender;
     }
-
-//    public void addReadBy(String nickname) {
-//        this.readBy.add(nickname);
-//    }
 }

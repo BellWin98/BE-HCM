@@ -38,7 +38,7 @@ public class WorkoutService {
     @CacheEvict(value = "workoutRoomDetail", allEntries = true)
     public WorkoutResponse authenticateWorkout(Member member, WorkoutRequest request) {
         LocalDate workoutDate = LocalDate.parse(request.getWorkoutDate(), DateTimeFormatter.ISO_LOCAL_DATE);
-        List<WorkoutRoomMember> wrms = workoutRoomMemberRepository.findWorkoutRoomMembersByMember(member);
+        List<WorkoutRoomMember> wrms = workoutRoomMemberRepository.findByMember(member);
         if (wrms.isEmpty()) {
             throw new CustomException(ErrorCode.WORKOUT_ROOM_NOT_FOUND);
         }

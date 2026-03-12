@@ -14,6 +14,7 @@ public class WorkoutRoomMemberResponse {
     private Long id;
     private String nickname;
     private String profileUrl;
+    private String bio;
     private Integer totalWorkouts;
     private Integer weeklyWorkouts;
     private Long totalPenalty;
@@ -31,6 +32,7 @@ public class WorkoutRoomMemberResponse {
                 .id(workoutRoomMember.getId())
                 .nickname(workoutRoomMember.getNickname())
                 .profileUrl(workoutRoomMember.getMember().getProfileUrl())
+                .bio(workoutRoomMember.getMember().getBio())
                 .totalWorkouts(workoutRoomMember.getTotalWorkouts())
                 .weeklyWorkouts(workoutRoomMember.getWeeklyWorkouts())
                 .totalPenalty(workoutRoomMember.getTotalPenalty())

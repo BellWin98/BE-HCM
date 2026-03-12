@@ -4,7 +4,7 @@ import com.behcm.domain.member.dto.*;
 import com.behcm.domain.member.entity.Member;
 import com.behcm.domain.member.service.MemberService;
 import com.behcm.domain.workout.dto.WorkoutFeedItemResponse;
-import com.behcm.domain.workout.dto.WorkoutStatsResponse;
+import com.behcm.domain.workout.enums.PeriodType;
 import com.behcm.global.common.ApiResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import jakarta.validation.Valid;
@@ -60,9 +60,11 @@ public class MemberController {
     public ResponseEntity<ApiResponse<Page<WorkoutFeedItemResponse>>> getMemberWorkoutFeed(
             @AuthenticationPrincipal Member member,
             @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "20") int size
+            @RequestParam(defaultValue = "20") int size,
+            @RequestParam(required = false) String periodType
     ) {
-        Page<WorkoutFeedItemResponse> response = memberService.getMemberWorkoutFeed(member, page, size);
+        PeriodType period = PeriodType.from(periodType);
+        Page<WorkoutFeedItemResponse> response = memberService.getMemberWorkoutFeed(member, page, size, period);
         return ResponseEntity.ok(ApiResponse.success(response));
     }
 

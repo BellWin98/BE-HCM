@@ -4,6 +4,7 @@ import com.behcm.domain.chat.dto.ChatHistoryResponse;
 import com.behcm.domain.chat.dto.ChatImageUploadResponse;
 import com.behcm.domain.chat.dto.ChatMessageRequest;
 import com.behcm.domain.chat.dto.ChatMessageResponse;
+import com.behcm.domain.chat.dto.ReadStatusMessage;
 import com.behcm.domain.chat.entity.ChatMessage;
 import com.behcm.domain.chat.entity.MessageType;
 import com.behcm.domain.chat.repository.ChatMessageRepository;
@@ -27,6 +28,7 @@ import org.springframework.util.StringUtils;
 
 import java.util.Comparator;
 import java.util.List;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 @Service
@@ -74,7 +76,9 @@ public class ChatService {
                 .build();
 
         ChatMessage savedChatMessage = chatMessageRepository.save(chatMessage);
-        ChatMessageResponse response = ChatMessageResponse.from(savedChatMessage);
+
+        List<ChatMessageResponse> responses = toResponsesWithUnread(workoutRoom, List.of(savedChatMessage));
+        ChatMessageResponse response = responses.isEmpty() ? ChatMessageResponse.from(savedChatMessage) : responses.getFirst();
 
         messagingTemplate.convertAndSend("/topic/chat/room/" + roomId, response);
     }
@@ -93,13 +97,15 @@ public class ChatService {
 
         // 2. 이전 기록 스크롤 로드
         Pageable pageable = PageRequest.of(0, size);
-        Slice<ChatMessage> messageSlice = chatMessageRepository.findByWorkoutRoomAndIdLessThanOrderByIdDesc(wrm.getWorkoutRoom(), cursorId, pageable);
-        List<ChatMessageResponse> messages = messageSlice.getContent().stream()
-                .map(ChatMessageResponse::from)
-                .sorted(Comparator.comparing(ChatMessageResponse::getId))
+        Slice<ChatMessage> messageSlice = chatMessageRepository
+                .findByWorkoutRoomAndIdLessThanOrderByIdDesc(wrm.getWorkoutRoom(), cursorId, pageable);
+
+        List<ChatMessage> chatMessages = messageSlice.getContent().stream()
+                .sorted(Comparator.comparing(ChatMessage::getId))
                 .toList();
 
-        Long nextCursor = messages.isEmpty() ? null : messages.getFirst().getId();
+        List<ChatMessageResponse> messages = toResponsesWithUnread(wrm.getWorkoutRoom(), chatMessages);
+        Long nextCursor = chatMessages.isEmpty() ? null : chatMessages.getFirst().getId();
 
         return new ChatHistoryResponse(messages, nextCursor, messageSlice.hasNext());
     }
@@ -112,25 +118,35 @@ public class ChatService {
 
         // 현재 채팅방의 가장 최신 메시지를 찾음
         ChatMessage latestMessage = chatMessageRepository.findFirstByWorkoutRoomOrderByIdDesc(wrm.getWorkoutRoom());
-        if (latestMessage != null) {
+        if (latestMessage == null) {
+            return;
+        }
+
+        ChatMessage currentLastRead = wrm.getLastReadMessage();
+        if (currentLastRead == null || currentLastRead.getId() < latestMessage.getId()) {
             wrm.setLastReadMessage(latestMessage);
             workoutRoomMemberRepository.save(wrm);
+        }
+
+        // 최신 읽음 상태를 기반으로 최근 메시지들의 unreadCount를 재계산하여 브로드캐스트
+        Pageable pageable = PageRequest.of(0, 50);
+        List<ChatMessage> recentMessages =
+                chatMessageRepository.findByWorkoutRoomOrderByIdDesc(wrm.getWorkoutRoom(), pageable);
+
+        List<ChatMessageResponse> responses = toResponsesWithUnread(wrm.getWorkoutRoom(), recentMessages);
+        List<ReadStatusMessage.UpdatedMessage> updatedMessages = responses.stream()
+                .map(r -> new ReadStatusMessage.UpdatedMessage(r.getId(), r.getUnreadCount()))
+                .collect(Collectors.toList());
+
+        if (!updatedMessages.isEmpty()) {
+            ReadStatusMessage readStatusMessage = ReadStatusMessage.of(updatedMessages);
+            messagingTemplate.convertAndSend("/topic/chat/room/" + roomId, readStatusMessage);
         }
     }
 
     public void markAsRead(Long roomId, Long messageId, Member member) {
-        WorkoutRoom workoutRoom = workoutRoomRepository.findByIdAndIsActiveTrue(roomId)
-                .orElseThrow(() -> new CustomException(ErrorCode.WORKOUT_ROOM_NOT_FOUND));
-        WorkoutRoomMember wrm = workoutRoomMemberRepository.findByWorkoutRoomAndMember(workoutRoom, member)
-                .orElseThrow(() -> new CustomException(ErrorCode.NOT_WORKOUT_ROOM_MEMBER));
-        ChatMessage chatMessage = chatMessageRepository.findById(messageId)
-                .orElseThrow(() -> new CustomException(ErrorCode.CHAT_MESSAGE_NOT_FOUND));
-//        chatMessage.addReadBy(wrm.getNickname());
-        chatMessageRepository.save(chatMessage);
-
-        // 읽음 상태 업데이트 정보를 브로드캐스팅
-        ChatMessageResponse response = ChatMessageResponse.from(chatMessage);
-        messagingTemplate.convertAndSend("/topic/chat/room/" + roomId + "/read", response);
+        // STOMP를 통한 읽음 처리 요청은 REST API 기반 읽음 처리와 동일하게 동작하도록 통합
+        updateLastReadMessage(member, roomId);
     }
 
     private ChatHistoryResponse getInitialMessages(WorkoutRoom workoutRoom, WorkoutRoomMember workoutRoomMember, int size) {
@@ -152,13 +168,41 @@ public class ChatService {
                 .sorted(Comparator.comparing(ChatMessage::getId))
                 .toList();
 
-        // 두 리스트 합쳐서 반환
-        List<ChatMessageResponse> combinedMessages = Stream.concat(oldMessages.stream(), newMessages.stream())
-                .map(ChatMessageResponse::from)
+        // 두 리스트 합쳐서 unreadCount 포함 응답 생성
+        List<ChatMessage> combinedMessages = Stream.concat(oldMessages.stream(), newMessages.stream())
+                .sorted(Comparator.comparing(ChatMessage::getId))
                 .toList();
 
+        List<ChatMessageResponse> combinedResponses = toResponsesWithUnread(workoutRoom, combinedMessages);
         Long nextCursor = oldMessages.isEmpty() ? null : oldMessages.getFirst().getId();
 
-        return new ChatHistoryResponse(combinedMessages, nextCursor, oldMessageSlice.hasNext());
+        return new ChatHistoryResponse(combinedResponses, nextCursor, oldMessageSlice.hasNext());
+    }
+
+    private List<ChatMessageResponse> toResponsesWithUnread(WorkoutRoom workoutRoom, List<ChatMessage> messages) {
+        if (messages.isEmpty()) {
+            return List.of();
+        }
+
+        List<WorkoutRoomMember> members =
+                workoutRoomMemberRepository.findByWorkoutRoomOrderByJoinedAtFetchMember(workoutRoom);
+
+        List<Long> lastReadIds = members.stream()
+                .map(WorkoutRoomMember::getLastReadMessage)
+                .map(lastRead -> lastRead != null ? lastRead.getId() : null)
+                .toList();
+
+        return messages.stream()
+                .map(message -> {
+                    int unread = 0;
+                    Long messageId = message.getId();
+                    for (Long lastReadId : lastReadIds) {
+                        if (lastReadId == null || lastReadId < messageId) {
+                            unread++;
+                        }
+                    }
+                    return ChatMessageResponse.from(message, unread);
+                })
+                .toList();
     }
 }

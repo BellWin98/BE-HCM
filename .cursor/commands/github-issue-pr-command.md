@@ -13,12 +13,16 @@ When I ask to "ship it", "deploy feature", or "start github workflow" regarding 
 3. Call MCP tool **issue_write** (**모든 텍스트 필드 `title`, `body`는 반드시 한국어로 작성할 것**):
    - **Server**: `user-github`
    - **Tool**: `issue_write`
-   - **Arguments**:
-     - `method` (string): 'create'
-     - `owner` (string): repository owner
-     - `repo` (string): repository name
-     - `title` (string): concise summary of the feature or fix **(Korean only)**
-     - `body` (string): detailed description of the implementation **(Korean only)**
+   - **Arguments** (아래 모든 key-value를 하나의 `arguments` JSON 객체로 전달):
+     ```json
+     {
+       "method": "create",
+       "owner": "<repository owner>",
+       "repo": "<repository name>",
+       "title": "<concise summary of the feature or fix (Korean only)>",
+       "body": "<detailed description of the implementation (Korean only)>"
+     }
+     ```
 4. **IMPORTANT**: Remember the returned `number` (issue_number) from the response.
 
 ---

@@ -16,6 +16,9 @@ public interface ChatMessageRepository extends JpaRepository<ChatMessage, Long> 
     // 커서 ID를 기준으로 이전 메시지들을 Slice로 내림차순(최신순)으로 조회
     Slice<ChatMessage> findByWorkoutRoomAndIdLessThanOrderByIdDesc(WorkoutRoom workoutRoom, Long id, Pageable pageable);
 
+    // 특정 채팅방의 최근 메시지들을 내림차순(최신순)으로 조회
+    List<ChatMessage> findByWorkoutRoomOrderByIdDesc(WorkoutRoom workoutRoom, Pageable pageable);
+
     // 마지막으로 읽은 메시지 이후의 모든 새 메시지를 조회
     List<ChatMessage> findByWorkoutRoomAndIdGreaterThanOrderByIdAsc(WorkoutRoom workoutRoom, Long id);
 

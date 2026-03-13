@@ -6,7 +6,6 @@ import lombok.Builder;
 import lombok.Getter;
 
 import java.time.LocalDateTime;
-import java.util.Set;
 
 @Getter
 @Builder
@@ -16,8 +15,8 @@ public class ChatMessageResponse {
     private String content;
     private String sender;
     private String imageUrl;
-//    private Set<String> readBy;
     private LocalDateTime timestamp;
+    private Integer unreadCount;
 
     public static ChatMessageResponse from(ChatMessage chatMessage) {
         return ChatMessageResponse.builder()
@@ -26,8 +25,19 @@ public class ChatMessageResponse {
                 .content(chatMessage.getContent())
                 .sender(chatMessage.getSender().getNickname())
                 .imageUrl(chatMessage.getImageUrl())
-//                .readBy(chatMessage.getReadBy())
                 .timestamp(chatMessage.getTimestamp())
+                .build();
+    }
+
+    public static ChatMessageResponse from(ChatMessage chatMessage, int unreadCount) {
+        return ChatMessageResponse.builder()
+                .id(chatMessage.getId())
+                .type(chatMessage.getMessageType())
+                .content(chatMessage.getContent())
+                .sender(chatMessage.getSender().getNickname())
+                .imageUrl(chatMessage.getImageUrl())
+                .timestamp(chatMessage.getTimestamp())
+                .unreadCount(unreadCount)
                 .build();
     }
 }

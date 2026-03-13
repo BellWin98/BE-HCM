@@ -1,6 +1,7 @@
 package com.behcm.domain.workout.service;
 
 import com.behcm.domain.member.entity.Member;
+import com.behcm.domain.member.entity.MemberRole;
 import com.behcm.domain.rest.dto.RestResponse;
 import com.behcm.domain.rest.repository.RestRepository;
 import com.behcm.domain.workout.dto.*;
@@ -14,12 +15,11 @@ import com.behcm.global.exception.CustomException;
 import com.behcm.global.exception.ErrorCode;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDate;
 import java.security.SecureRandom;
+import java.time.LocalDate;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -36,6 +36,7 @@ public class WorkoutRoomService {
     private static final int ENTRY_CODE_MAX_GENERATION_ATTEMPTS = 30;
     private static final char[] ENTRY_CODE_CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789".toCharArray();
     private static final SecureRandom SECURE_RANDOM = new SecureRandom();
+    private static final int MAX_JOINED_WORKOUT_ROOMS = 3;
 
     private final WorkoutRoomRepository workoutRoomRepository;
     private final WorkoutRoomMemberRepository workoutRoomMemberRepository;
@@ -43,7 +44,7 @@ public class WorkoutRoomService {
     private final RestRepository restRepository;
 
     public WorkoutRoomResponse createWorkoutRoom(Member owner, CreateWorkoutRoomRequest request) {
-        // NOTE: 다중 방 참여/생성을 허용합니다. (같은 방 중복 참여는 WorkoutRoomMember의 UNIQUE 제약으로 방지)
+        validateWorkoutRoomLimit(owner);
 
         // 날짜 검증
 /*        if (request.getStartDate().isBefore(LocalDate.now())) {
@@ -134,6 +135,7 @@ public class WorkoutRoomService {
     }
 
     public WorkoutRoomResponse joinWorkoutRoomByCode(String entryCode, Member member) {
+        validateWorkoutRoomLimit(member);
         WorkoutRoom workoutRoom = workoutRoomRepository.findByEntryCodeAndIsActiveTrue(entryCode)
                 .orElseThrow(() -> new CustomException(ErrorCode.WORKOUT_ROOM_NOT_FOUND));
 
@@ -192,5 +194,16 @@ public class WorkoutRoomService {
             buf[i] = ENTRY_CODE_CHARS[SECURE_RANDOM.nextInt(ENTRY_CODE_CHARS.length)];
         }
         return new String(buf);
+    }
+
+    private void validateWorkoutRoomLimit(Member member) {
+        if (member.getRole() == MemberRole.ADMIN) {
+            return;
+        }
+
+        long joinedRoomCount = workoutRoomMemberRepository.countByMember(member);
+        if (joinedRoomCount >= MAX_JOINED_WORKOUT_ROOMS) {
+            throw new CustomException(ErrorCode.COUNT_LIMIT_EXCEEDED, "일반 회원은 최대 3개의 운동방에만 참여할 수 있습니다.");
+        }
     }
 }

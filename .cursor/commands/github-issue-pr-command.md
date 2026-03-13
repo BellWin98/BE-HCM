@@ -14,7 +14,7 @@ When I ask to "ship it", "deploy feature", or "start github workflow" regarding 
    - **Server**: `user-github`
    - **Tool**: `issue_write`
    - **Arguments**:
-     - `method` (string): create
+     - `method` (string): 'create'
      - `owner` (string): repository owner
      - `repo` (string): repository name
      - `title` (string): concise summary of the feature or fix **(Korean only)**

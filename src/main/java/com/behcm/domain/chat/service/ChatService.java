@@ -77,6 +77,16 @@ public class ChatService {
 
         ChatMessage savedChatMessage = chatMessageRepository.save(chatMessage);
 
+        // 보낸 사람은 해당 메시지를 즉시 읽은 것으로 간주하여 lastReadMessage 갱신
+        WorkoutRoomMember senderWorkoutRoomMember = workoutRoomMemberRepository
+                .findByWorkoutRoomAndMember(workoutRoom, sender)
+                .orElseThrow(() -> new CustomException(ErrorCode.NOT_WORKOUT_ROOM_MEMBER));
+        ChatMessage senderCurrentLastRead = senderWorkoutRoomMember.getLastReadMessage();
+        if (senderCurrentLastRead == null || senderCurrentLastRead.getId() < savedChatMessage.getId()) {
+            senderWorkoutRoomMember.setLastReadMessage(savedChatMessage);
+            workoutRoomMemberRepository.save(senderWorkoutRoomMember);
+        }
+
         List<ChatMessageResponse> responses = toResponsesWithUnread(workoutRoom, List.of(savedChatMessage));
         ChatMessageResponse response = responses.isEmpty() ? ChatMessageResponse.from(savedChatMessage) : responses.getFirst();
 
@@ -129,7 +139,7 @@ public class ChatService {
         }
 
         // 최신 읽음 상태를 기반으로 최근 메시지들의 unreadCount를 재계산하여 브로드캐스트
-        Pageable pageable = PageRequest.of(0, 50);
+        Pageable pageable = PageRequest.of(0, 200);
         List<ChatMessage> recentMessages =
                 chatMessageRepository.findByWorkoutRoomOrderByIdDesc(wrm.getWorkoutRoom(), pageable);
 

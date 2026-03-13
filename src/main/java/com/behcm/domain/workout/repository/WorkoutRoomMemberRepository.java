@@ -18,6 +18,7 @@ public interface WorkoutRoomMemberRepository extends JpaRepository<WorkoutRoomMe
     Optional<WorkoutRoomMember> findByWorkoutRoomAndMember(WorkoutRoom workoutRoom, Member member);
     List<WorkoutRoomMember> findByWorkoutRoomOrderByJoinedAt(WorkoutRoom workoutRoom);
     List<WorkoutRoomMember> findByMember(Member member);
+    long countByMember(Member member);
 
     @Query("SELECT wrm FROM WorkoutRoomMember wrm JOIN FETCH wrm.member WHERE wrm.workoutRoom = :workoutRoom ORDER BY wrm.joinedAt")
     List<WorkoutRoomMember> findByWorkoutRoomOrderByJoinedAtFetchMember(@Param("workoutRoom") WorkoutRoom workoutRoom);

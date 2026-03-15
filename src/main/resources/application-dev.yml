@@ -36,7 +36,7 @@ cloud:
 
 # 프론트엔드 URL (OAuth 콜백 리다이렉트용)
 app:
-  frontend-url: https://dev-api.bellwin.co.kr
+  frontend-url: https://dev.bellwin.co.kr
 
 # 로깅 설정
 logging:

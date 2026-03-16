@@ -99,8 +99,11 @@ public class PenaltyService {
                 .ifPresent(penaltyAccountRepository::delete);
     }
 
-    public List<PenaltyRecord> getPenaltyRecords(Long roomId) {
-        return penaltyRepository.findAllByWorkoutRoomId(roomId).stream()
+    public List<PenaltyRecord> getPenaltyRecords(Long roomId, LocalDate startDate, LocalDate endDate) {
+        List<Penalty> penalties = (startDate != null && endDate != null)
+                ? penaltyRepository.findAllByWorkoutRoomIdAndWeekOverlapping(roomId, startDate, endDate)
+                : penaltyRepository.findAllByWorkoutRoomId(roomId);
+        return penalties.stream()
                 .map(PenaltyRecord::from)
                 .toList();
     }

@@ -4,9 +4,11 @@ import com.behcm.domain.penalty.dto.*;
 import com.behcm.domain.penalty.service.PenaltyService;
 import com.behcm.global.common.ApiResponse;
 import lombok.RequiredArgsConstructor;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.LocalDate;
 import java.util.List;
 
 @RestController
@@ -35,8 +37,11 @@ public class PenaltyController {
     }
 
     @GetMapping("/{roomId}/records")
-    public ResponseEntity<ApiResponse<List<PenaltyRecord>>> getPenaltyRecords(@PathVariable Long roomId) {
-        List<PenaltyRecord> response = penaltyService.getPenaltyRecords(roomId);
+    public ResponseEntity<ApiResponse<List<PenaltyRecord>>> getPenaltyRecords(
+            @PathVariable Long roomId,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate) {
+        List<PenaltyRecord> response = penaltyService.getPenaltyRecords(roomId, startDate, endDate);
         return ResponseEntity.ok(ApiResponse.success(response));
     }
 }

@@ -58,7 +58,7 @@ public enum ErrorCode {
     NOT_FOUND(HttpStatus.NOT_FOUND, "요청한 리소스를 찾을 수 없습니다."),
 
     // Rest
-    REST_PERIOD_OVERLAP(HttpStatus.BAD_REQUEST, "해당 기간에 이미 휴식일이 등록되어 있습니다."),
+    REST_PERIOD_OVERLAP(HttpStatus.BAD_REQUEST, "이미 등록된 휴식일이 있습니다. 제외 후 재등록해주세요."),
 
     // Common
     INTERNAL_SERVER_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "서버 내부 오류가 발생했습니다."),

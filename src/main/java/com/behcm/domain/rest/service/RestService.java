@@ -32,6 +32,14 @@ public class RestService {
         LocalDate startDate = LocalDate.parse(request.getStartDate());
         LocalDate endDate = LocalDate.parse(request.getEndDate());
 
+        List<Rest> existingRests = restRepository.findAllByWorkoutRoomMemberIn(wrms);
+        boolean hasOverlap = existingRests.stream()
+                .anyMatch(rest -> isOverlapping(rest.getStartDate(), rest.getEndDate(), startDate, endDate));
+
+        if (hasOverlap) {
+            throw new CustomException(ErrorCode.REST_PERIOD_OVERLAP);
+        }
+
         for (WorkoutRoomMember wrm : wrms) {
             Rest rest = Rest.builder()
                     .workoutRoomMember(wrm)
@@ -41,5 +49,10 @@ public class RestService {
                     .build();
             restRepository.save(rest);
         }
+    }
+
+    private boolean isOverlapping(LocalDate existingStart, LocalDate existingEnd,
+                                  LocalDate newStart, LocalDate newEnd) {
+        return !(existingEnd.isBefore(newStart) || existingStart.isAfter(newEnd));
     }
 }

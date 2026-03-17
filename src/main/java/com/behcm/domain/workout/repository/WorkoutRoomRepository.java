@@ -9,6 +9,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 
@@ -44,4 +45,14 @@ public interface WorkoutRoomRepository extends JpaRepository<WorkoutRoom, Long> 
                                        Pageable pageable);
 
     List<WorkoutRoom> findByOwner(Member owner);
+
+    @Query(
+            """
+                    SELECT COUNT(wr)
+                    FROM WorkoutRoom wr
+                    WHERE wr.isActive = true
+                    AND (wr.endDate IS NULL OR wr.endDate >= :today)
+                    """
+    )
+    long countActiveRooms(@Param("today") LocalDate today);
 }

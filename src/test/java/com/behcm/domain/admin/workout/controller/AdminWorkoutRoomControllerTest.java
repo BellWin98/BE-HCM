@@ -19,7 +19,6 @@ import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
-import java.time.LocalDate;
 import java.util.Collections;
 import java.util.List;
 
@@ -48,14 +47,11 @@ class AdminWorkoutRoomControllerTest {
     @WithMockUser(roles = "ADMIN")
     @DisplayName("ADMIN 권한으로 운동방 목록 조회 시 200과 ApiResponse.success가 반환된다")
     void getRooms_withAdminRole_returnsOk() throws Exception {
-        // given
         WorkoutRoomResponse roomResponse = WorkoutRoomResponse.builder()
                 .id(1L)
                 .name("Room 1")
                 .minWeeklyWorkouts(3)
                 .penaltyPerMiss(1000L)
-                .startDate(LocalDate.now())
-                .endDate(LocalDate.now().plusDays(10))
                 .maxMembers(10)
                 .currentMembers(1)
                 .isActive(true)
@@ -68,7 +64,6 @@ class AdminWorkoutRoomControllerTest {
         given(adminWorkoutRoomService.getRooms(anyString(), anyBoolean(), any(Pageable.class)))
                 .willReturn(page);
 
-        // when & then
         mockMvc.perform(get("/api/admin/workout/rooms")
                         .param("query", "Room")
                         .param("page", "0")
@@ -90,14 +85,11 @@ class AdminWorkoutRoomControllerTest {
     @WithMockUser(roles = "ADMIN")
     @DisplayName("ADMIN 권한으로 운동방 상세 조회 시 200과 ApiResponse.success가 반환된다")
     void getRoomDetail_withAdminRole_returnsOk() throws Exception {
-        // given
         WorkoutRoomResponse roomInfo = WorkoutRoomResponse.builder()
                 .id(1L)
                 .name("Room 1")
                 .minWeeklyWorkouts(3)
                 .penaltyPerMiss(1000L)
-                .startDate(LocalDate.now())
-                .endDate(LocalDate.now().plusDays(10))
                 .maxMembers(10)
                 .currentMembers(1)
                 .isActive(true)
@@ -109,7 +101,6 @@ class AdminWorkoutRoomControllerTest {
         given(adminWorkoutRoomService.getRoomDetail(anyLong()))
                 .willReturn(detailResponse);
 
-        // when & then
         mockMvc.perform(get("/api/admin/workout/rooms/{roomId}", 1L))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success", is(true)))
@@ -120,10 +111,7 @@ class AdminWorkoutRoomControllerTest {
     @WithMockUser(roles = "ADMIN")
     @DisplayName("ADMIN 권한으로 운동방 설정 수정 시 200과 수정된 정보가 반환된다")
     void updateRoomSettings_withAdminRole_returnsOk() throws Exception {
-        // given
         AdminUpdateRoomRequest request = new AdminUpdateRoomRequest();
-        request.setStartDate(LocalDate.now().plusDays(1));
-        request.setEndDate(LocalDate.now().plusDays(10));
         request.setMaxMembers(20);
         request.setMinWeeklyWorkouts(5);
         request.setPenaltyPerMiss(2000L);
@@ -133,8 +121,6 @@ class AdminWorkoutRoomControllerTest {
                 .name("Room 1")
                 .minWeeklyWorkouts(5)
                 .penaltyPerMiss(2000L)
-                .startDate(request.getStartDate())
-                .endDate(request.getEndDate())
                 .maxMembers(20)
                 .currentMembers(1)
                 .isActive(true)
@@ -143,7 +129,6 @@ class AdminWorkoutRoomControllerTest {
         given(adminWorkoutRoomService.updateRoomSettings(anyLong(), any(AdminUpdateRoomRequest.class)))
                 .willReturn(roomResponse);
 
-        // when & then
         mockMvc.perform(put("/api/admin/workout/rooms/{roomId}", 1L)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))

@@ -46,22 +46,10 @@ public class WorkoutRoomService {
     public WorkoutRoomResponse createWorkoutRoom(Member owner, CreateWorkoutRoomRequest request) {
         validateWorkoutRoomLimit(owner);
 
-        // 날짜 검증
-/*        if (request.getStartDate().isBefore(LocalDate.now())) {
-            throw new CustomException(ErrorCode.INVALID_INPUT, "시작 날짜는 오늘 이후여야 합니다.");
-        }
-        if (request.getEndDate() != null) {
-            if (request.getEndDate().isBefore(request.getStartDate())) {
-                throw new CustomException(ErrorCode.INVALID_INPUT, "종료 날짜는 시작 날짜보다 뒤여야 합니다.");
-            }
-        }*/
-
         WorkoutRoom workoutRoom = WorkoutRoom.builder()
                 .name(request.getName())
                 .minWeeklyWorkouts(request.getMinWeeklyWorkouts())
                 .penaltyPerMiss(request.getPenaltyPerMiss())
-                // .startDate(request.getStartDate())
-                // .endDate(request.getEndDate() != null ? request.getEndDate() : null)
                 .maxMembers(request.getMaxMembers())
                 .entryCode(request.getEntryCode())
                 .owner(owner)
@@ -69,7 +57,6 @@ public class WorkoutRoomService {
 
         WorkoutRoom savedWorkoutRoom = workoutRoomRepository.save(workoutRoom);
 
-        // 방장을 멤버로 추가
         WorkoutRoomMember workoutRoomMember = WorkoutRoomMember.builder()
                 .member(owner)
                 .workoutRoom(savedWorkoutRoom)
@@ -87,7 +74,6 @@ public class WorkoutRoomService {
     }
 
     @Transactional(readOnly = true)
-//    @Cacheable(value = "workoutRoomDetail", key = "#roomId + '-' + #member.id")
     public WorkoutRoomDetailResponse getJoinedWorkoutRoom(Long roomId, Member member) {
         WorkoutRoom workoutRoom = workoutRoomRepository.findById(roomId)
                 .orElseThrow(() -> new CustomException(ErrorCode.WORKOUT_ROOM_NOT_FOUND, "유저가 속한 운동방이 없습니다."));

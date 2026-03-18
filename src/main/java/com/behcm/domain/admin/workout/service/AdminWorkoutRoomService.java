@@ -24,8 +24,6 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
-import java.time.LocalDate;
 import java.util.List;
 
 @Service
@@ -63,7 +61,6 @@ public class AdminWorkoutRoomService {
                 })
                 .toList();
 
-        // Admin 조회에서는 특정 "현재 회원" 개념이 없으므로 오늘 운동 기록은 null로 반환
         return new WorkoutRoomDetailResponse(WorkoutRoomResponse.from(workoutRoom), workoutRoomMembers, null);
     }
 
@@ -72,22 +69,10 @@ public class AdminWorkoutRoomService {
         WorkoutRoom workoutRoom = workoutRoomRepository.findById(roomId)
                 .orElseThrow(() -> new CustomException(ErrorCode.WORKOUT_ROOM_NOT_FOUND));
 
-        LocalDate startDate = request.getStartDate();
-        LocalDate endDate = request.getEndDate();
-
-        if (startDate.isBefore(LocalDate.now())) {
-            throw new CustomException(ErrorCode.INVALID_INPUT, "시작 날짜는 오늘 이후여야 합니다.");
-        }
-        if (endDate != null && endDate.isBefore(startDate)) {
-            throw new CustomException(ErrorCode.INVALID_INPUT, "종료 날짜는 시작 날짜보다 뒤여야 합니다.");
-        }
-
         workoutRoom.updateRoomSettings(
                 workoutRoom.getName(),
                 request.getMinWeeklyWorkouts(),
                 request.getPenaltyPerMiss(),
-                startDate,
-                endDate,
                 request.getMaxMembers(),
                 workoutRoom.getEntryCode()
         );
@@ -98,35 +83,27 @@ public class AdminWorkoutRoomService {
 
     @Transactional
     public void deleteRoom(Long roomId) {
-        // 삭제 대상 운동방 조회
         WorkoutRoom workoutRoom = workoutRoomRepository.findById(roomId)
                 .orElseThrow(() -> new CustomException(ErrorCode.WORKOUT_ROOM_NOT_FOUND));
 
-        // WorkoutRoomMember의 Rest 삭제
         List<WorkoutRoomMember> members = workoutRoomMemberRepository.findByWorkoutRoomOrderByJoinedAt(workoutRoom);
         for (WorkoutRoomMember wrm : members) {
             List<Rest> rests = restRepository.findAllByWorkoutRoomMember(wrm);
             restRepository.deleteAll(rests);
         }
 
-        // WorkoutRecord 삭제
         workoutRecordRepository.deleteByWorkoutRoom(workoutRoom);
 
-        // ChatMessage 삭제
         chatMessageRepository.deleteByWorkoutRoom(workoutRoom);
 
-        // Penalty 삭제
         List<Penalty> penalties = penaltyRepository.findAllByWorkoutRoomId(workoutRoom.getId());
         penaltyRepository.deleteAll(penalties);
 
-        // PenaltyAccount 삭제
         penaltyAccountRepository.findByWorkoutRoom(workoutRoom)
                 .ifPresent(penaltyAccountRepository::delete);
 
-        // WorkoutRoomMember는 CASCADE로 자동 삭제되지만 명시적으로 처리
         workoutRoomMemberRepository.deleteAll(members);
 
-        // 운동방 삭제
         workoutRoomRepository.delete(workoutRoom);
     }
 }

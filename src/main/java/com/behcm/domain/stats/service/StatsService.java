@@ -20,7 +20,7 @@ public class StatsService {
     public LandingStatsResponse getLandingStats() {
         long totalUsers = memberRepository.count();
         long totalExerciseProofs = workoutRecordRepository.count();
-        long activeRooms = workoutRoomRepository.countActiveRooms(LocalDate.now());
+        long activeRooms = workoutRoomRepository.countActiveRooms();
 
         return LandingStatsResponse.of(totalUsers, totalExerciseProofs, activeRooms);
     }

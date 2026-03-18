@@ -32,10 +32,6 @@ public class WorkoutRoom extends BaseTimeEntity {
     @Column(nullable = false, length = 10, unique = true)
     private String entryCode;
 
-//    @Column(nullable = false)
-    private LocalDate startDate;
-    private LocalDate endDate;
-
     @Column(nullable = false)
     private Integer maxMembers;
 
@@ -51,12 +47,10 @@ public class WorkoutRoom extends BaseTimeEntity {
 
     @Builder
     public WorkoutRoom(String name, Integer minWeeklyWorkouts, Long penaltyPerMiss,
-                       LocalDate startDate, LocalDate endDate, Integer maxMembers, String entryCode, Member owner) {
+                       Integer maxMembers, String entryCode, Member owner) {
         this.name = name;
         this.minWeeklyWorkouts = minWeeklyWorkouts;
         this.penaltyPerMiss = penaltyPerMiss;
-        this.startDate = startDate;
-        this.endDate = endDate;
         this.maxMembers = maxMembers;
         this.entryCode = entryCode;
         this.owner = owner;
@@ -67,12 +61,10 @@ public class WorkoutRoom extends BaseTimeEntity {
     }
 
     public void updateRoomSettings(String name, Integer minWeeklyWorkouts, Long penaltyPerMiss,
-                                   LocalDate startDate, LocalDate endDate, Integer maxMembers, String entryCode) {
+                                   Integer maxMembers, String entryCode) {
         this.name = name;
         this.minWeeklyWorkouts = minWeeklyWorkouts;
         this.penaltyPerMiss = penaltyPerMiss;
-        this.startDate = startDate;
-        this.endDate = endDate;
         this.maxMembers = maxMembers;
         this.entryCode = entryCode;
     }
@@ -82,10 +74,6 @@ public class WorkoutRoom extends BaseTimeEntity {
     }
 
     public boolean canJoin() {
-        if (endDate != null) {
-            return isActive && workoutRoomMembers.size() < maxMembers &&
-                    (LocalDate.now().isBefore(endDate));
-        }
         return isActive && workoutRoomMembers.size() < maxMembers;
     }
 

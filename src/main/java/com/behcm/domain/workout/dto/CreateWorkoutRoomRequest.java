@@ -1,9 +1,12 @@
 package com.behcm.domain.workout.dto;
 
-import jakarta.validation.constraints.*;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.NotEmpty;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Pattern;
+import jakarta.validation.constraints.Size;
 import lombok.Data;
-
-import java.time.LocalDate;
 
 @Data
 public class CreateWorkoutRoomRequest {
@@ -19,10 +22,6 @@ public class CreateWorkoutRoomRequest {
     @NotNull(message = "회당 벌금은 필수입니다.")
     @Min(value = 1000, message = "회당 벌금은 1000원 이상이어야 합니다.")
     private Long penaltyPerMiss;
-
-    // @NotNull(message = "시작일은 필수입니다.")
-    private LocalDate startDate;
-    private LocalDate endDate;
 
     @NotNull(message = "최대 인원은 필수입니다.")
     @Min(value = 1, message = "최대 인원은 1명 이상이어야 합니다.")

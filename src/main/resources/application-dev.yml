@@ -1,15 +1,12 @@
-server:
-  forward-headers-strategy: native
-
 spring:
   config:
     activate:
       on-profile: dev
   datasource:
-    url: ENC(w43r+JK4IxkLaz67OZbo9/Sw9jvs0dLStb+GUsc+yZdWLeFiuMEvbAishy3kMxWHaqOnbpCVxNg/Yx9grYShknzUlNYOYJ/IUC8BzTPXUX2XkUXmdvXykvRP+VtD584xFLL+Vb4LrpY2xb/ja0gtnfhqG5w5YhudkA3+6b5eO1a3e6SBXSiALZEYAQHHLUk4VkH2+G1pPB1qfKqODtFxFA==)
+    url: ENC(QiknjOczspOaC13jCCLCuJKjSBsKoxLvRpke1mKDQsrNmbLU75EgLQIiX9yQ1ggTlw6Ky1yFOKSjqwTHEKvBGsjPfcHWOV0qe5Ymk0SxMYDt0GqpZ1tU6LM0EkEuC/AasjnHQutl/pXUhP4qOc+6PHSzQ5Ib3M71Wqlvr6RYmCub3BOF8PYC7vpycAITCaDRlv6yX0eQ8dnea51QhUp5voonOVcMhHx/MbCozyVrMEWmSIUD6f+7NwpKqcKEvzJh+UwnF6wHMTU=)
     username: ENC(lVSrqCpmTW5Z7LsDVhoNIQ==)
-    password: ENC(xGO3ZGAnd1V6vd8YK0vE621ooscZjt+EGrK+v183NKU=)
-    driver-class-name: org.mariadb.jdbc.Driver
+    password: ENC(vz6izsSjhrgiaPC/ZwLvjSOiW4F6uDanR2Kjcp7emYwC22DtClpZUMg+Z35ODtAx)
+    driver-class-name: com.mysql.cj.jdbc.Driver
   jpa:
     properties:
       hibernate:
@@ -27,16 +24,16 @@ spring:
 cloud:
   aws:
     credentials:
-      access-key: ENC(vZ/NolroRR+tqNJoGqwNtr920TySD+JKw5C+b6fGoeY=)
-      secret-key: ENC(yTqkdKxGuimUAOyoRJdsxTOW0tqT1+JBIm7LW/H/DFw9QTgHGueiHVkl0CyFcatK9WwO+lVC6yc=)
+      access-key: ENC(SPPzrqWgyXUXVTcgjkyUpRu3M1WMigX4naC5pEWqHt0=)
+      secret-key: ENC(cB07qYeqVSis0WKZqqoOsLhNc+Hes1hJnhHbBIflyGMLQRmVDLno7Ne9poRh3DGT7D1vwwKHo5Q=)
     s3:
-      bucket: ENC(LBQ0Oiwmr4kfUXFudgnSPCzrVao1uhk9)
+      bucket: ENC(6V5nfAzhQgBTFIntlqAi03ssLAzppMvX)
     region:
       static: ap-northeast-2
 
 # 프론트엔드 URL (OAuth 콜백 리다이렉트용)
 app:
-  frontend-url: https://dev.bellwin.co.kr
+  frontend-url: ENC(utl1cWheQ+zZot47kM2AOKtxwd4PUW/IAIbbQLAnT1S1R4aOKPJEHg==)
 
 # 로깅 설정
 logging:

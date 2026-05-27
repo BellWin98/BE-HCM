@@ -19,7 +19,6 @@ spring:
       max-request-size: 100MB
   jpa:
     database: mysql
-    database-platform: org.hibernate.dialect.MariaDBDialect
     generate-ddl: true
     properties:
       hibernate:

@@ -2,6 +2,7 @@ package com.behcm.domain.admin.workout.controller;
 
 import com.behcm.domain.admin.workout.dto.AdminUpdateRoomRequest;
 import com.behcm.domain.admin.workout.service.AdminWorkoutRoomService;
+import com.behcm.domain.chat.dto.ChatHistoryResponse;
 import com.behcm.domain.workout.dto.WorkoutRoomDetailResponse;
 import com.behcm.domain.workout.dto.WorkoutRoomResponse;
 import com.behcm.global.common.ApiResponse;
@@ -48,6 +49,16 @@ public class AdminWorkoutRoomController {
             @PathVariable Long roomId
     ) {
         WorkoutRoomDetailResponse response = adminWorkoutRoomService.getRoomDetail(roomId);
+        return ResponseEntity.ok(ApiResponse.success(response));
+    }
+
+    @GetMapping("/{roomId}/messages")
+    public ResponseEntity<ApiResponse<ChatHistoryResponse>> getChatHistory(
+            @PathVariable Long roomId,
+            @RequestParam(required = false) Long cursorId,
+            @RequestParam(defaultValue = "20") int size
+    ) {
+        ChatHistoryResponse response = adminWorkoutRoomService.getChatHistory(roomId, cursorId, size);
         return ResponseEntity.ok(ApiResponse.success(response));
     }
 

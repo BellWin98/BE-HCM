@@ -96,18 +96,21 @@ public class ChatService {
         }
 
         // 2. 이전 기록 스크롤 로드
-        Pageable pageable = PageRequest.of(0, size);
-        Slice<ChatMessage> messageSlice = chatMessageRepository
-                .findByWorkoutRoomAndIdLessThanOrderByIdDesc(wrm.getWorkoutRoom(), cursorId, pageable);
+        return loadOlderMessages(wrm.getWorkoutRoom(), cursorId, size);
+    }
 
-        List<ChatMessage> chatMessages = messageSlice.getContent().stream()
-                .sorted(Comparator.comparing(ChatMessage::getId))
-                .toList();
+    @Transactional(readOnly = true)
+    public ChatHistoryResponse getChatHistoryForAdmin(Long roomId, Long cursorId, int size) {
+        WorkoutRoom workoutRoom = workoutRoomRepository.findById(roomId)
+                .orElseThrow(() -> new CustomException(ErrorCode.WORKOUT_ROOM_NOT_FOUND));
 
-        List<ChatMessageResponse> messages = toResponsesWithUnread(wrm.getWorkoutRoom(), chatMessages);
-        Long nextCursor = chatMessages.isEmpty() ? null : chatMessages.getFirst().getId();
+        int pageSize = Math.min(Math.max(size, 1), 50);
 
-        return new ChatHistoryResponse(messages, nextCursor, messageSlice.hasNext());
+        if (cursorId == null) {
+            return loadLatestMessages(workoutRoom, pageSize);
+        }
+
+        return loadOlderMessages(workoutRoom, cursorId, pageSize);
     }
 
     public void updateLastReadMessage(Member member, Long roomId) {
@@ -177,6 +180,37 @@ public class ChatService {
         Long nextCursor = oldMessages.isEmpty() ? null : oldMessages.getFirst().getId();
 
         return new ChatHistoryResponse(combinedResponses, nextCursor, oldMessageSlice.hasNext());
+    }
+
+    private ChatHistoryResponse loadOlderMessages(WorkoutRoom workoutRoom, Long cursorId, int size) {
+        Pageable pageable = PageRequest.of(0, size);
+        Slice<ChatMessage> messageSlice = chatMessageRepository
+                .findByWorkoutRoomAndIdLessThanOrderByIdDesc(workoutRoom, cursorId, pageable);
+
+        List<ChatMessage> chatMessages = messageSlice.getContent().stream()
+                .sorted(Comparator.comparing(ChatMessage::getId))
+                .toList();
+
+        List<ChatMessageResponse> messages = toResponsesWithUnread(workoutRoom, chatMessages);
+        Long nextCursor = chatMessages.isEmpty() ? null : chatMessages.getFirst().getId();
+
+        return new ChatHistoryResponse(messages, nextCursor, messageSlice.hasNext());
+    }
+
+    private ChatHistoryResponse loadLatestMessages(WorkoutRoom workoutRoom, int size) {
+        Pageable pageable = PageRequest.of(0, size + 1);
+        List<ChatMessage> descMessages = chatMessageRepository.findByWorkoutRoomOrderByIdDesc(workoutRoom, pageable);
+
+        boolean hasNext = descMessages.size() > size;
+        List<ChatMessage> chatMessages = descMessages.stream()
+                .limit(size)
+                .sorted(Comparator.comparing(ChatMessage::getId))
+                .toList();
+
+        List<ChatMessageResponse> messages = toResponsesWithUnread(workoutRoom, chatMessages);
+        Long nextCursor = chatMessages.isEmpty() ? null : chatMessages.getFirst().getId();
+
+        return new ChatHistoryResponse(messages, nextCursor, hasNext);
     }
 
     private List<ChatMessageResponse> toResponsesWithUnread(WorkoutRoom workoutRoom, List<ChatMessage> messages) {

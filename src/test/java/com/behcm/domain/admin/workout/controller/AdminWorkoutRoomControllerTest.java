@@ -2,6 +2,7 @@ package com.behcm.domain.admin.workout.controller;
 
 import com.behcm.domain.admin.workout.dto.AdminUpdateRoomRequest;
 import com.behcm.domain.admin.workout.service.AdminWorkoutRoomService;
+import com.behcm.domain.chat.dto.ChatHistoryResponse;
 import com.behcm.domain.workout.dto.WorkoutRoomDetailResponse;
 import com.behcm.domain.workout.dto.WorkoutRoomResponse;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -105,6 +106,29 @@ class AdminWorkoutRoomControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success", is(true)))
                 .andExpect(jsonPath("$.data.workoutRoomInfo.name", is("Room 1")));
+    }
+
+    @Test
+    @WithMockUser(roles = "ADMIN")
+    @DisplayName("ADMIN 권한으로 운동방 채팅 내역 조회 시 200과 ApiResponse.success가 반환된다")
+    void getChatHistory_withAdminRole_returnsOk() throws Exception {
+        ChatHistoryResponse chatHistoryResponse = new ChatHistoryResponse(Collections.emptyList(), null, false);
+
+        given(adminWorkoutRoomService.getChatHistory(eq(1L), isNull(), eq(20)))
+                .willReturn(chatHistoryResponse);
+
+        mockMvc.perform(get("/api/admin/workout/rooms/{roomId}/messages", 1L))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success", is(true)))
+                .andExpect(jsonPath("$.data.hasNext", is(false)));
+    }
+
+    @Test
+    @WithMockUser(roles = "USER")
+    @DisplayName("ADMIN 권한이 아닌 사용자로 운동방 채팅 내역 조회 시 403이 반환된다")
+    void getChatHistory_withNonAdminRole_returnsForbidden() throws Exception {
+        mockMvc.perform(get("/api/admin/workout/rooms/{roomId}/messages", 1L))
+                .andExpect(status().isForbidden());
     }
 
     @Test

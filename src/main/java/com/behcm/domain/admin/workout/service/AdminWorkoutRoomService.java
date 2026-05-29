@@ -1,7 +1,9 @@
 package com.behcm.domain.admin.workout.service;
 
 import com.behcm.domain.admin.workout.dto.AdminUpdateRoomRequest;
+import com.behcm.domain.chat.dto.ChatHistoryResponse;
 import com.behcm.domain.chat.repository.ChatMessageRepository;
+import com.behcm.domain.chat.service.ChatService;
 import com.behcm.domain.penalty.entity.Penalty;
 import com.behcm.domain.penalty.repository.PenaltyAccountRepository;
 import com.behcm.domain.penalty.repository.PenaltyRepository;
@@ -36,6 +38,7 @@ public class AdminWorkoutRoomService {
     private final WorkoutRecordRepository workoutRecordRepository;
     private final RestRepository restRepository;
     private final ChatMessageRepository chatMessageRepository;
+    private final ChatService chatService;
     private final PenaltyAccountRepository penaltyAccountRepository;
     private final PenaltyRepository penaltyRepository;
 
@@ -62,6 +65,10 @@ public class AdminWorkoutRoomService {
                 .toList();
 
         return new WorkoutRoomDetailResponse(WorkoutRoomResponse.from(workoutRoom), workoutRoomMembers, null);
+    }
+
+    public ChatHistoryResponse getChatHistory(Long roomId, Long cursorId, int size) {
+        return chatService.getChatHistoryForAdmin(roomId, cursorId, size);
     }
 
     @Transactional

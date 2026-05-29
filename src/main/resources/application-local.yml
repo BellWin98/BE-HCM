@@ -23,10 +23,10 @@ spring:
 cloud:
   aws:
     credentials:
-      access-key: ENC(vZ/NolroRR+tqNJoGqwNtr920TySD+JKw5C+b6fGoeY=)
-      secret-key: ENC(yTqkdKxGuimUAOyoRJdsxTOW0tqT1+JBIm7LW/H/DFw9QTgHGueiHVkl0CyFcatK9WwO+lVC6yc=)
+      access-key: ENC(SPPzrqWgyXUXVTcgjkyUpRu3M1WMigX4naC5pEWqHt0=)
+      secret-key: ENC(cB07qYeqVSis0WKZqqoOsLhNc+Hes1hJnhHbBIflyGMLQRmVDLno7Ne9poRh3DGT7D1vwwKHo5Q=)
     s3:
-      bucket: ENC(LBQ0Oiwmr4kfUXFudgnSPCzrVao1uhk9)
+      bucket: ENC(6V5nfAzhQgBTFIntlqAi03ssLAzppMvX)
     region:
       static: ap-northeast-2
 

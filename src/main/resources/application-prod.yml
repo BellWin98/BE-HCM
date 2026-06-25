@@ -6,10 +6,10 @@ spring:
     activate:
       on-profile: prod
   datasource:
-    url: ENC(eIaXhLuPjXNns190AdxpJ3zElBCTrTWHLNZuLPsK83PbNWS+qUmWAcXdQrajk7vftSbmCVdYBu2e29ZlPNE0NaGI7Cv8wWREseE8NMUJ9X/9Xe1jObIA+h48BQDMRNO5XykFs5Jd5jU+pvFHg36azRJIyC4mNp2wcF8/H5oQZinzS5GyUsbulu2qOM1rsf1i45zfrbu/rZBWX4lxB+iRpw==)
-    username: ENC(KECJYP3aLTAaS/1ffwfn2Q==)
-    password: ENC(dH70a8PAfeYkwJ/fS9oTCyQ7nIM9QfYhlVqbVF+T/0A=)
-    driver-class-name: org.mariadb.jdbc.Driver
+    url: ENC(3XJkFO537HvFkUkKfZEjYeN1U8b2mVwpnRv6/wl6ZneP6odkliHkcV7A135YfXfDA6W9xeoOOD4w5zeuhqauGAj069fDmRGq89OsAUE+rA1cmIZ3bZsm80o6im4mhw09QqZrDx8oMoRvhMCsT23Adq4RUBJ7B9z3g5nSdcEmFVCkHYVB3Bg0Zb49DmDYDyzDWHqEgMYc+AAx8upoOK9yOErnkK7R/kA+omwTMk7ymlDRgZNBskXw9uUAuGl/Pa9m)
+    username: ENC(lVSrqCpmTW5Z7LsDVhoNIQ==)
+    password: ENC(vz6izsSjhrgiaPC/ZwLvjSOiW4F6uDanR2Kjcp7emYwC22DtClpZUMg+Z35ODtAx)
+    driver-class-name: com.mysql.cj.jdbc.Driver
   jpa:
     properties:
       hibernate:
@@ -20,9 +20,9 @@ spring:
     show-sql: false
   data:
     redis:
-      host: ENC(+mNfUF8iXbnTe2oQ58Z2WA==)
+      host: ENC(biGY1NB/OG+9fMjwd9xydQ==)
       port: 6379
-      password: ENC(fFn96KY60L7dV8VvoBEASYnsAHjA4BPN)
+      password: ENC(f/q6GpGysypGkQk/Mswp9J3L2U3SLMwp)
 
 cloud:
   aws:

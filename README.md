@@ -1,8 +1,8 @@
 # BE-HCM
 
-> "헬창모임" — 그룹 운동 습관 관리 앱의 **Spring Boot 3.5 / Java 21 백엔드 API 서버**입니다. 사용자는 소규모
-> 그룹인 "운동방"에 참여해 매일 운동 인증을 올리고, 실시간으로 채팅하며, 약속을 지키지 못하면 벌금을 냅니다.
-> 그 외에 한국투자증권 주식 시세 연동과 FCM 푸시 알림 기능도 포함되어 있습니다.
+> "헬창마을" — 벌금 기반 운동 인증 서비스의 **Spring Boot 3.5 / Java 21 백엔드 API 서버**입니다. 
+> <br>사용자는 운동방에 참여해 운동 인증을 올리고, 실시간으로 채팅하며, 매주 운동 횟수를 못 채우면 벌금을 냅니다.
+> <br>그 외에 한국투자증권 주식 시세 연동과 FCM 푸시 알림 기능도 포함되어 있습니다.
 
 프론트엔드 저장소는 [`FE-HCM`](../FE-HCM)이며, REST(`{ success, message, data }` 응답 포맷) + WebSocket(STOMP)으로
 연동됩니다.
@@ -23,7 +23,7 @@
 
 | 구분 | 기술 |
 | --- | --- |
-| 언어 / 런타임 | ![Java](https://img.shields.io/badge/Java-21-007396?logo=openjdk&logoColor=white) (Gradle Toolchain으로 고정, 런타임 이미지는 Amazon Corretto 21 alpine) |
+| 언어 | ![Java](https://img.shields.io/badge/Java-21-007396?logo=openjdk&logoColor=white) (Gradle Toolchain으로 고정, 런타임 이미지는 Amazon Corretto 21 alpine) |
 | 프레임워크 | ![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.5.3-6DB33F?logo=springboot&logoColor=white) |
 | 빌드 도구 | ![Gradle](https://img.shields.io/badge/Gradle-Groovy%20DSL-02303A?logo=gradle&logoColor=white) (Gradle Wrapper 포함) |
 | 데이터 접근 | Spring Data JPA(Hibernate) — `default_batch_fetch_size: 500`, `open-in-view: false`, `ddl-auto: update` |

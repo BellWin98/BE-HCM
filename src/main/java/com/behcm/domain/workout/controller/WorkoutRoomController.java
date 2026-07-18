@@ -3,6 +3,7 @@ package com.behcm.domain.workout.controller;
 import com.behcm.domain.member.entity.Member;
 import com.behcm.domain.workout.dto.CreateWorkoutRoomRequest;
 import com.behcm.domain.workout.dto.JoinWorkoutRoomByCodeRequest;
+import com.behcm.domain.workout.dto.SchedulePenaltyChangeRequest;
 import com.behcm.domain.workout.dto.WorkoutRoomDetailResponse;
 import com.behcm.domain.workout.dto.WorkoutRoomResponse;
 import com.behcm.domain.workout.service.WorkoutRoomService;
@@ -69,6 +70,16 @@ public class WorkoutRoomController {
             @AuthenticationPrincipal Member member
     ) {
         WorkoutRoomResponse response = workoutRoomService.regenerateEntryCode(roomId, member);
+        return ResponseEntity.ok(ApiResponse.success(response));
+    }
+
+    @PatchMapping("/{roomId}/penalty-schedule")
+    public ResponseEntity<ApiResponse<WorkoutRoomResponse>> schedulePenaltyChange(
+            @PathVariable Long roomId,
+            @Valid @RequestBody SchedulePenaltyChangeRequest request,
+            @AuthenticationPrincipal Member member
+    ) {
+        WorkoutRoomResponse response = workoutRoomService.scheduleOwnerPenaltyChange(roomId, request, member);
         return ResponseEntity.ok(ApiResponse.success(response));
     }
 }

@@ -111,6 +111,11 @@ public class PenaltyService {
     private void processWorkoutRoomPenalties(WorkoutRoom workoutRoom, LocalDate weekStart, LocalDate weekEnd) {
         log.info("Processing penalties for workout room: {} (ID: {})", workoutRoom.getName(), workoutRoom.getId());
 
+        if (!workoutRoom.getPenaltyEnabled()) {
+            log.info("Penalty system disabled for workout room {} (ID: {}), skipping penalty calculation", workoutRoom.getName(), workoutRoom.getId());
+            return;
+        }
+
         List<WorkoutRoomMember> members = workoutRoom.getWorkoutRoomMembers();
         if (members.isEmpty()) {
             log.info("No members in workout room {} (ID: {}), skipping penalty calculation", workoutRoom.getName(), workoutRoom.getId());

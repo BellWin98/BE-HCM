@@ -19,7 +19,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.security.SecureRandom;
+import java.time.DayOfWeek;
 import java.time.LocalDate;
+import java.time.temporal.TemporalAdjusters;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -49,7 +51,8 @@ public class WorkoutRoomService {
         WorkoutRoom workoutRoom = WorkoutRoom.builder()
                 .name(request.getName())
                 .minWeeklyWorkouts(request.getMinWeeklyWorkouts())
-                .penaltyPerMiss(request.getPenaltyPerMiss())
+                .penaltyEnabled(request.getPenaltyEnabled())
+                .penaltyPerMiss(request.getPenaltyEnabled() ? request.getPenaltyPerMiss() : null)
                 .maxMembers(request.getMaxMembers())
                 .entryCode(request.getEntryCode())
                 .owner(owner)
@@ -159,6 +162,49 @@ public class WorkoutRoomService {
         workoutRoom.updateEntryCode(newEntryCode);
 
         return WorkoutRoomResponse.from(workoutRoom);
+    }
+
+    public WorkoutRoomResponse scheduleOwnerPenaltyChange(Long roomId, SchedulePenaltyChangeRequest request, Member currentMember) {
+        WorkoutRoom workoutRoom = workoutRoomRepository.findByIdAndIsActiveTrue(roomId)
+                .orElseThrow(() -> new CustomException(ErrorCode.WORKOUT_ROOM_NOT_FOUND));
+
+        if (!workoutRoom.isOwner(currentMember)) {
+            throw new CustomException(ErrorCode.NOT_WORKOUT_ROOM_OWNER);
+        }
+
+        return schedulePenaltyChange(workoutRoom, request);
+    }
+
+    public WorkoutRoomResponse scheduleAdminPenaltyChange(Long roomId, SchedulePenaltyChangeRequest request) {
+        WorkoutRoom workoutRoom = workoutRoomRepository.findById(roomId)
+                .orElseThrow(() -> new CustomException(ErrorCode.WORKOUT_ROOM_NOT_FOUND));
+
+        return schedulePenaltyChange(workoutRoom, request);
+    }
+
+    private WorkoutRoomResponse schedulePenaltyChange(WorkoutRoom workoutRoom, SchedulePenaltyChangeRequest request) {
+        validatePenaltyEffectiveDate(request.getEffectiveDate());
+
+        workoutRoom.schedulePenaltyChange(request.getPenaltyEnabled(), request.getPenaltyPerMiss(), request.getEffectiveDate());
+
+        return WorkoutRoomResponse.from(workoutRoom);
+    }
+
+    private void validatePenaltyEffectiveDate(LocalDate effectiveDate) {
+        LocalDate earliestMonday = LocalDate.now().plusDays(7).with(TemporalAdjusters.nextOrSame(DayOfWeek.MONDAY));
+
+        if (effectiveDate.getDayOfWeek() != DayOfWeek.MONDAY || effectiveDate.isBefore(earliestMonday)) {
+            throw new CustomException(ErrorCode.INVALID_PENALTY_EFFECTIVE_DATE);
+        }
+    }
+
+    public void applyDuePendingPenaltyChanges() {
+        LocalDate today = LocalDate.now();
+        List<WorkoutRoom> roomsWithDueChanges = workoutRoomRepository.findByIsActiveTrueAndPenaltyChangeEffectiveDateLessThanEqual(today);
+
+        for (WorkoutRoom workoutRoom : roomsWithDueChanges) {
+            workoutRoom.applyPendingPenaltyChangeIfDue(today);
+        }
     }
 
     private String generateUniqueEntryCode(String currentEntryCode) {

@@ -33,6 +33,7 @@ public enum ErrorCode {
     NOT_WORKOUT_ROOM_OWNER(HttpStatus.FORBIDDEN, "방장이 아닙니다."),
     INVALID_ENTRY_CODE(HttpStatus.BAD_REQUEST, "입장코드가 맞지 않습니다."),
     WORKOUT_ROOM_ALREADY_STARTED(HttpStatus.BAD_REQUEST, "이미 시작된 운동방에는 참여할 수 없습니다."),
+    INVALID_PENALTY_EFFECTIVE_DATE(HttpStatus.BAD_REQUEST, "전환 예정일은 오늘로부터 최소 7일 이후의 월요일이어야 합니다."),
 
     // Workout
     WORKOUT_ALREADY_UPLOADED(HttpStatus.BAD_REQUEST, "오늘 이미 운동을 인증했습니다."),

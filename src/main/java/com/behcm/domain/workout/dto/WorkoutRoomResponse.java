@@ -4,6 +4,7 @@ import com.behcm.domain.workout.entity.WorkoutRoom;
 import lombok.Builder;
 import lombok.Getter;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 @Getter
@@ -14,7 +15,11 @@ public class WorkoutRoomResponse {
     private String name;
     private String ownerNickname;
     private Integer minWeeklyWorkouts;
+    private Boolean penaltyEnabled;
     private Long penaltyPerMiss;
+    private Boolean pendingPenaltyEnabled;
+    private Long pendingPenaltyPerMiss;
+    private LocalDate penaltyChangeEffectiveDate;
     private Integer maxMembers;
     private Integer currentMembers;
     private Boolean isActive;
@@ -34,7 +39,11 @@ public class WorkoutRoomResponse {
                 .id(workoutRoom.getId())
                 .name(workoutRoom.getName())
                 .minWeeklyWorkouts(workoutRoom.getMinWeeklyWorkouts())
+                .penaltyEnabled(workoutRoom.getPenaltyEnabled())
                 .penaltyPerMiss(workoutRoom.getPenaltyPerMiss())
+                .pendingPenaltyEnabled(workoutRoom.getPendingPenaltyEnabled())
+                .pendingPenaltyPerMiss(workoutRoom.getPendingPenaltyPerMiss())
+                .penaltyChangeEffectiveDate(workoutRoom.getPenaltyChangeEffectiveDate())
                 .maxMembers(workoutRoom.getMaxMembers())
                 .currentMembers(workoutRoom.getCurrentMemberCount())
                 .ownerNickname(workoutRoom.getOwnerNickname())

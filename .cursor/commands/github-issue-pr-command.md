@@ -74,7 +74,7 @@ git push -u origin feature/issue-{issue_number}
   - `title` (string): same as the issue title (or slightly more descriptive) **(Korean only)**
   - `body` (string): `Closes #{issue_number}\n\n## Description\n{summary_of_changes_in_korean}` **(Korean only)**
   - `head` (string): branch name, e.g. `feature/issue-{issue_number}`
-  - `base` (string): `dev` if the branch exists, otherwise `main`
+  - `base` (string): always `main` (do not target `dev`)
 
 ---
 
@@ -85,5 +85,5 @@ git push -u origin feature/issue-{issue_number}
 3. Execute **Step 2** (create/switch branch via terminal).
 4. Execute **Step 3** (stage and commit via terminal; use `git_write` permission for commit).
 5. Execute **Step 4** (push via terminal; use `network` and `git_write` permissions).
-6. Execute **Step 5** (create PR via MCP). If `base: "dev"` fails with invalid base, retry with `base: "main"`.
+6. Execute **Step 5** (create PR via MCP), always with `base: "main"`.
 7. At the end, report the created issue URL, PR URL, and branch name to the user.

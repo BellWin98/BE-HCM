@@ -62,7 +62,7 @@ class AdminWorkoutRoomControllerTest {
         Page<WorkoutRoomResponse> page =
                 new PageImpl<>(List.of(roomResponse), pageable, 1);
 
-        given(adminWorkoutRoomService.getRooms(anyString(), anyBoolean(), any(Pageable.class)))
+        given(adminWorkoutRoomService.getRooms(anyString(), isNull(), any(Pageable.class)))
                 .willReturn(page);
 
         mockMvc.perform(get("/api/admin/workout/rooms")

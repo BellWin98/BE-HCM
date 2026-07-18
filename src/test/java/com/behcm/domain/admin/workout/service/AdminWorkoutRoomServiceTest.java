@@ -1,6 +1,8 @@
 package com.behcm.domain.admin.workout.service;
 
 import com.behcm.domain.admin.workout.dto.AdminUpdateRoomRequest;
+import com.behcm.domain.member.entity.Member;
+import com.behcm.domain.member.entity.MemberRole;
 import com.behcm.domain.rest.dto.RestResponse;
 import com.behcm.domain.rest.entity.Rest;
 import com.behcm.domain.rest.repository.RestRepository;
@@ -54,6 +56,16 @@ class AdminWorkoutRoomServiceTest {
     @InjectMocks
     private AdminWorkoutRoomService adminWorkoutRoomService;
 
+    // WorkoutRoom.owner/WorkoutRoomMember.member는 실제로는 nullable=false라, 응답 DTO 매핑 시
+    // owner.getNickname() 등을 그대로 호출한다. 테스트에서 owner(null)로 두면 NPE가 나므로 실제 Member를 준다.
+    private Member member() {
+        return Member.builder()
+                .email("owner@test.com")
+                .nickname("owner")
+                .role(MemberRole.USER)
+                .build();
+    }
+
     @Test
     @DisplayName("getRooms는 레포지토리에서 조회한 WorkoutRoom 페이지를 WorkoutRoomResponse 페이지로 매핑한다")
     void getRooms_mapsToWorkoutRoomResponsePage() {
@@ -64,7 +76,7 @@ class AdminWorkoutRoomServiceTest {
                 .penaltyPerMiss(1000L)
                 .maxMembers(10)
                 .entryCode("ENTRY01")
-                .owner(null)
+                .owner(member())
                 .build();
 
         Page<WorkoutRoom> roomPage = new PageImpl<>(List.of(room), pageable, 1);
@@ -116,10 +128,11 @@ class AdminWorkoutRoomServiceTest {
                 .penaltyPerMiss(1000L)
                 .maxMembers(10)
                 .entryCode("ENTRY01")
-                .owner(null)
+                .owner(member())
                 .build();
 
         WorkoutRoomMember workoutRoomMember = WorkoutRoomMember.builder()
+                .member(member())
                 .workoutRoom(room)
                 .build();
 
@@ -166,7 +179,7 @@ class AdminWorkoutRoomServiceTest {
                 .penaltyPerMiss(1000L)
                 .maxMembers(10)
                 .entryCode("ENTRY01")
-                .owner(null)
+                .owner(member())
                 .build();
 
         AdminUpdateRoomRequest request = new AdminUpdateRoomRequest();

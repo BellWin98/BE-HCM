@@ -15,14 +15,18 @@ public class WorkoutSchedulingService {
 
     private final WorkoutRoomMemberRepository workoutRoomMemberRepository;
     private final PenaltyService penaltyService;
+    private final WorkoutRoomService workoutRoomService;
 
     @Scheduled(cron = "0 0 0 * * MON")
     @Transactional
     public void weeklyProcessing() {
         log.info("Starting weekly processing");
 
-        // 벌금 계산 및 부과 (주간 운동 데이터 리셋 전에 실행)
+        // 벌금 계산 및 부과 (전환 반영 전, 지난주 설정 기준으로 실행)
         penaltyService.calculateAndAssignPenalties();
+
+        // 예약된 벌금제도 전환 반영 (이번 주부터 적용)
+        workoutRoomService.applyDuePendingPenaltyChanges();
 
         // 주간 운동 횟수 리셋
         resetWeeklyWorkouts();

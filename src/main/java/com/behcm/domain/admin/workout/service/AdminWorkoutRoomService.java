@@ -10,6 +10,7 @@ import com.behcm.domain.penalty.repository.PenaltyRepository;
 import com.behcm.domain.rest.dto.RestResponse;
 import com.behcm.domain.rest.entity.Rest;
 import com.behcm.domain.rest.repository.RestRepository;
+import com.behcm.domain.workout.dto.SchedulePenaltyChangeRequest;
 import com.behcm.domain.workout.dto.WorkoutRecordResponse;
 import com.behcm.domain.workout.dto.WorkoutRoomDetailResponse;
 import com.behcm.domain.workout.dto.WorkoutRoomMemberResponse;
@@ -19,6 +20,7 @@ import com.behcm.domain.workout.entity.WorkoutRoomMember;
 import com.behcm.domain.workout.repository.WorkoutRecordRepository;
 import com.behcm.domain.workout.repository.WorkoutRoomMemberRepository;
 import com.behcm.domain.workout.repository.WorkoutRoomRepository;
+import com.behcm.domain.workout.service.WorkoutRoomService;
 import com.behcm.global.exception.CustomException;
 import com.behcm.global.exception.ErrorCode;
 import lombok.RequiredArgsConstructor;
@@ -41,6 +43,7 @@ public class AdminWorkoutRoomService {
     private final ChatService chatService;
     private final PenaltyAccountRepository penaltyAccountRepository;
     private final PenaltyRepository penaltyRepository;
+    private final WorkoutRoomService workoutRoomService;
 
     public Page<WorkoutRoomResponse> getRooms(String query, Boolean active, Pageable pageable) {
         String normalizedQuery = (query != null && !query.isBlank()) ? query : null;
@@ -86,6 +89,11 @@ public class AdminWorkoutRoomService {
 
         WorkoutRoom saved = workoutRoomRepository.save(workoutRoom);
         return WorkoutRoomResponse.from(saved);
+    }
+
+    @Transactional
+    public WorkoutRoomResponse schedulePenaltyChange(Long roomId, SchedulePenaltyChangeRequest request) {
+        return workoutRoomService.scheduleAdminPenaltyChange(roomId, request);
     }
 
     @Transactional

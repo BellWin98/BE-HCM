@@ -3,6 +3,7 @@ package com.behcm.domain.admin.workout.controller;
 import com.behcm.domain.admin.workout.dto.AdminUpdateRoomRequest;
 import com.behcm.domain.admin.workout.service.AdminWorkoutRoomService;
 import com.behcm.domain.chat.dto.ChatHistoryResponse;
+import com.behcm.domain.workout.dto.SchedulePenaltyChangeRequest;
 import com.behcm.domain.workout.dto.WorkoutRoomDetailResponse;
 import com.behcm.domain.workout.dto.WorkoutRoomResponse;
 import com.behcm.global.common.ApiResponse;
@@ -16,6 +17,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -68,6 +70,15 @@ public class AdminWorkoutRoomController {
             @Valid @RequestBody AdminUpdateRoomRequest request
     ) {
         WorkoutRoomResponse response = adminWorkoutRoomService.updateRoomSettings(roomId, request);
+        return ResponseEntity.ok(ApiResponse.success(response));
+    }
+
+    @PatchMapping("/{roomId}/penalty-schedule")
+    public ResponseEntity<ApiResponse<WorkoutRoomResponse>> schedulePenaltyChange(
+            @PathVariable Long roomId,
+            @Valid @RequestBody SchedulePenaltyChangeRequest request
+    ) {
+        WorkoutRoomResponse response = adminWorkoutRoomService.schedulePenaltyChange(roomId, request);
         return ResponseEntity.ok(ApiResponse.success(response));
     }
 

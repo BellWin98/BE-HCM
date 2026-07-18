@@ -1,5 +1,6 @@
 package com.behcm.domain.workout.repository;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 
@@ -43,6 +44,8 @@ public interface WorkoutRoomRepository extends JpaRepository<WorkoutRoom, Long> 
             Pageable pageable);
 
     List<WorkoutRoom> findByOwner(Member owner);
+
+    List<WorkoutRoom> findByIsActiveTrueAndPenaltyChangeEffectiveDateLessThanEqual(LocalDate date);
 
     @Query("""
             SELECT COUNT(wr)

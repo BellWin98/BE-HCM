@@ -26,8 +26,20 @@ public class WorkoutRoom extends BaseTimeEntity {
     @Column(nullable = false)
     private Integer minWeeklyWorkouts;
 
-    @Column(nullable = false)
+    @Column(nullable = false, columnDefinition = "boolean default true")
+    private Boolean penaltyEnabled;
+
+    @Column
     private Long penaltyPerMiss;
+
+    @Column
+    private Boolean pendingPenaltyEnabled;
+
+    @Column
+    private Long pendingPenaltyPerMiss;
+
+    @Column
+    private LocalDate penaltyChangeEffectiveDate;
 
     @Column(nullable = false, length = 10, unique = true)
     private String entryCode;
@@ -46,10 +58,11 @@ public class WorkoutRoom extends BaseTimeEntity {
     private Boolean isActive = true;
 
     @Builder
-    public WorkoutRoom(String name, Integer minWeeklyWorkouts, Long penaltyPerMiss,
+    public WorkoutRoom(String name, Integer minWeeklyWorkouts, Boolean penaltyEnabled, Long penaltyPerMiss,
                        Integer maxMembers, String entryCode, Member owner) {
         this.name = name;
         this.minWeeklyWorkouts = minWeeklyWorkouts;
+        this.penaltyEnabled = penaltyEnabled != null ? penaltyEnabled : true;
         this.penaltyPerMiss = penaltyPerMiss;
         this.maxMembers = maxMembers;
         this.entryCode = entryCode;
@@ -71,6 +84,27 @@ public class WorkoutRoom extends BaseTimeEntity {
 
     public void updateEntryCode(String entryCode) {
         this.entryCode = entryCode;
+    }
+
+    public void schedulePenaltyChange(boolean enabled, Long penaltyPerMiss, LocalDate effectiveDate) {
+        this.pendingPenaltyEnabled = enabled;
+        this.pendingPenaltyPerMiss = penaltyPerMiss;
+        this.penaltyChangeEffectiveDate = effectiveDate;
+    }
+
+    public void applyPendingPenaltyChangeIfDue(LocalDate today) {
+        if (pendingPenaltyEnabled == null || penaltyChangeEffectiveDate.isAfter(today)) {
+            return;
+        }
+
+        this.penaltyEnabled = pendingPenaltyEnabled;
+        if (pendingPenaltyEnabled) {
+            this.penaltyPerMiss = pendingPenaltyPerMiss;
+        }
+
+        this.pendingPenaltyEnabled = null;
+        this.pendingPenaltyPerMiss = null;
+        this.penaltyChangeEffectiveDate = null;
     }
 
     public boolean canJoin() {

@@ -1,5 +1,6 @@
 package com.behcm.domain.workout.dto;
 
+import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotEmpty;
@@ -19,7 +20,9 @@ public class CreateWorkoutRoomRequest {
     @Max(value = 7, message = "주당 최소 운동 횟수는 7회 이하이어야 합니다.")
     private Integer minWeeklyWorkouts;
 
-    @NotNull(message = "회당 벌금은 필수입니다.")
+    @NotNull(message = "벌금제도 사용 여부는 필수입니다.")
+    private Boolean penaltyEnabled;
+
     @Min(value = 1000, message = "회당 벌금은 1000원 이상이어야 합니다.")
     private Long penaltyPerMiss;
 
@@ -31,4 +34,9 @@ public class CreateWorkoutRoomRequest {
     @Size(min = 6, max = 10, message = "방 입장 코드는 6~10자리여야 합니다.")
     @Pattern(regexp = "^[A-Za-z0-9]{6,10}$", message = "방 입장 코드는 영문/숫자 조합만 가능합니다.")
     private String entryCode;
+
+    @AssertTrue(message = "벌금제도를 사용하는 경우 회당 벌금은 필수입니다.")
+    public boolean isPenaltyAmountValidWhenEnabled() {
+        return penaltyEnabled == null || !penaltyEnabled || penaltyPerMiss != null;
+    }
 }

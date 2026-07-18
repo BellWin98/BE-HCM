@@ -3,6 +3,7 @@ package com.behcm.domain.workout.service;
 import com.behcm.domain.member.entity.Member;
 import com.behcm.domain.member.entity.MemberRole;
 import com.behcm.domain.member.repository.MemberRepository;
+import com.behcm.domain.notification.service.NotificationFacade;
 import com.behcm.domain.workout.dto.WorkoutRequest;
 import com.behcm.domain.workout.dto.WorkoutResponse;
 import com.behcm.domain.workout.entity.WorkoutRecord;
@@ -28,6 +29,8 @@ import java.util.List;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -49,6 +52,9 @@ class WorkoutServiceTest {
 
     @Mock
     private CacheManager cacheManager;
+
+    @Mock
+    private NotificationFacade notificationFacade;
 
     @InjectMocks
     private WorkoutService workoutService;
@@ -170,5 +176,49 @@ class WorkoutServiceTest {
 
         assertThat(wrm.getTotalWorkouts()).isEqualTo(1);
         assertThat(wrm.getWeeklyWorkouts()).isEqualTo(0);
+    }
+
+    @Test
+    @DisplayName("이번 인증으로 주간 목표 횟수를 처음 채우면 같은 방의 다른 멤버들에게 알림을 보낸다")
+    void authenticateWorkout_reachesWeeklyGoal_notifiesRoomMembers() {
+        Member member = member();
+        WorkoutRoom room = room(1L); // minWeeklyWorkouts = 3
+        WorkoutRoomMember wrm = WorkoutRoomMember.builder().member(member).workoutRoom(room).build();
+        wrm.updateWeeklyWorkouts(2); // 이미 2회 완료, 이번 인증이 3번째
+        given(workoutRoomMemberRepository.findByMember(member)).willReturn(List.of(wrm));
+        given(workoutRecordRepository.findByMemberAndWorkoutDateAndWorkoutRoomIn(any(), any(), any()))
+                .willReturn(List.of());
+        given(s3Service.uploadWorkoutImages(any())).willReturn(List.of("https://s3/image.jpg"));
+        given(workoutRecordRepository.save(any(WorkoutRecord.class)))
+                .willAnswer(invocation -> invocation.getArgument(0));
+        given(memberRepository.save(any(Member.class))).willAnswer(invocation -> invocation.getArgument(0));
+
+        String today = LocalDate.now().toString();
+        workoutService.authenticateWorkout(member, request(today));
+
+        assertThat(wrm.getWeeklyWorkouts()).isEqualTo(3);
+        verify(notificationFacade).notifyRoomMembers(eq(1L), eq(member), anyString(), anyString(), eq("WEEKLY_GOAL_ACHIEVED"), eq(""));
+    }
+
+    @Test
+    @DisplayName("이미 주간 목표를 달성한 이후 추가로 인증해도 알림을 다시 보내지 않는다")
+    void authenticateWorkout_alreadyReachedWeeklyGoal_doesNotNotifyAgain() {
+        Member member = member();
+        WorkoutRoom room = room(1L); // minWeeklyWorkouts = 3
+        WorkoutRoomMember wrm = WorkoutRoomMember.builder().member(member).workoutRoom(room).build();
+        wrm.updateWeeklyWorkouts(3); // 이미 목표 달성
+        given(workoutRoomMemberRepository.findByMember(member)).willReturn(List.of(wrm));
+        given(workoutRecordRepository.findByMemberAndWorkoutDateAndWorkoutRoomIn(any(), any(), any()))
+                .willReturn(List.of());
+        given(s3Service.uploadWorkoutImages(any())).willReturn(List.of("https://s3/image.jpg"));
+        given(workoutRecordRepository.save(any(WorkoutRecord.class)))
+                .willAnswer(invocation -> invocation.getArgument(0));
+        given(memberRepository.save(any(Member.class))).willAnswer(invocation -> invocation.getArgument(0));
+
+        String today = LocalDate.now().toString();
+        workoutService.authenticateWorkout(member, request(today));
+
+        assertThat(wrm.getWeeklyWorkouts()).isEqualTo(4);
+        verify(notificationFacade, never()).notifyRoomMembers(any(), any(), any(), any(), any(), any());
     }
 }

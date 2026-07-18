@@ -2,6 +2,7 @@ package com.behcm.domain.workout.service;
 
 import com.behcm.domain.member.entity.Member;
 import com.behcm.domain.member.repository.MemberRepository;
+import com.behcm.domain.notification.service.NotificationFacade;
 import com.behcm.domain.workout.dto.WorkoutRequest;
 import com.behcm.domain.workout.dto.WorkoutResponse;
 import com.behcm.domain.workout.entity.WorkoutRecord;
@@ -29,11 +30,14 @@ import java.util.List;
 @Transactional
 public class WorkoutService {
 
+    private static final String WEEKLY_GOAL_ACHIEVED_TYPE = "WEEKLY_GOAL_ACHIEVED";
+
     private final WorkoutRecordRepository workoutRecordRepository;
     private final WorkoutRoomMemberRepository workoutRoomMemberRepository;
     private final MemberRepository memberRepository;
     private final S3Service s3Service;
     private final CacheManager cacheManager;
+    private final NotificationFacade notificationFacade;
 
     @CacheEvict(value = "workoutRoomDetail", allEntries = true)
     public WorkoutResponse authenticateWorkout(Member member, WorkoutRequest request) {
@@ -73,13 +77,29 @@ public class WorkoutService {
             wrm.updateTotalWorkouts(wrm.getTotalWorkouts() + 1);
             // 이번주가 아닌 날짜는 이번주 운동 횟수에 반영 안함
             if (isThisWeek(savedWorkoutRecord.getWorkoutDate())) {
-                wrm.updateWeeklyWorkouts(wrm.getWeeklyWorkouts() + 1);
+                int weeklyWorkoutsBeforeUpdate = wrm.getWeeklyWorkouts();
+                wrm.updateWeeklyWorkouts(weeklyWorkoutsBeforeUpdate + 1);
+                if (hasJustReachedWeeklyGoal(weeklyWorkoutsBeforeUpdate, wrm.getWeeklyWorkouts(), workoutRoom.getMinWeeklyWorkouts())) {
+                    notifyWeeklyGoalAchieved(member, workoutRoom);
+                }
             }
         }
         member.updateTotalWorkoutDays(member.getTotalWorkoutDays() + 1);
         Member savedMember = memberRepository.save(member);
 
         return new WorkoutResponse(workoutDate, request.getWorkoutTypes(), request.getDuration(), imageUrls, savedMember.getTotalWorkoutDays());
+    }
+
+    // 이번 운동 인증으로 주간 목표 횟수를 처음 채웠는지 여부 (목표 달성 이후 추가 인증 시 재알림 방지)
+    private boolean hasJustReachedWeeklyGoal(int weeklyWorkoutsBeforeUpdate, int weeklyWorkoutsAfterUpdate, int minWeeklyWorkouts) {
+        return weeklyWorkoutsBeforeUpdate < minWeeklyWorkouts && weeklyWorkoutsAfterUpdate >= minWeeklyWorkouts;
+    }
+
+    private void notifyWeeklyGoalAchieved(Member member, WorkoutRoom workoutRoom) {
+        String title = "🎉 주간 운동 목표 달성!";
+        String body = String.format("%s님이 이번 주 운동 목표(%d회)를 달성했어요!",
+                member.getNickname(), workoutRoom.getMinWeeklyWorkouts());
+        notificationFacade.notifyRoomMembers(workoutRoom.getId(), member, title, body, WEEKLY_GOAL_ACHIEVED_TYPE, "");
     }
 
     private boolean isThisWeek(LocalDate targetDate) {

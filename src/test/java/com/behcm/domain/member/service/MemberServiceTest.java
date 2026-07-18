@@ -6,6 +6,7 @@ import com.behcm.domain.member.repository.MemberSettingsRepository;
 import com.behcm.domain.workout.dto.WorkoutFeedItemResponse;
 import com.behcm.domain.workout.enums.PeriodType;
 import com.behcm.domain.workout.entity.WorkoutRecord;
+import com.behcm.domain.workout.entity.WorkoutRoom;
 import com.behcm.domain.workout.repository.WorkoutRecordRepository;
 import com.behcm.global.config.aws.S3Service;
 import org.junit.jupiter.api.DisplayName;
@@ -57,8 +58,20 @@ class MemberServiceTest {
         int size = 10;
         Pageable pageable = PageRequest.of(page, size);
 
+        // WorkoutFeedItemResponse.from은 workoutRecord.getWorkoutRoom().getName()을 그대로 호출하므로
+        // workoutRoom이 없으면 NPE가 난다. 실제로는 nullable=false라 항상 존재하는 값이다.
+        WorkoutRoom room = WorkoutRoom.builder()
+                .name("Test Room")
+                .minWeeklyWorkouts(3)
+                .penaltyEnabled(false)
+                .maxMembers(10)
+                .entryCode("ENTRY01")
+                .owner(member)
+                .build();
+
         WorkoutRecord record = WorkoutRecord.builder()
                 .member(member)
+                .workoutRoom(room)
                 .workoutDate(LocalDate.now())
                 .duration(30)
                 .build();
@@ -87,8 +100,18 @@ class MemberServiceTest {
         int size = 10;
         Pageable pageable = PageRequest.of(page, size);
 
+        WorkoutRoom room = WorkoutRoom.builder()
+                .name("Test Room")
+                .minWeeklyWorkouts(3)
+                .penaltyEnabled(false)
+                .maxMembers(10)
+                .entryCode("ENTRY02")
+                .owner(member)
+                .build();
+
         WorkoutRecord record = WorkoutRecord.builder()
                 .member(member)
+                .workoutRoom(room)
                 .workoutDate(LocalDate.now())
                 .duration(30)
                 .build();

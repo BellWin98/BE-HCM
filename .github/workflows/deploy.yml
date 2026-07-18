@@ -17,6 +17,31 @@ jobs:
     env:
       DOCKER_IMAGE: ${{ secrets.DOCKER_REPO }}/hcm
 
+    # 테스트(@SpringBootTest)가 실제 로컬 인프라와 동일한 구성(src/test/resources/application-local.yml:
+    # localhost:3306 root/1234, localhost:6379)을 기대하므로, CI에서도 동일하게 서비스 컨테이너로 띄운다.
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: 1234
+          MYSQL_DATABASE: hcm
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -p1234"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+
     steps:
       - uses: actions/checkout@v4
 
@@ -40,8 +65,15 @@ jobs:
       - name: Grant execute permission for gradlew
         run: chmod +x ./gradlew
 
-      - name: Build with Gradle
-        run: ./gradlew clean build -x test --no-daemon
+      - name: Build with Gradle (테스트 포함)
+        run: ./gradlew clean build --no-daemon
+
+      - name: Upload test report on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-report
+          path: build/reports/tests/test
 
       # Docker 로그인
       - name: Login to Docker Hub

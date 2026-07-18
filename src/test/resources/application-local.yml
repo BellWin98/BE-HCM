@@ -1,0 +1,45 @@
+spring:
+  config:
+    activate:
+      on-profile: local
+  datasource:
+    url: jdbc:mariadb://localhost:3306/hcm?useSSL=false&characterEncoding=UTF-8&allowPublicKeyRetrieval=true
+    username: root
+    password: 1234
+    driver-class-name: org.mariadb.jdbc.Driver
+  jpa:
+    properties:
+      hibernate:
+        format_sql: true
+        highlight_sql: true
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+  data:
+    redis:
+      host: localhost
+      port: 6379
+
+# 테스트 환경에서는 실제 AWS 자격증명을 알 수 없으므로(application-local.yml의 ENC(...) 값은
+# JASYPT_ENCRYPTOR_PASSWORD 없이는 복호화 불가) 평문 더미 값으로 대체한다.
+# S3Config는 빈 생성 시 자격증명으로 클라이언트 객체만 구성할 뿐 즉시 네트워크 호출을 하지 않으므로
+# 컨텍스트 로딩에는 영향이 없다(S3 API를 실제로 호출하는 테스트는 별도로 목킹한다).
+cloud:
+  aws:
+    credentials:
+      access-key: test-access-key
+      secret-key: test-secret-key
+    s3:
+      bucket: test-bucket
+    region:
+      static: ap-northeast-2
+
+# 프론트엔드 URL (OAuth 콜백 리다이렉트용)
+app:
+  frontend-url: http://localhost:3000
+
+# 로깅 설정
+logging:
+  level:
+    root: INFO
+    com.behcm: DEBUG

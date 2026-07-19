@@ -2,6 +2,7 @@ package com.behcm.domain.notification.service;
 
 import com.behcm.domain.member.entity.Member;
 import com.behcm.domain.member.entity.MemberRole;
+import com.behcm.domain.notification.entity.FcmToken;
 import com.behcm.domain.notification.repository.FcmTokenRepository;
 import com.behcm.domain.workout.entity.WorkoutRoom;
 import com.behcm.domain.workout.entity.WorkoutRoomMember;
@@ -98,6 +99,29 @@ class NotificationFacadeTest {
         notificationFacade.notifyAllRoomMembers(member, "title", "body", "WORKOUT", "/path");
 
         verify(fcmService).sendGroupNotification(1L, List.of("token-a", "token-b"), "title", "body", "WORKOUT-1", "/path");
+    }
+
+    @Test
+    @DisplayName("notifyMember는 대상 회원의 토큰으로만 알림을 발송한다")
+    void notifyMember_sendsToTargetMemberToken() {
+        Member target = member(1L, "target");
+        FcmToken fcmToken = new FcmToken(target, "target-token");
+        given(fcmTokenRepository.findByMember(target)).willReturn(Optional.of(fcmToken));
+
+        notificationFacade.notifyMember(target, "title", "body", "PENALTY_ASSIGNED", "/path");
+
+        verify(fcmService).sendGroupNotification(1L, List.of("target-token"), "title", "body", "PENALTY_ASSIGNED-1", "/path");
+    }
+
+    @Test
+    @DisplayName("notifyMember는 대상 회원의 토큰이 없으면 발송하지 않는다")
+    void notifyMember_noToken_doesNotSend() {
+        Member target = member(1L, "target");
+        given(fcmTokenRepository.findByMember(target)).willReturn(Optional.empty());
+
+        notificationFacade.notifyMember(target, "title", "body", "PENALTY_ASSIGNED", "/path");
+
+        verify(fcmService, never()).sendGroupNotification(any(), any(), any(), any(), any(), any());
     }
 
     @Test

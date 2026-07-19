@@ -9,6 +9,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 
@@ -29,4 +30,19 @@ public interface WorkoutRoomMemberRepository extends JpaRepository<WorkoutRoomMe
     @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query("update WorkoutRoomMember wrm set wrm.weeklyWorkouts = 0 where wrm.weeklyWorkouts <> 0")
     void resetWeeklyWorkouts();
+
+    @Query("""
+            select wrm from WorkoutRoomMember wrm
+            join fetch wrm.member m
+            join fetch wrm.workoutRoom wr
+            where wr.isActive = true
+            and wrm.isOnBreak = false
+            and not exists (
+                select 1 from WorkoutRecord rec
+                where rec.member = wrm.member
+                and rec.workoutRoom = wrm.workoutRoom
+                and rec.workoutDate = :today
+            )
+            """)
+    List<WorkoutRoomMember> findMembersWithoutWorkoutRecordOn(@Param("today") LocalDate today);
 }

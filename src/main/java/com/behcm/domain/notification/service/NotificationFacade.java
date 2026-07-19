@@ -36,6 +36,13 @@ public class NotificationFacade {
         fcmService.sendGroupNotification(member.getId(), fcmTokens, title, body, type + "-" + member.getId(), path);
     }
 
+    public void notifyMember(Member targetMember, String title, String body, String type, String path) {
+        fcmTokenRepository.findByMember(targetMember)
+                .ifPresent(fcmToken -> fcmService.sendGroupNotification(
+                        targetMember.getId(), List.of(fcmToken.getToken()), title, body,
+                        type + "-" + targetMember.getId(), path));
+    }
+
     public void notifyRoomMembers(Long roomId, Member member, String title, String body, String type, String path) {
         WorkoutRoom workoutRoom = workoutRoomRepository.findByIdAndIsActiveTrue(roomId)
                 .orElseThrow(() -> new CustomException(ErrorCode.WORKOUT_ROOM_NOT_FOUND));

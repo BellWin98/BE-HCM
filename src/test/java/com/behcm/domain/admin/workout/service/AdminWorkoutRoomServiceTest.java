@@ -1,8 +1,11 @@
 package com.behcm.domain.admin.workout.service;
 
 import com.behcm.domain.admin.workout.dto.AdminUpdateRoomRequest;
+import com.behcm.domain.chat.repository.ChatMessageRepository;
 import com.behcm.domain.member.entity.Member;
 import com.behcm.domain.member.entity.MemberRole;
+import com.behcm.domain.penalty.repository.PenaltyAccountRepository;
+import com.behcm.domain.penalty.repository.PenaltyRepository;
 import com.behcm.domain.rest.dto.RestResponse;
 import com.behcm.domain.rest.entity.Rest;
 import com.behcm.domain.rest.repository.RestRepository;
@@ -36,6 +39,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
 @ExtendWith(MockitoExtension.class)
@@ -53,8 +58,29 @@ class AdminWorkoutRoomServiceTest {
     @Mock
     private RestRepository restRepository;
 
+    @Mock
+    private ChatMessageRepository chatMessageRepository;
+
+    @Mock
+    private PenaltyRepository penaltyRepository;
+
+    @Mock
+    private PenaltyAccountRepository penaltyAccountRepository;
+
     @InjectMocks
     private AdminWorkoutRoomService adminWorkoutRoomService;
+
+    // Member.id/WorkoutRoomMember.id는 public setter가 없어 리플렉션으로 채운다.
+    // (groupingBy 등 id를 키로 쓰는 배치 조회 로직 검증에 필요)
+    private void setId(Object entity, long id) {
+        try {
+            var field = entity.getClass().getDeclaredField("id");
+            field.setAccessible(true);
+            field.set(entity, id);
+        } catch (ReflectiveOperationException e) {
+            throw new RuntimeException(e);
+        }
+    }
 
     // WorkoutRoom.owner/WorkoutRoomMember.member는 실제로는 nullable=false라, 응답 DTO 매핑 시
     // owner.getNickname() 등을 그대로 호출한다. 테스트에서 owner(null)로 두면 NPE가 나므로 실제 Member를 준다.
@@ -131,43 +157,54 @@ class AdminWorkoutRoomServiceTest {
                 .owner(member())
                 .build();
 
-        WorkoutRoomMember workoutRoomMember = WorkoutRoomMember.builder()
-                .member(member())
+        Member member1 = member();
+        setId(member1, 1L);
+        Member member2 = member();
+        setId(member2, 2L);
+
+        WorkoutRoomMember workoutRoomMember1 = WorkoutRoomMember.builder()
+                .member(member1)
                 .workoutRoom(room)
                 .build();
+        setId(workoutRoomMember1, 1L);
+        WorkoutRoomMember workoutRoomMember2 = WorkoutRoomMember.builder()
+                .member(member2)
+                .workoutRoom(room)
+                .build();
+        setId(workoutRoomMember2, 2L);
 
         WorkoutRecord workoutRecord = WorkoutRecord.builder()
+                .member(workoutRoomMember1.getMember())
                 .workoutDate(java.time.LocalDate.now())
                 .duration(30)
                 .build();
 
         Rest rest = Rest.builder()
+                .workoutRoomMember(workoutRoomMember1)
                 .reason("휴식")
                 .startDate(java.time.LocalDate.now())
                 .endDate(java.time.LocalDate.now().plusDays(1))
                 .build();
 
         given(workoutRoomRepository.findById(1L)).willReturn(Optional.of(room));
-        given(workoutRoomMemberRepository.findByWorkoutRoomOrderByJoinedAt(room))
-                .willReturn(List.of(workoutRoomMember));
-        given(workoutRecordRepository.findAllByMemberPerWorkoutDate(workoutRoomMember.getMember()))
+        given(workoutRoomMemberRepository.findByWorkoutRoomOrderByJoinedAtFetchMember(room))
+                .willReturn(List.of(workoutRoomMember1, workoutRoomMember2));
+        given(workoutRecordRepository.findByWorkoutRoomAndMemberInPerWorkoutDate(eq(room), any()))
                 .willReturn(List.of(workoutRecord));
-        given(restRepository.findAllByWorkoutRoomMember(workoutRoomMember))
+        given(restRepository.findAllByWorkoutRoomMemberIn(List.of(workoutRoomMember1, workoutRoomMember2)))
                 .willReturn(List.of(rest));
 
         WorkoutRoomDetailResponse result = adminWorkoutRoomService.getRoomDetail(1L);
 
         assertThat(result.getWorkoutRoomInfo().getName()).isEqualTo(room.getName());
-        assertThat(result.getWorkoutRoomMembers()).hasSize(1);
-        WorkoutRoomMemberResponse memberResponse = result.getWorkoutRoomMembers().getFirst();
-        List<WorkoutRecordResponse> workoutRecords = memberResponse.getWorkoutRecords();
-        List<RestResponse> restInfoList = memberResponse.getRestInfoList();
-
-        assertThat(workoutRecords).hasSize(1);
-        assertThat(workoutRecords.getFirst().getDuration()).isEqualTo(30);
-        assertThat(restInfoList).hasSize(1);
-        assertThat(restInfoList.getFirst().getReason()).isEqualTo("휴식");
+        assertThat(result.getWorkoutRoomMembers()).hasSize(2);
         assertThat(result.getCurrentMemberTodayWorkoutRecord()).isNull();
+
+        verify(workoutRoomMemberRepository, never()).findByWorkoutRoomOrderByJoinedAt(any());
+        verify(workoutRecordRepository, never()).findAllByMemberPerWorkoutDate(any());
+        verify(restRepository, never()).findAllByWorkoutRoomMember(any());
+        verify(workoutRecordRepository, times(1)).findByWorkoutRoomAndMemberInPerWorkoutDate(any(), any());
+        verify(restRepository, times(1)).findAllByWorkoutRoomMemberIn(any());
     }
 
     @Test
@@ -198,6 +235,43 @@ class AdminWorkoutRoomServiceTest {
 
         verify(workoutRoomRepository).findById(1L);
         verify(workoutRoomRepository).save(room);
+    }
+
+    @Test
+    @DisplayName("deleteRoom은 멤버별로 순회하지 않고 배치로 휴식 정보를 삭제한다")
+    void deleteRoom_deletesRestsInBatchNotPerMember() {
+        WorkoutRoom room = WorkoutRoom.builder()
+                .name("Room 1")
+                .minWeeklyWorkouts(3)
+                .penaltyPerMiss(1000L)
+                .maxMembers(10)
+                .entryCode("ENTRY01")
+                .owner(member())
+                .build();
+
+        WorkoutRoomMember workoutRoomMember1 = WorkoutRoomMember.builder()
+                .member(member())
+                .workoutRoom(room)
+                .build();
+        WorkoutRoomMember workoutRoomMember2 = WorkoutRoomMember.builder()
+                .member(member())
+                .workoutRoom(room)
+                .build();
+        List<WorkoutRoomMember> members = List.of(workoutRoomMember1, workoutRoomMember2);
+
+        given(workoutRoomRepository.findById(1L)).willReturn(Optional.of(room));
+        given(workoutRoomMemberRepository.findByWorkoutRoomOrderByJoinedAt(room)).willReturn(members);
+        given(penaltyRepository.findAllByWorkoutRoomId(room.getId())).willReturn(List.of());
+        given(penaltyAccountRepository.findByWorkoutRoom(room)).willReturn(Optional.empty());
+
+        adminWorkoutRoomService.deleteRoom(1L);
+
+        verify(restRepository, never()).findAllByWorkoutRoomMember(any());
+        verify(restRepository, times(1)).deleteAllByWorkoutRoomMemberIn(members);
+        verify(workoutRecordRepository).deleteByWorkoutRoom(room);
+        verify(chatMessageRepository).deleteByWorkoutRoom(room);
+        verify(workoutRoomMemberRepository).deleteAll(members);
+        verify(workoutRoomRepository).delete(room);
     }
 }
 

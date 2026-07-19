@@ -8,7 +8,6 @@ import com.behcm.domain.penalty.entity.Penalty;
 import com.behcm.domain.penalty.repository.PenaltyAccountRepository;
 import com.behcm.domain.penalty.repository.PenaltyRepository;
 import com.behcm.domain.rest.dto.RestResponse;
-import com.behcm.domain.rest.entity.Rest;
 import com.behcm.domain.rest.repository.RestRepository;
 import com.behcm.domain.workout.dto.SchedulePenaltyChangeRequest;
 import com.behcm.domain.workout.dto.WorkoutRecordResponse;
@@ -28,7 +27,10 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import java.util.Collections;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -55,16 +57,32 @@ public class AdminWorkoutRoomService {
         WorkoutRoom workoutRoom = workoutRoomRepository.findById(roomId)
                 .orElseThrow(() -> new CustomException(ErrorCode.WORKOUT_ROOM_NOT_FOUND));
 
-        List<WorkoutRoomMemberResponse> workoutRoomMembers = workoutRoomMemberRepository.findByWorkoutRoomOrderByJoinedAt(workoutRoom).stream()
-                .map(workoutRoomMember -> {
-                    List<WorkoutRecordResponse> workoutRecords = workoutRecordRepository.findAllByMemberPerWorkoutDate(workoutRoomMember.getMember()).stream()
-                            .map(WorkoutRecordResponse::from)
-                            .toList();
-                    List<RestResponse> restInfoList = restRepository.findAllByWorkoutRoomMember(workoutRoomMember).stream()
-                            .map(RestResponse::from)
-                            .toList();
-                    return WorkoutRoomMemberResponse.of(workoutRoomMember, workoutRecords, restInfoList);
-                })
+        List<WorkoutRoomMember> members = workoutRoomMemberRepository.findByWorkoutRoomOrderByJoinedAtFetchMember(workoutRoom);
+
+        final Map<Long, List<RestResponse>> restByWrmId;
+        final Map<Long, List<WorkoutRecordResponse>> recordsByMemberId;
+        if (!members.isEmpty()) {
+            List<Long> memberIds = members.stream()
+                    .map(wrm -> wrm.getMember().getId())
+                    .toList();
+            restByWrmId = restRepository.findAllByWorkoutRoomMemberIn(members).stream()
+                    .collect(Collectors.groupingBy(r -> r.getWorkoutRoomMember().getId()))
+                    .entrySet().stream()
+                    .collect(Collectors.toMap(Map.Entry::getKey, e -> e.getValue().stream().map(RestResponse::from).toList()));
+            recordsByMemberId = workoutRecordRepository.findByWorkoutRoomAndMemberInPerWorkoutDate(workoutRoom, memberIds).stream()
+                    .collect(Collectors.groupingBy(wr -> wr.getMember().getId()))
+                    .entrySet().stream()
+                    .collect(Collectors.toMap(Map.Entry::getKey, e -> e.getValue().stream().map(WorkoutRecordResponse::from).toList()));
+        } else {
+            restByWrmId = Collections.emptyMap();
+            recordsByMemberId = Collections.emptyMap();
+        }
+
+        List<WorkoutRoomMemberResponse> workoutRoomMembers = members.stream()
+                .map(workoutRoomMember -> WorkoutRoomMemberResponse.of(
+                        workoutRoomMember,
+                        recordsByMemberId.getOrDefault(workoutRoomMember.getMember().getId(), List.of()),
+                        restByWrmId.getOrDefault(workoutRoomMember.getId(), List.of())))
                 .toList();
 
         return new WorkoutRoomDetailResponse(WorkoutRoomResponse.from(workoutRoom), workoutRoomMembers, null);
@@ -102,10 +120,7 @@ public class AdminWorkoutRoomService {
                 .orElseThrow(() -> new CustomException(ErrorCode.WORKOUT_ROOM_NOT_FOUND));
 
         List<WorkoutRoomMember> members = workoutRoomMemberRepository.findByWorkoutRoomOrderByJoinedAt(workoutRoom);
-        for (WorkoutRoomMember wrm : members) {
-            List<Rest> rests = restRepository.findAllByWorkoutRoomMember(wrm);
-            restRepository.deleteAll(rests);
-        }
+        restRepository.deleteAllByWorkoutRoomMemberIn(members);
 
         workoutRecordRepository.deleteByWorkoutRoom(workoutRoom);
 

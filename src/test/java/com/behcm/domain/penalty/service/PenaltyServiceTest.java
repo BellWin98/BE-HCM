@@ -75,13 +75,14 @@ class PenaltyServiceTest {
         WorkoutRoomMember member = WorkoutRoomMember.builder().member(member()).workoutRoom(disabledRoom).build();
         disabledRoom.getWorkoutRoomMembers().add(member);
 
-        given(workoutRoomRepository.findByIsActiveTrue()).willReturn(List.of(disabledRoom));
+        given(workoutRoomRepository.findByIsActiveTrueAndPenaltyEnabledTrueFetchMembers()).willReturn(List.of(disabledRoom));
 
         penaltyService.calculateAndAssignPenalties();
 
         // penaltyEnabled=false 가드가 먼저 걸려 운동 기록/휴식 조회 자체가 일어나지 않아야 한다.
         verify(workoutRecordRepository, never()).countByWorkoutRoomAndWorkoutDateBetweenGroupByMember(any(), any(), any());
         verify(penaltyRepository, never()).save(any(Penalty.class));
+        verify(workoutRoomRepository, never()).findByIsActiveTrue();
     }
 
     @Test
@@ -91,7 +92,7 @@ class PenaltyServiceTest {
         WorkoutRoomMember member = WorkoutRoomMember.builder().member(member()).workoutRoom(enabledRoom).build();
         enabledRoom.getWorkoutRoomMembers().add(member);
 
-        given(workoutRoomRepository.findByIsActiveTrue()).willReturn(List.of(enabledRoom));
+        given(workoutRoomRepository.findByIsActiveTrueAndPenaltyEnabledTrueFetchMembers()).willReturn(List.of(enabledRoom));
         // 주 3회 목표인데 실제로는 기록이 없어(빈 리스트) 3회 모두 미달 처리됨
         given(workoutRecordRepository.countByWorkoutRoomAndWorkoutDateBetweenGroupByMember(any(), any(), any()))
                 .willReturn(List.of());
@@ -103,5 +104,6 @@ class PenaltyServiceTest {
         verify(penaltyRepository).save(penaltyCaptor.capture());
         assertThat(penaltyCaptor.getValue().getPenaltyAmount()).isEqualTo(3 * 5000L);
         assertThat(member.getTotalPenalty()).isEqualTo(3 * 5000L);
+        verify(workoutRoomRepository, never()).findByIsActiveTrue();
     }
 }

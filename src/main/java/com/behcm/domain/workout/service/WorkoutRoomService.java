@@ -71,7 +71,7 @@ public class WorkoutRoomService {
 
     @Transactional(readOnly = true)
     public List<WorkoutRoomResponse> getJoinedWorkoutRooms(Member member) {
-        return workoutRoomMemberRepository.findByMember(member).stream()
+        return workoutRoomMemberRepository.findByMemberFetchWorkoutRoomAndOwner(member).stream()
                 .map(workoutRoomMember -> WorkoutRoomResponse.from(workoutRoomMember.getWorkoutRoom()))
                 .toList();
     }

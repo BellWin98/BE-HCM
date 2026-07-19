@@ -17,10 +17,18 @@ import com.behcm.domain.workout.entity.WorkoutRoom;
 @Repository
 public interface WorkoutRoomRepository extends JpaRepository<WorkoutRoom, Long> {
 
-    @Query("SELECT wr FROM WorkoutRoom wr WHERE wr.isActive = true")
+    @Query("SELECT wr FROM WorkoutRoom wr JOIN FETCH wr.owner WHERE wr.isActive = true")
     List<WorkoutRoom> findActiveRooms();
 
     List<WorkoutRoom> findByIsActiveTrue();
+
+    @Query("""
+            SELECT DISTINCT wr FROM WorkoutRoom wr
+            JOIN FETCH wr.workoutRoomMembers wrm
+            JOIN FETCH wrm.member
+            WHERE wr.isActive = true AND wr.penaltyEnabled = true
+            """)
+    List<WorkoutRoom> findByIsActiveTrueAndPenaltyEnabledTrueFetchMembers();
 
     boolean existsByEntryCode(String entryCode);
 
@@ -28,8 +36,19 @@ public interface WorkoutRoomRepository extends JpaRepository<WorkoutRoom, Long> 
 
     Optional<WorkoutRoom> findByIdAndIsActiveTrue(Long roomId);
 
-    @Query("""
+    @Query(value = """
             SELECT wr
+            FROM WorkoutRoom wr
+            JOIN FETCH wr.owner o
+            WHERE (:active IS NULL OR wr.isActive = :active)
+            AND (
+                :query IS NULL
+                OR LOWER(wr.name) LIKE LOWER(CONCAT('%', :query, '%'))
+                OR LOWER(o.nickname) LIKE LOWER(CONCAT('%', :query, '%'))
+            )
+            """,
+            countQuery = """
+            SELECT COUNT(wr)
             FROM WorkoutRoom wr
             JOIN wr.owner o
             WHERE (:active IS NULL OR wr.isActive = :active)

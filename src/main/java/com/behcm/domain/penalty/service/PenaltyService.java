@@ -1,5 +1,6 @@
 package com.behcm.domain.penalty.service;
 
+import com.behcm.domain.notification.service.NotificationFacade;
 import com.behcm.domain.penalty.dto.*;
 import com.behcm.domain.penalty.entity.PenaltyAccount;
 import com.behcm.domain.penalty.entity.Penalty;
@@ -31,11 +32,14 @@ import java.util.stream.Collectors;
 @Transactional(readOnly = true)
 public class PenaltyService {
 
+    private static final String PENALTY_ASSIGNED_TYPE = "PENALTY_ASSIGNED";
+
     private final WorkoutRoomRepository workoutRoomRepository;
     private final WorkoutRecordRepository workoutRecordRepository;
     private final RestRepository restRepository;
     private final PenaltyAccountRepository penaltyAccountRepository;
     private final PenaltyRepository penaltyRepository;
+    private final NotificationFacade notificationFacade;
 
     @Transactional
     public void calculateAndAssignPenalties() {
@@ -161,6 +165,8 @@ public class PenaltyService {
 
                 member.updateTotalPenalty(member.getTotalPenalty() + penaltyAmount);
 
+                notifyPenaltyAssigned(member, workoutRoom, penalty);
+
                 log.info("Penalty assigned to {} in room {}: {}원 (Required: {}, Actual: {})",
                         member.getNickname(), workoutRoom.getName(), penaltyAmount, requiredWorkouts, actualWorkouts);
             } else {
@@ -168,6 +174,14 @@ public class PenaltyService {
                         member.getNickname(), workoutRoom.getName(), requiredWorkouts, actualWorkouts);
             }
         }
+    }
+
+    private void notifyPenaltyAssigned(WorkoutRoomMember member, WorkoutRoom workoutRoom, Penalty penalty) {
+        String title = "💸 벌금이 부과됐어요";
+        String body = String.format("%s에서 이번 주 목표(%d회)를 채우지 못해 벌금 %,d원이 부과됐어요. (인증 %d회)",
+                workoutRoom.getName(), penalty.getRequiredWorkouts(), penalty.getPenaltyAmount(), penalty.getActualWorkouts());
+
+        notificationFacade.notifyMember(member.getMember(), title, body, PENALTY_ASSIGNED_TYPE, "");
     }
 
     private boolean isMemberOnBreak(WorkoutRoomMember member, LocalDate weekStart, LocalDate weekEnd,

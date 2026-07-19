@@ -2,6 +2,7 @@ package com.behcm.domain.penalty.service;
 
 import com.behcm.domain.member.entity.Member;
 import com.behcm.domain.member.entity.MemberRole;
+import com.behcm.domain.notification.service.NotificationFacade;
 import com.behcm.domain.penalty.entity.Penalty;
 import com.behcm.domain.penalty.repository.PenaltyAccountRepository;
 import com.behcm.domain.penalty.repository.PenaltyRepository;
@@ -22,6 +23,7 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -44,8 +46,21 @@ class PenaltyServiceTest {
     @Mock
     private PenaltyRepository penaltyRepository;
 
+    @Mock
+    private NotificationFacade notificationFacade;
+
     @InjectMocks
     private PenaltyService penaltyService;
+
+    private void setId(Object entity, long id) {
+        try {
+            java.lang.reflect.Field field = entity.getClass().getDeclaredField("id");
+            field.setAccessible(true);
+            field.set(entity, id);
+        } catch (ReflectiveOperationException e) {
+            throw new RuntimeException(e);
+        }
+    }
 
     private Member member() {
         return Member.builder()
@@ -105,5 +120,42 @@ class PenaltyServiceTest {
         assertThat(penaltyCaptor.getValue().getPenaltyAmount()).isEqualTo(3 * 5000L);
         assertThat(member.getTotalPenalty()).isEqualTo(3 * 5000L);
         verify(workoutRoomRepository, never()).findByIsActiveTrue();
+    }
+
+    @Test
+    @DisplayName("벌금이 부과되면 해당 멤버에게 즉시 알림을 보낸다")
+    void calculateAndAssignPenalties_notifiesMemberImmediately() {
+        WorkoutRoom enabledRoom = room(true, 5000L);
+        WorkoutRoomMember member = WorkoutRoomMember.builder().member(member()).workoutRoom(enabledRoom).build();
+        enabledRoom.getWorkoutRoomMembers().add(member);
+
+        given(workoutRoomRepository.findByIsActiveTrueAndPenaltyEnabledTrueFetchMembers()).willReturn(List.of(enabledRoom));
+        given(workoutRecordRepository.countByWorkoutRoomAndWorkoutDateBetweenGroupByMember(any(), any(), any()))
+                .willReturn(List.of());
+        given(restRepository.findAllByWorkoutRoomMemberIn(any())).willReturn(List.of());
+
+        penaltyService.calculateAndAssignPenalties();
+
+        verify(notificationFacade).notifyMember(
+                eq(member.getMember()), any(), any(), eq("PENALTY_ASSIGNED"), any());
+    }
+
+    @Test
+    @DisplayName("목표를 채운 멤버에게는 벌금 알림을 보내지 않는다")
+    void calculateAndAssignPenalties_meetsGoal_doesNotNotify() {
+        WorkoutRoom enabledRoom = room(true, 5000L);
+        Member m = member();
+        setId(m, 1L);
+        WorkoutRoomMember member = WorkoutRoomMember.builder().member(m).workoutRoom(enabledRoom).build();
+        enabledRoom.getWorkoutRoomMembers().add(member);
+
+        given(workoutRoomRepository.findByIsActiveTrueAndPenaltyEnabledTrueFetchMembers()).willReturn(List.of(enabledRoom));
+        given(workoutRecordRepository.countByWorkoutRoomAndWorkoutDateBetweenGroupByMember(any(), any(), any()))
+                .willReturn(List.<Object[]>of(new Object[]{1L, 3L}));
+        given(restRepository.findAllByWorkoutRoomMemberIn(any())).willReturn(List.of());
+
+        penaltyService.calculateAndAssignPenalties();
+
+        verify(notificationFacade, never()).notifyMember(any(), any(), any(), any(), any());
     }
 }

@@ -5,6 +5,7 @@ import com.behcm.domain.member.entity.Member;
 import com.behcm.domain.workout.entity.WorkoutRoom;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Slice;
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
@@ -14,15 +15,19 @@ import java.util.List;
 public interface ChatMessageRepository extends JpaRepository<ChatMessage, Long> {
     /* Slice를 사용해 다음 페이지 존재 여부를 효율적으로 확인 */
     // 커서 ID를 기준으로 이전 메시지들을 Slice로 내림차순(최신순)으로 조회
+    @EntityGraph(attributePaths = "sender")
     Slice<ChatMessage> findByWorkoutRoomAndIdLessThanOrderByIdDesc(WorkoutRoom workoutRoom, Long id, Pageable pageable);
 
     // 특정 채팅방의 최근 메시지들을 내림차순(최신순)으로 조회
+    @EntityGraph(attributePaths = "sender")
     List<ChatMessage> findByWorkoutRoomOrderByIdDesc(WorkoutRoom workoutRoom, Pageable pageable);
 
     // 마지막으로 읽은 메시지 이후의 모든 새 메시지를 조회
+    @EntityGraph(attributePaths = "sender")
     List<ChatMessage> findByWorkoutRoomAndIdGreaterThanOrderByIdAsc(WorkoutRoom workoutRoom, Long id);
 
     // 특정 채팅방의 가장 최근 메시지 1개를 조회
+    @EntityGraph(attributePaths = "sender")
     ChatMessage findFirstByWorkoutRoomOrderByIdDesc(WorkoutRoom workoutRoom);
 
     void deleteBySender(Member sender);

@@ -5,6 +5,7 @@ import com.behcm.domain.member.entity.MemberRole;
 import com.behcm.domain.notification.repository.FcmTokenRepository;
 import com.behcm.domain.workout.entity.WorkoutRoom;
 import com.behcm.domain.workout.entity.WorkoutRoomMember;
+import com.behcm.domain.workout.repository.WorkoutRoomMemberRepository;
 import com.behcm.domain.workout.repository.WorkoutRoomRepository;
 import com.behcm.global.exception.CustomException;
 import com.behcm.global.exception.ErrorCode;
@@ -32,6 +33,9 @@ class NotificationFacadeTest {
 
     @Mock
     private WorkoutRoomRepository workoutRoomRepository;
+
+    @Mock
+    private WorkoutRoomMemberRepository workoutRoomMemberRepository;
 
     @Mock
     private FcmTokenRepository fcmTokenRepository;
@@ -117,14 +121,15 @@ class NotificationFacadeTest {
         WorkoutRoom room = room(1L, sender);
         WorkoutRoomMember senderWrm = WorkoutRoomMember.builder().member(sender).workoutRoom(room).build();
         WorkoutRoomMember otherWrm = WorkoutRoomMember.builder().member(other).workoutRoom(room).build();
-        room.getWorkoutRoomMembers().add(senderWrm);
-        room.getWorkoutRoomMembers().add(otherWrm);
         given(workoutRoomRepository.findByIdAndIsActiveTrue(1L)).willReturn(Optional.of(room));
+        given(workoutRoomMemberRepository.findByWorkoutRoomOrderByJoinedAtFetchMember(room))
+                .willReturn(List.of(senderWrm, otherWrm));
         given(fcmTokenRepository.findFcmTokensByMembers(List.of(other))).willReturn(List.of("other-token"));
 
         notificationFacade.notifyRoomMembers(1L, sender, "title", "body", "CHAT", "/path");
 
         verify(fcmService).sendGroupNotification(eq(1L), eq(List.of("other-token")), eq("title"), eq("body"), eq("CHAT-1"), eq("/path"));
         verify(fcmTokenRepository).findFcmTokensByMembers(List.of(other));
+        verify(workoutRoomMemberRepository).findByWorkoutRoomOrderByJoinedAtFetchMember(room);
     }
 }

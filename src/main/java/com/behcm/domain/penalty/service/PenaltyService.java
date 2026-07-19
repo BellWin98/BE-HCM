@@ -47,7 +47,7 @@ public class PenaltyService {
 
         log.info("Calculating penalties for week: {} to {}", lastWeekStart, lastWeekEnd);
 
-        List<WorkoutRoom> activeWorkoutRooms = workoutRoomRepository.findByIsActiveTrue();
+        List<WorkoutRoom> activeWorkoutRooms = workoutRoomRepository.findByIsActiveTrueAndPenaltyEnabledTrueFetchMembers();
 
         for (WorkoutRoom workoutRoom : activeWorkoutRooms) {
             processWorkoutRoomPenalties(workoutRoom, lastWeekStart, lastWeekEnd);

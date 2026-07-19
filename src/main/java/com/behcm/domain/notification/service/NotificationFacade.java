@@ -4,6 +4,7 @@ import com.behcm.domain.member.entity.Member;
 import com.behcm.domain.notification.repository.FcmTokenRepository;
 import com.behcm.domain.workout.entity.WorkoutRoom;
 import com.behcm.domain.workout.entity.WorkoutRoomMember;
+import com.behcm.domain.workout.repository.WorkoutRoomMemberRepository;
 import com.behcm.domain.workout.repository.WorkoutRoomRepository;
 import com.behcm.global.exception.CustomException;
 import com.behcm.global.exception.ErrorCode;
@@ -21,6 +22,7 @@ import java.util.List;
 public class NotificationFacade {
 
     private final WorkoutRoomRepository workoutRoomRepository;
+    private final WorkoutRoomMemberRepository workoutRoomMemberRepository;
     private final FcmTokenRepository fcmTokenRepository;
     private final FcmService fcmService;
 
@@ -38,7 +40,7 @@ public class NotificationFacade {
         WorkoutRoom workoutRoom = workoutRoomRepository.findByIdAndIsActiveTrue(roomId)
                 .orElseThrow(() -> new CustomException(ErrorCode.WORKOUT_ROOM_NOT_FOUND));
 
-        List<Member> targetMembers = workoutRoom.getWorkoutRoomMembers().stream()
+        List<Member> targetMembers = workoutRoomMemberRepository.findByWorkoutRoomOrderByJoinedAtFetchMember(workoutRoom).stream()
                 .map(WorkoutRoomMember::getMember)
                 .filter(m -> !m.getId().equals(member.getId()))
                 .toList();

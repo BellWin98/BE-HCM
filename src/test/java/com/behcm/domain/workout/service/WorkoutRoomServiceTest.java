@@ -6,6 +6,7 @@ import com.behcm.domain.rest.repository.RestRepository;
 import com.behcm.domain.workout.dto.SchedulePenaltyChangeRequest;
 import com.behcm.domain.workout.dto.WorkoutRoomResponse;
 import com.behcm.domain.workout.entity.WorkoutRoom;
+import com.behcm.domain.workout.entity.WorkoutRoomMember;
 import com.behcm.domain.workout.repository.WorkoutRecordRepository;
 import com.behcm.domain.workout.repository.WorkoutRoomMemberRepository;
 import com.behcm.domain.workout.repository.WorkoutRoomRepository;
@@ -28,6 +29,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 
 @ExtendWith(MockitoExtension.class)
 class WorkoutRoomServiceTest {
@@ -183,5 +186,36 @@ class WorkoutRoomServiceTest {
 
         assertThat(dueRoom.getPenaltyEnabled()).isFalse();
         assertThat(dueRoom.getPendingPenaltyEnabled()).isNull();
+    }
+
+    @Test
+    @DisplayName("getWorkoutRooms는 활성 운동방 목록을 owner가 fetch-join된 상태로 응답으로 변환한다")
+    void getWorkoutRooms_mapsActiveRoomsToResponses() {
+        Member owner = member(1L);
+        WorkoutRoom room = room(owner, true, 5000L);
+        given(workoutRoomRepository.findActiveRooms()).willReturn(List.of(room));
+
+        List<WorkoutRoomResponse> result = workoutRoomService.getWorkoutRooms();
+
+        assertThat(result).hasSize(1);
+        assertThat(result.getFirst().getOwnerNickname()).isEqualTo(owner.getNickname());
+    }
+
+    @Test
+    @DisplayName("getJoinedWorkoutRooms는 fetch-join 배치 쿼리로 가입한 운동방 목록을 응답으로 변환한다")
+    void getJoinedWorkoutRooms_returnsMappedResponses() {
+        Member owner = member(1L);
+        Member member = member(2L);
+        WorkoutRoom room = room(owner, true, 5000L);
+        WorkoutRoomMember workoutRoomMember = WorkoutRoomMember.builder().member(member).workoutRoom(room).build();
+
+        given(workoutRoomMemberRepository.findByMemberFetchWorkoutRoomAndOwner(member))
+                .willReturn(List.of(workoutRoomMember));
+
+        List<WorkoutRoomResponse> result = workoutRoomService.getJoinedWorkoutRooms(member);
+
+        assertThat(result).hasSize(1);
+        assertThat(result.getFirst().getOwnerNickname()).isEqualTo(owner.getNickname());
+        verify(workoutRoomMemberRepository, never()).findByMember(any());
     }
 }

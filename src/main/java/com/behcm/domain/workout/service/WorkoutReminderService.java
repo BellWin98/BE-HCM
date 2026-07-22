@@ -46,15 +46,18 @@ public class WorkoutReminderService {
         int authenticatedCount = totalMembers - pendingMembers.size();
 
         for (WorkoutRoomMember pendingMember : pendingMembers) {
-            sendReminder(pendingMember, workoutRoom, authenticatedCount, totalMembers);
+            sendReminder(pendingMember, workoutRoom, authenticatedCount);
         }
     }
 
-    private void sendReminder(WorkoutRoomMember pendingMember, WorkoutRoom workoutRoom,
-                               int authenticatedCount, int totalMembers) {
+    private void sendReminder(WorkoutRoomMember pendingMember, WorkoutRoom workoutRoom, int authenticatedCount) {
         String title = "⏰ 오늘 운동 인증 잊지 마세요";
-        String body = String.format("%s에서 %s님 아직 인증 전이에요. 벌써 %d/%d명이 인증했어요!",
-                workoutRoom.getName(), pendingMember.getNickname(), authenticatedCount, totalMembers);
+        String body;
+        if (authenticatedCount == 0) {
+            body = String.format("%s에서 오늘 첫 운동 인증의 주인공이 되어보세요!", workoutRoom.getName());
+        } else {
+            body = String.format("%s에서 오늘 %d명이 인증했어요!", workoutRoom.getName(), authenticatedCount);
+        }
 
         notificationFacade.notifyMember(pendingMember.getMember(), title, body, UNAUTHENTICATED_REMINDER_TYPE, "");
     }

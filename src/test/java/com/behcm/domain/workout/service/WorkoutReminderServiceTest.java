@@ -88,4 +88,29 @@ class WorkoutReminderServiceTest {
                 eq("")
         );
     }
+
+    @Test
+    @DisplayName("오늘 아무도 인증하지 않았으면 '0명 인증' 대신 첫 인증 독려 문구를 보낸다")
+    void remindUnauthenticatedMembers_noOneAuthenticated_sendsFirstAuthenticationEncouragement() {
+        WorkoutRoom workoutRoom = room("아침 러닝방");
+        Member pendingMember1 = member("pending1");
+        Member pendingMember2 = member("pending2");
+        WorkoutRoomMember pendingWrm1 = WorkoutRoomMember.builder().member(pendingMember1).workoutRoom(workoutRoom).build();
+        WorkoutRoomMember pendingWrm2 = WorkoutRoomMember.builder().member(pendingMember2).workoutRoom(workoutRoom).build();
+        workoutRoom.getWorkoutRoomMembers().add(pendingWrm1);
+        workoutRoom.getWorkoutRoomMembers().add(pendingWrm2);
+
+        given(workoutRoomMemberRepository.findMembersWithoutWorkoutRecordOn(any(LocalDate.class)))
+                .willReturn(List.of(pendingWrm1, pendingWrm2));
+
+        workoutReminderService.remindUnauthenticatedMembers();
+
+        verify(notificationFacade).notifyMember(
+                eq(pendingMember1),
+                anyString(),
+                eq("아침 러닝방에서 pending1님 아직 인증 전이에요. 오늘 첫 인증의 주인공이 되어보세요!"),
+                eq("UNAUTHENTICATED_REMINDER"),
+                eq("")
+        );
+    }
 }

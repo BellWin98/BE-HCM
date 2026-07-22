@@ -83,7 +83,7 @@ class WorkoutReminderServiceTest {
         verify(notificationFacade).notifyMember(
                 eq(pendingMember),
                 anyString(),
-                eq("아침 러닝방에서 pending님 아직 인증 전이에요. 벌써 1/2명이 인증했어요!"),
+                eq("아침 러닝방에서 오늘 1명이 인증했어요!"),
                 eq("UNAUTHENTICATED_REMINDER"),
                 eq("")
         );
@@ -108,7 +108,7 @@ class WorkoutReminderServiceTest {
         verify(notificationFacade).notifyMember(
                 eq(pendingMember1),
                 anyString(),
-                eq("아침 러닝방에서 pending1님 아직 인증 전이에요. 오늘 첫 인증의 주인공이 되어보세요!"),
+                eq("아침 러닝방에서 오늘 첫 운동 인증의 주인공이 되어보세요!"),
                 eq("UNAUTHENTICATED_REMINDER"),
                 eq("")
         );

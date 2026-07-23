@@ -23,7 +23,7 @@
 | 언어 | ![Java](https://img.shields.io/badge/Java-25-007396?logo=openjdk&logoColor=white) (Gradle Toolchain으로 고정, 런타임 이미지는 Amazon Corretto 25 alpine) |
 | 프레임워크 | ![Spring Boot](https://img.shields.io/badge/Spring%20Boot-4.1.0-6DB33F?logo=springboot&logoColor=white) |
 | 빌드 도구 | ![Gradle](https://img.shields.io/badge/Gradle-9.6.1-02303A?logo=gradle&logoColor=white) (Groovy DSL, Gradle Wrapper 포함) |
-| 데이터 접근 | Spring Data JPA(Hibernate) — `default_batch_fetch_size: 500`, `open-in-view: false`, `ddl-auto: update` |
+| 데이터 접근 | Spring Data JPA(Hibernate) — `default_batch_fetch_size: 500`, `open-in-view: false`, `ddl-auto: validate` (스키마는 Flyway가 단독 관리) |
 | 데이터베이스 | ![MySQL](https://img.shields.io/badge/MySQL-8.4-4479A1?logo=mysql&logoColor=white) (dev/prod, `mysql-connector-j`), 로컬은 `mariadb-java-client`로 접속 |
 | 캐시 | ![Redis](https://img.shields.io/badge/Redis-7-DC382D?logo=redis&logoColor=white)(`spring-boot-starter-data-redis`) + Spring Cache + Caffeine |
 | 인증/보안 | Spring Security(Stateless JWT), `io.jsonwebtoken:jjwt` 0.11.5, OAuth2 Client(Google / Kakao / Naver 소셜 로그인) |
@@ -127,7 +127,7 @@ export FCM_KEY_PATH=[이곳에 정보 입력]                  # 기본값: /app
 | `spring.profiles.active` | 사용할 프로필 (`local` / `dev` / `prod`) |
 | `spring.profiles.include: secret` | `application-secret.yml`(암호화된 값) 자동 포함 |
 | `spring.datasource.*` | DB 접속 정보 — local: `jdbc:mariadb://localhost:3306/hcm?...`, `root`/`1234`; dev/prod는 암호화됨 |
-| `spring.jpa.hibernate.ddl-auto` | local/dev/prod 모두 `update` |
+| `spring.jpa.hibernate.ddl-auto` | local/dev/prod 모두 `validate` — 스키마 변경은 Flyway가 담당하고 Hibernate는 검증만 한다 |
 | `spring.data.redis.*` | Redis 접속 정보 — local: `localhost:6379`; dev/prod는 암호화(호스트/포트/비밀번호) |
 | `spring.mail.*` | 이메일 인증 발송용 SMTP 설정 (host/username/password 모두 암호화) |
 | `spring.security.oauth2.client.registration.{google,kakao,naver}.*` | 소셜 로그인 클라이언트 ID/Secret (암호화) |

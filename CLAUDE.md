@@ -47,6 +47,34 @@ BE-HCM("헬창모임")은 그룹 운동 습관 관리 앱을 위한 Spring Boot 
   해당 GitHub Environment(`production` / `development`)의 시크릿을 사용해 EC2에 SSH로 접속해
   `docker-compose up -d`를 실행합니다.
 
+## DB 스키마 변경 (Flyway)
+
+스키마는 Flyway가 단독으로 관리합니다. 모든 프로필에서 `ddl-auto: validate`이므로 **Hibernate는 스키마를
+절대 변경하지 않고 검증만 합니다** — 엔티티에 컬럼을 추가하고 마이그레이션을 빠뜨리면 부팅이 실패합니다.
+
+- 마이그레이션 파일 위치: `src/main/resources/db/migration/V{N}__{설명}.sql`
+- `V1__baseline.sql`은 Flyway 도입 시점의 기준 스키마입니다. 기존 dev/prod DB는
+  `baseline-on-migrate: true` / `baseline-version: 1` 설정에 의해 V1을 건너뛰고 V2부터 적용받습니다.
+  **V1을 포함해 이미 적용된 마이그레이션 파일은 절대 수정하지 마세요** — 체크섬이 어긋나 부팅이 실패합니다.
+  변경이 필요하면 항상 새 버전 파일을 추가합니다.
+- 스키마를 바꿀 때는 엔티티와 마이그레이션을 **함께** 수정하고, 인덱스/제약조건은 이름을 양쪽에서 동일하게
+  유지합니다(`@Table(indexes = ..., uniqueConstraints = ...)`).
+- 운영 DB에 대한 DDL은 온라인으로 처리되도록 `ALGORITHM = INPLACE LOCK = NONE`을 명시합니다.
+  (`CREATE INDEX`에서는 두 옵션 사이에 쉼표를 쓰지 않고, `ALTER TABLE`에서는 절 구분자로 쉼표를 씁니다.)
+- UNIQUE 제약을 새로 추가하는 마이그레이션은 기존 데이터에 중복이 있으면 실패해 앱이 부팅되지 않습니다.
+  배포 전에 중복 검사 쿼리를 먼저 돌리세요(해당 마이그레이션 파일 상단 주석에 쿼리를 적어 둡니다).
+- **파일 하나에 DDL 한 개**를 원칙으로 합니다. MySQL은 DDL을 롤백하지 않으므로, 여러 DDL을 한 파일에
+  묶으면 중간에 실패했을 때 부분 적용 상태가 남아 재실행이 불가능해집니다(재실행 시 앞부분이
+  "duplicate key name" 등으로 실패). 실제로 V4가 이 문제를 겪어 V4/V5로 분리했습니다.
+- 마이그레이션이 실패한 채로 남으면 이후 모든 마이그레이션이 막힙니다. 실패 기록을 지우려면
+  `flyway repair`(또는 `DELETE FROM flyway_schema_history WHERE success = 0`)로 정리한 뒤,
+  **DB를 해당 마이그레이션 적용 이전 상태로 되돌리고** 다시 실행해야 합니다.
+- **FK 컬럼을 커버하는 인덱스를 새로 추가할 때 `DROP INDEX`로 기존 FK 인덱스를 지우려 하지 마세요.**
+  InnoDB가 FK 제약을 위해 자동 생성한 인덱스는 이를 대체할 인덱스가 생기는 순간 MySQL이 스스로
+  제거하므로, `DROP INDEX`는 "그런 인덱스 없음"으로 실패합니다. 반대로 V1 baseline으로 만들어진
+  신규 DB에는 그 인덱스가 명시적으로 존재해 남아 있습니다 — 즉 같은 DDL이 환경에 따라 다르게
+  동작합니다. 중복 인덱스는 그냥 두는 편이 안전합니다.
+
 ## 아키텍처
 
 ### 패키지 구조 (레이어 우선이 아닌 도메인 주도 구조)

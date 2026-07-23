@@ -40,6 +40,10 @@ dependencies {
     implementation 'org.apache.httpcomponents.client5:httpclient5'
     implementation 'org.springframework.boot:spring-boot-starter-mail'
 
+    // DB 마이그레이션 (flyway-mysql은 Flyway 10+에서 MySQL 지원에 별도로 필요)
+    implementation 'org.flywaydb:flyway-core'
+    implementation 'org.flywaydb:flyway-mysql'
+
     // FCM
     implementation 'com.google.firebase:firebase-admin:9.2.0'
 

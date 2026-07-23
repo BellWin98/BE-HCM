@@ -16,7 +16,8 @@ spring:
         format_sql: false
         highlight_sql: false
     hibernate:
-      ddl-auto: update
+      # 스키마 변경은 Flyway(db/migration)가 담당한다. Hibernate 는 검증만 한다.
+      ddl-auto: validate
     show-sql: false
   data:
     redis:

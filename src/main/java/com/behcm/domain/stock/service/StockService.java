@@ -4,7 +4,7 @@ import com.behcm.domain.stock.dto.*;
 import com.behcm.domain.stock.dto.TradingProfitLossResponse.TradingProfitLossDto;
 import com.behcm.global.config.stock.KoreaInvestmentClient;
 import com.behcm.global.config.stock.KoreaInvestmentProperties;
-import com.fasterxml.jackson.databind.JsonNode;
+import tools.jackson.databind.JsonNode;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -112,12 +112,12 @@ public class StockService {
             JsonNode output1 = response.get("output1");
             if (output1 != null && output1.isArray()) {
                 for (JsonNode trade : output1) {
-                    String stockCode = trade.path("pdno").asText();
-                    String stockName = trade.path("prdt_name").asText();
-                    String tradeDate = formatTradeDate(trade.path("trad_dt").asText());
+                    String stockCode = trade.path("pdno").asString();
+                    String stockName = trade.path("prdt_name").asString();
+                    String tradeDate = formatTradeDate(trade.path("trad_dt").asString());
                     
                     // 매수 내역 처리 (buy_qty가 0이 아니면 매수 DTO 생성)
-                    String buyQty = trade.path("buy_qty").asText("0");
+                    String buyQty = trade.path("buy_qty").asString("0");
                     if (!buyQty.equals("0")) {
                         TradingProfitLossDto buyDto = TradingProfitLossDto.builder()
                                 .stockCode(stockCode)
@@ -125,18 +125,18 @@ public class StockService {
                                 .tradeDate(tradeDate)
                                 .tradeType("BUY")
                                 .quantity(Integer.parseInt(buyQty))
-                                .price(new BigDecimal(trade.path("pchs_unpr").asText("0")))
-                                .amount(new BigDecimal(trade.path("buy_amt").asText("0")))
+                                .price(new BigDecimal(trade.path("pchs_unpr").asString("0")))
+                                .amount(new BigDecimal(trade.path("buy_amt").asString("0")))
                                 .profitLoss(BigDecimal.ZERO) // 매수 시 손익 없음
                                 .profitLossRate(BigDecimal.ZERO) // 매수 시 손익률 없음
-                                .fee(new BigDecimal(trade.path("fee").asText("0")))
+                                .fee(new BigDecimal(trade.path("fee").asString("0")))
                                 .tax(BigDecimal.ZERO) // 매수 시 세금 없음
                                 .build();
                         allTrades.add(buyDto);
                     }
                     
                     // 매도 내역 처리 (sll_qty가 0이 아니면 매도 DTO 생성)
-                    String sllQty = trade.path("sll_qty").asText("0");
+                    String sllQty = trade.path("sll_qty").asString("0");
                     if (!sllQty.equals("0")) {
                         TradingProfitLossDto sellDto = TradingProfitLossDto.builder()
                                 .stockCode(stockCode)
@@ -144,20 +144,20 @@ public class StockService {
                                 .tradeDate(tradeDate)
                                 .tradeType("SELL")
                                 .quantity(Integer.parseInt(sllQty))
-                                .price(new BigDecimal(trade.path("sll_pric").asText("0")))
-                                .amount(new BigDecimal(trade.path("sll_amt").asText("0")))
-                                .profitLoss(new BigDecimal(trade.path("rlzt_pfls").asText("0")))
-                                .profitLossRate(new BigDecimal(trade.path("pfls_rt").asText("0")))
-                                .fee(new BigDecimal(trade.path("fee").asText("0")))
-                                .tax(new BigDecimal(trade.path("tl_tax").asText("0"))) // null safe 처리
+                                .price(new BigDecimal(trade.path("sll_pric").asString("0")))
+                                .amount(new BigDecimal(trade.path("sll_amt").asString("0")))
+                                .profitLoss(new BigDecimal(trade.path("rlzt_pfls").asString("0")))
+                                .profitLossRate(new BigDecimal(trade.path("pfls_rt").asString("0")))
+                                .fee(new BigDecimal(trade.path("fee").asString("0")))
+                                .tax(new BigDecimal(trade.path("tl_tax").asString("0"))) // null safe 처리
                                 .build();
                         allTrades.add(sellDto);
                     }
                 }
             }
             // 5. 연속 데이터 확인 (Response Body의 ctx 값 확인)
-            String ctxAreaNk = response.path("ctx_area_nk100").asText().trim();
-            String ctxAreaFk = response.path("ctx_area_fk100").asText().trim();
+            String ctxAreaNk = response.path("ctx_area_nk100").asString().trim();
+            String ctxAreaFk = response.path("ctx_area_fk100").asString().trim();
             // 다음 데이터가 없으면(키 값이 비어있으면) 루프 종료
             if (ctxAreaNk.isEmpty() && ctxAreaFk.isEmpty()) {
                 break;
@@ -191,12 +191,12 @@ public class StockService {
             output2 = output2.get(0);
         }
         // Null Safe 하게 값 추출
-        BigDecimal totalBuyAmount = new BigDecimal(output2 != null ? output2.path("buy_excc_amt_smtl").asText("0") : "0");
-        BigDecimal totalSellAmount = new BigDecimal(output2 != null ? output2.path("sll_excc_amt_smtl").asText("0") : "0");
-        BigDecimal totalProfitLoss = new BigDecimal(output2 != null ? output2.path("tot_rlzt_pfls").asText("0") : "0");
-        BigDecimal totalProfitLossRate = new BigDecimal(output2 != null ? output2.path("tot_pftrt").asText("0") : "0");
-        BigDecimal totalFee = new BigDecimal(output2 != null ? output2.path("tot_fee").asText("0") : "0");
-        BigDecimal totalTax = new BigDecimal(output2 != null ? output2.path("tot_tltx").asText("0") : "0");
+        BigDecimal totalBuyAmount = new BigDecimal(output2 != null ? output2.path("buy_excc_amt_smtl").asString("0") : "0");
+        BigDecimal totalSellAmount = new BigDecimal(output2 != null ? output2.path("sll_excc_amt_smtl").asString("0") : "0");
+        BigDecimal totalProfitLoss = new BigDecimal(output2 != null ? output2.path("tot_rlzt_pfls").asString("0") : "0");
+        BigDecimal totalProfitLossRate = new BigDecimal(output2 != null ? output2.path("tot_pftrt").asString("0") : "0");
+        BigDecimal totalFee = new BigDecimal(output2 != null ? output2.path("tot_fee").asString("0") : "0");
+        BigDecimal totalTax = new BigDecimal(output2 != null ? output2.path("tot_tltx").asString("0") : "0");
         String period = String.format("%s ~ %s", request.getStartDate(), request.getEndDate());
         return TradingProfitLossResponse.builder()
                 .period(period)
@@ -246,18 +246,18 @@ public class StockService {
         if (output1.isArray()) {
             for (JsonNode holding : output1) {
                 if (holding.get("hldg_qty") != null &&
-                    new BigDecimal(holding.get("hldg_qty").asText()).compareTo(BigDecimal.ZERO) > 0) {
+                    new BigDecimal(holding.get("hldg_qty").asString()).compareTo(BigDecimal.ZERO) > 0) {
 
                     StockPortfolioResponse.StockHoldingDto holdingDto = StockPortfolioResponse.StockHoldingDto.builder()
-                        .stockCode(holding.get("pdno").asText())
-                        .stockName(holding.get("prdt_name").asText())
-                        .quantity(Integer.parseInt(holding.get("hldg_qty").asText()))
-                        .averagePrice(new BigDecimal(holding.get("pchs_avg_pric").asText()))
-                        .currentPrice(new BigDecimal(holding.get("prpr").asText()))
-                        .marketValue(new BigDecimal(holding.get("evlu_amt").asText()))
-                        .purchasePrice(new BigDecimal(holding.get("pchs_amt").asText()))
-                        .profitLoss(new BigDecimal(holding.get("evlu_pfls_amt").asText()))
-                        .profitLossRate(new BigDecimal(holding.get("evlu_pfls_rt").asText()))
+                        .stockCode(holding.get("pdno").asString())
+                        .stockName(holding.get("prdt_name").asString())
+                        .quantity(Integer.parseInt(holding.get("hldg_qty").asString()))
+                        .averagePrice(new BigDecimal(holding.get("pchs_avg_pric").asString()))
+                        .currentPrice(new BigDecimal(holding.get("prpr").asString()))
+                        .marketValue(new BigDecimal(holding.get("evlu_amt").asString()))
+                        .purchasePrice(new BigDecimal(holding.get("pchs_amt").asString()))
+                        .profitLoss(new BigDecimal(holding.get("evlu_pfls_amt").asString()))
+                        .profitLossRate(new BigDecimal(holding.get("evlu_pfls_rt").asString()))
                         .sector("")
                         .dayChangeRate(null) // 초기값은 null, 이후 조회하여 설정
                         .build();
@@ -270,12 +270,12 @@ public class StockService {
         // 각 종목의 전일 대비 변동률 조회 (병렬 처리)
         fetchDayChangeRates(holdings);
 
-        BigDecimal totalMarketValue = output2 != null ? new BigDecimal(output2.get(0).get("evlu_amt_smtl_amt").asText()) : BigDecimal.ZERO;
-        BigDecimal totalBuyValue = output2 != null ? new BigDecimal(output2.get(0).get("pchs_amt_smtl_amt").asText()) : BigDecimal.ZERO;
-        BigDecimal totalProfitLoss = output2 != null ? new BigDecimal(output2.get(0).get("evlu_pfls_smtl_amt").asText()) : BigDecimal.ZERO;
+        BigDecimal totalMarketValue = output2 != null ? new BigDecimal(output2.get(0).get("evlu_amt_smtl_amt").asString()) : BigDecimal.ZERO;
+        BigDecimal totalBuyValue = output2 != null ? new BigDecimal(output2.get(0).get("pchs_amt_smtl_amt").asString()) : BigDecimal.ZERO;
+        BigDecimal totalProfitLoss = output2 != null ? new BigDecimal(output2.get(0).get("evlu_pfls_smtl_amt").asString()) : BigDecimal.ZERO;
         BigDecimal totalProfitLossRate = output2 != null ? new BigDecimal(String.valueOf(totalMarketValue.subtract(totalBuyValue).divide(totalBuyValue, 4, RoundingMode.HALF_UP).multiply(BigDecimal.valueOf(100)))) : BigDecimal.ZERO;
-        BigDecimal depositToday = output2 != null ? new BigDecimal(output2.get(0).get("dnca_tot_amt").asText()) : BigDecimal.ZERO;
-        BigDecimal depositD2 = output2 != null ? new BigDecimal(output2.get(0).get("prvs_rcdl_excc_amt").asText()) : BigDecimal.ZERO;
+        BigDecimal depositToday = output2 != null ? new BigDecimal(output2.get(0).get("dnca_tot_amt").asString()) : BigDecimal.ZERO;
+        BigDecimal depositD2 = output2 != null ? new BigDecimal(output2.get(0).get("prvs_rcdl_excc_amt").asString()) : BigDecimal.ZERO;
 
         return StockPortfolioResponse.builder()
             .totalBuyValue(totalBuyValue)
@@ -297,16 +297,16 @@ public class StockService {
 
         return StockPriceResponse.builder()
             .stockCode(stockCode)
-            .stockName(output.get("hts_kor_isnm").asText())
-            .currentPrice(new BigDecimal(output.get("stck_prpr").asText()))
-            .changeAmount(new BigDecimal(output.get("prdy_vrss").asText()))
-            .changeRate(new BigDecimal(output.get("prdy_ctrt").asText()))
-            .changeDirection(output.get("prdy_vrss_sign").asText())
-            .volume(new BigDecimal(output.get("acml_vol").asText()))
-            .highPrice(new BigDecimal(output.get("stck_hgpr").asText()))
-            .lowPrice(new BigDecimal(output.get("stck_lwpr").asText()))
-            .openPrice(new BigDecimal(output.get("stck_oprc").asText()))
-            .marketType(output.get("mrkt_ctg").asText())
+            .stockName(output.get("hts_kor_isnm").asString())
+            .currentPrice(new BigDecimal(output.get("stck_prpr").asString()))
+            .changeAmount(new BigDecimal(output.get("prdy_vrss").asString()))
+            .changeRate(new BigDecimal(output.get("prdy_ctrt").asString()))
+            .changeDirection(output.get("prdy_vrss_sign").asString())
+            .volume(new BigDecimal(output.get("acml_vol").asString()))
+            .highPrice(new BigDecimal(output.get("stck_hgpr").asString()))
+            .lowPrice(new BigDecimal(output.get("stck_lwpr").asString()))
+            .openPrice(new BigDecimal(output.get("stck_oprc").asString()))
+            .marketType(output.get("mrkt_ctg").asString())
             .build();
     }
 
@@ -358,7 +358,7 @@ public class StockService {
 
                     JsonNode output = response.get("output");
                     if (output != null && output.has("prdy_ctrt")) {
-                        BigDecimal dayChangeRate = new BigDecimal(output.get("prdy_ctrt").asText());
+                        BigDecimal dayChangeRate = new BigDecimal(output.get("prdy_ctrt").asString());
                         // 소수점 첫째 자리까지 반올림
                         dayChangeRate = dayChangeRate.setScale(1, RoundingMode.HALF_UP);
                         
@@ -427,8 +427,8 @@ public class StockService {
 
         return StockInfoResponse.builder()
             .stockCode(stockCode)
-            .stockName(stockData.get("hts_kor_isnm") != null ? stockData.get("hts_kor_isnm").asText() : "")
-            .marketType(stockData.get("mrkt_ctg") != null ? stockData.get("mrkt_ctg").asText() : "")
+            .stockName(stockData.get("hts_kor_isnm") != null ? stockData.get("hts_kor_isnm").asString() : "")
+            .marketType(stockData.get("mrkt_ctg") != null ? stockData.get("mrkt_ctg").asString() : "")
             .sector("")
             .marketCap(BigDecimal.ZERO)
             .per(BigDecimal.ZERO)

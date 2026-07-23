@@ -10,7 +10,7 @@ import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
 import org.springframework.test.util.ReflectionTestUtils;
 
-import java.util.concurrent.TimeUnit;
+import java.time.Duration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.eq;
@@ -44,8 +44,7 @@ class RefreshTokenServiceTest {
         verify(valueOperations).set(
                 eq("refresh_token::user@test.com"),
                 eq("refresh-token-value"),
-                eq(604_800_000L),
-                eq(TimeUnit.MILLISECONDS)
+                eq(Duration.ofMillis(604_800_000L))
         );
     }
 

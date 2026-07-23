@@ -1,7 +1,5 @@
 package com.behcm.global.config.stock;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.RedisTemplate;
@@ -9,12 +7,14 @@ import org.springframework.http.*;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestTemplate;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.json.JsonMapper;
 
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.concurrent.TimeUnit;
 
 @Slf4j
 @Component
@@ -24,7 +24,7 @@ public class KoreaInvestmentClient {
     private final KoreaInvestmentProperties properties;
     private final RestTemplate restTemplate;
     private final RedisTemplate<String, Object> redisTemplate;
-    private final ObjectMapper objectMapper = new ObjectMapper();
+    private final JsonMapper objectMapper = new JsonMapper();
 
     private static final String ACCESS_TOKEN_KEY = "korea_investment:access_token";
     private static final String ACCESS_TOKEN_EXPIRY_KEY = "korea_investment:access_token_expiry";
@@ -62,12 +62,13 @@ public class KoreaInvestmentClient {
             ResponseEntity<String> response = restTemplate.exchange(url, HttpMethod.POST, request, String.class);
             JsonNode responseJson = objectMapper.readTree(response.getBody());
 
-            String accessToken = responseJson.get("access_token").asText();
-            String expiryTimeStr = responseJson.get("access_token_token_expired").asText();
+            String accessToken = responseJson.get("access_token").asString();
+            String expiryTimeStr = responseJson.get("access_token_token_expired").asString();
             int expiresInSeconds = responseJson.get("expires_in").asInt();
 
-            redisTemplate.opsForValue().set(ACCESS_TOKEN_KEY, accessToken, expiresInSeconds - 300, TimeUnit.SECONDS);
-            redisTemplate.opsForValue().set(ACCESS_TOKEN_EXPIRY_KEY, expiryTimeStr, expiresInSeconds - 300, TimeUnit.SECONDS);
+            Duration tokenTtl = Duration.ofSeconds(expiresInSeconds - 300L);
+            redisTemplate.opsForValue().set(ACCESS_TOKEN_KEY, accessToken, tokenTtl);
+            redisTemplate.opsForValue().set(ACCESS_TOKEN_EXPIRY_KEY, expiryTimeStr, tokenTtl);
 
             log.info("New access token cached successfully. Expires at: {}", expiryTimeStr);
             return accessToken;
@@ -146,7 +147,7 @@ public class KoreaInvestmentClient {
 
     private boolean isTokenExpiredResponse(JsonNode responseJson) {
         if (responseJson.has("rt_cd")) {
-            String rtCd = responseJson.get("rt_cd").asText();
+            String rtCd = responseJson.get("rt_cd").asString();
             return "EGW00123".equals(rtCd) || "EGW00124".equals(rtCd);
         }
         return false;

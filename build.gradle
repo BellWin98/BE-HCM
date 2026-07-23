@@ -19,6 +19,16 @@ configurations {
     }
 }
 
+ext {
+    // Spring Boot 3.5.3 기본값은 Flyway 11.7.2 이며 MySQL 8.1 까지만 지원한다.
+    // 운영 DB(MySQL 8.4)에서 "Flyway upgrade recommended" 경고가 뜨므로 버전을 올린다(9.4 까지 지원).
+    //
+    // 11.x 계열의 마지막 버전으로 고정한다. Flyway 12.0.0 에서 FluentConfiguration.cleanOnValidationError()
+    // 가 제거되었는데 Boot 3.5.x 의 FlywayAutoConfiguration 이 이를 호출하므로,
+    // 12/13 으로 올리면 NoSuchMethodError 로 부팅이 실패한다. Boot 를 올릴 때 함께 올릴 것.
+    set('flyway.version', '11.20.3')
+}
+
 repositories {
     mavenCentral()
 }

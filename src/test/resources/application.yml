@@ -17,7 +17,7 @@ spring:
       max-file-size: 20MB
       max-request-size: 100MB
   jpa:
-    database: mysql
+    # hibernate.dialect 는 명시하지 않는다(HHH90000025) — main 의 application.yml 과 동일하게 맞춘다.
     properties:
       hibernate:
         default_batch_fetch_size: 500

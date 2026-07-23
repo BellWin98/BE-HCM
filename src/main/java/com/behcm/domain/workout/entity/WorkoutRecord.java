@@ -22,6 +22,20 @@ import java.util.List;
                         name = "uk_workout_record_member_room_date",
                         columnNames = {"member_id", "workout_room_id", "workout_date"}
                 )
+        },
+        indexes = {
+                // 회원별 일자별 최신 기록 조회(findAllByMemberPerWorkoutDate 계열)의 상관 서브쿼리
+                // max(created_at) where member = ? and workout_date = ? 를 index-only 로 만든다.
+                // 위 UK 는 workout_room_id 가 중간에 있어 workout_date 를 탈 수 없다.
+                @Index(
+                        name = "idx_workout_record_member_date_created",
+                        columnList = "member_id, workout_date, created_at"
+                ),
+                // 주간 벌금 정산 배치(countByWorkoutRoomAndWorkoutDateBetweenGroupByMember)용 커버링 인덱스.
+                @Index(
+                        name = "idx_workout_record_room_date_member",
+                        columnList = "workout_room_id, workout_date, member_id"
+                )
         }
 )
 @Getter

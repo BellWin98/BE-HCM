@@ -13,6 +13,13 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 @Entity
+@Table(uniqueConstraints = {
+        // 멤버당 주차별 벌금은 1건. 주간 정산 스케줄러가 재실행되어도 중복 생성되지 않도록 막는다.
+        @UniqueConstraint(
+                name = "uk_penalty_member_week",
+                columnNames = {"workout_room_member_id", "week_start_date"}
+        )
+})
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @EntityListeners(AuditingEntityListener.class)

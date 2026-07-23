@@ -9,6 +9,13 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 @Entity
+@Table(uniqueConstraints = {
+        // 방당 계좌는 1건(findByWorkoutRoom 이 Optional 을 반환하므로 코드가 이미 1:1 을 전제한다).
+        @UniqueConstraint(
+                name = "uk_penalty_account_room",
+                columnNames = {"workout_room_id"}
+        )
+})
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class PenaltyAccount extends BaseTimeEntity {

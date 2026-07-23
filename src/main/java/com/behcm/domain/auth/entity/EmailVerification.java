@@ -10,6 +10,14 @@ import lombok.NoArgsConstructor;
 import java.time.LocalDateTime;
 
 @Entity
+@Table(indexes = {
+        // findFirstByEmailAndIsVerifiedFalseOrderByCreatedAtDesc / deleteByEmailAndIsVerifiedFalse.
+        // (등호 2개 → 정렬 1개) 순서라 filesort 없이 처리된다.
+        @Index(
+                name = "idx_email_verification_email_verified_created",
+                columnList = "email, is_verified, created_at"
+        )
+})
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class EmailVerification extends BaseTimeEntity {

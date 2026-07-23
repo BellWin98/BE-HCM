@@ -14,6 +14,14 @@ import java.util.Collection;
 import java.util.List;
 
 @Entity
+@Table(uniqueConstraints = {
+        // 소셜 로그인 조회(findByOauthProviderAndOauthProviderId)용.
+        // MySQL 의 UNIQUE 는 NULL 중복을 허용하므로 이메일 가입 회원끼리는 충돌하지 않는다.
+        @UniqueConstraint(
+                name = "uk_member_oauth",
+                columnNames = {"oauth_provider", "oauth_provider_id"}
+        )
+})
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class Member extends BaseTimeEntity implements UserDetails {

@@ -1,6 +1,6 @@
 # BE-HCM
 
-> "헬창마을" — 벌금 기반 운동 인증 서비스의 **Spring Boot 3.5 / Java 21 백엔드 API 서버**입니다. 
+> "헬창마을" — 벌금 기반 운동 인증 서비스의 **Spring Boot 4.1 / Java 25 백엔드 API 서버**입니다. 
 > <br>사용자는 운동방에 참여해 운동 인증을 올리고, 실시간으로 채팅하며, 매주 운동 횟수를 못 채우면 벌금을 냅니다.
 > <br>그 외에 한국투자증권 주식 시세 연동과 FCM 푸시 알림 기능도 포함되어 있습니다.
 
@@ -20,19 +20,19 @@
 
 | 구분 | 기술 |
 | --- | --- |
-| 언어 | ![Java](https://img.shields.io/badge/Java-21-007396?logo=openjdk&logoColor=white) (Gradle Toolchain으로 고정, 런타임 이미지는 Amazon Corretto 21 alpine) |
-| 프레임워크 | ![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.5.3-6DB33F?logo=springboot&logoColor=white) |
-| 빌드 도구 | ![Gradle](https://img.shields.io/badge/Gradle-Groovy%20DSL-02303A?logo=gradle&logoColor=white) (Gradle Wrapper 포함) |
+| 언어 | ![Java](https://img.shields.io/badge/Java-25-007396?logo=openjdk&logoColor=white) (Gradle Toolchain으로 고정, 런타임 이미지는 Amazon Corretto 25 alpine) |
+| 프레임워크 | ![Spring Boot](https://img.shields.io/badge/Spring%20Boot-4.1.0-6DB33F?logo=springboot&logoColor=white) |
+| 빌드 도구 | ![Gradle](https://img.shields.io/badge/Gradle-9.6.1-02303A?logo=gradle&logoColor=white) (Groovy DSL, Gradle Wrapper 포함) |
 | 데이터 접근 | Spring Data JPA(Hibernate) — `default_batch_fetch_size: 500`, `open-in-view: false`, `ddl-auto: update` |
 | 데이터베이스 | ![MySQL](https://img.shields.io/badge/MySQL-8.4-4479A1?logo=mysql&logoColor=white) (dev/prod, `mysql-connector-j`), 로컬은 `mariadb-java-client`로 접속 |
-| 캐시 | ![Redis](https://img.shields.io/badge/Redis-7-DC382D?logo=redis&logoColor=white)(`spring-boot-starter-data-redis`) + Spring Cache + Caffeine 3.1.8 |
+| 캐시 | ![Redis](https://img.shields.io/badge/Redis-7-DC382D?logo=redis&logoColor=white)(`spring-boot-starter-data-redis`) + Spring Cache + Caffeine |
 | 인증/보안 | Spring Security(Stateless JWT), `io.jsonwebtoken:jjwt` 0.11.5, OAuth2 Client(Google / Kakao / Naver 소셜 로그인) |
 | 실시간 통신 | `spring-boot-starter-websocket` + `spring-messaging` (STOMP, `/wss`, SockJS 폴백) |
 | 이메일 | `spring-boot-starter-mail` (회원가입 이메일 인증) |
-| 외부 연동 | Firebase Admin SDK 9.2.0(FCM 푸시), 한국투자증권 Open API(주식 시세, `RestTemplateConfig`/`httpclient5`), Spring Cloud AWS 2.2.6(S3) |
-| API 문서화 | springdoc-openapi-starter-webmvc-ui 2.2.0 (Swagger UI: `/swagger-ui.html`, OpenAPI: `/v3/api-docs`) |
-| 비밀값 암호화 | Jasypt(`jasypt-spring-boot-starter` 3.0.5) — YAML에 `ENC(...)` 형식으로 암호화 저장 |
-| 컨테이너 | ![Docker](https://img.shields.io/badge/Docker-amazoncorretto:21--alpine--jdk-2496ED?logo=docker&logoColor=white) |
+| 외부 연동 | Firebase Admin SDK 9.10.0(FCM 푸시), 한국투자증권 Open API(주식 시세, `RestTemplateConfig`/`httpclient5`), AWS SDK v2(S3) |
+| API 문서화 | springdoc-openapi-starter-webmvc-ui 3.0.3 (Swagger UI: `/swagger-ui.html`, OpenAPI: `/v3/api-docs`) |
+| 비밀값 암호화 | Jasypt(`jasypt-spring-boot-starter` 4.0.4) — YAML에 `ENC(...)` 형식으로 암호화 저장 |
+| 컨테이너 | ![Docker](https://img.shields.io/badge/Docker-amazoncorretto:25--alpine--jdk-2496ED?logo=docker&logoColor=white) |
 | CI/CD | GitHub Actions → Docker Hub → EC2 SSH 배포(`docker-compose`) |
 
 ## 핵심 기능
@@ -51,7 +51,7 @@
   제공합니다.
 - **주식 시세 연동**: 한국투자증권 Open API를 통해 시세 데이터를 조회합니다.
 - **관리자 기능**: `/api/admin/**` 하위에 `ROLE_ADMIN` 권한이 필요한 회원/운동방 관리 API를 제공합니다.
-- **파일 업로드**: AWS S3(Spring Cloud AWS)를 통해 운동 인증/채팅/프로필 이미지를 업로드합니다.
+- **파일 업로드**: AWS S3(AWS SDK v2)를 통해 운동 인증/채팅/프로필 이미지를 업로드합니다.
 
 ## 프로젝트 구조
 
@@ -89,7 +89,7 @@ BE-HCM/
 │   └── application-secret.yml           # Jasypt로 암호화된 시크릿 (spring.profiles.include: secret)
 ├── src/test/resources/                  # 테스트 전용 설정 (application-local.yml: localhost:3306 root/1234, localhost:6379)
 ├── .github/workflows/deploy.yml         # CI(빌드/테스트) + CD(Docker 빌드/푸시 + EC2 배포)
-├── Dockerfile                           # amazoncorretto:21-alpine-jdk 런타임 이미지
+├── Dockerfile                           # amazoncorretto:25-alpine-jdk 런타임 이미지
 ├── build.gradle
 ├── settings.gradle
 └── gradlew / gradlew.bat
@@ -99,7 +99,7 @@ BE-HCM/
 
 | 도구 | 버전 | 비고 |
 | --- | --- | --- |
-| Java (JDK) | 21 | Gradle Toolchain으로 자동 지정 (`build.gradle`) |
+| Java (JDK) | 25 | Gradle Toolchain으로 자동 지정 (`build.gradle`) |
 | Docker / Docker Compose | 최신 버전 | 로컬 MySQL/Redis 실행 또는 컨테이너 빌드 시 필요 |
 | MySQL 또는 MariaDB | 8.x / 호환 버전 | 로컬 프로필은 `mariadb-java-client`로 `localhost:3306` 접속 |
 | Redis | 7.x | 캐시 용도 |
@@ -203,7 +203,7 @@ docker run -d \
 `.github/workflows/deploy.yml` — `main`, `dev` 브랜치에 대한 push/PR 시 다음 파이프라인이 실행됩니다.
 
 1. **CI**
-   - JDK 21(Temurin) 설정, Gradle 캐싱(`~/.gradle/caches`, `~/.gradle/wrapper`)
+   - JDK 25(Temurin) 설정, Gradle 캐싱(`~/.gradle/caches`, `~/.gradle/wrapper`)
    - `mysql:8.4`, `redis:7-alpine` 서비스 컨테이너를 띄운 상태에서 `./gradlew clean build --no-daemon` 실행
      (`@SpringBootTest`가 `src/test/resources/application-local.yml`의 로컬 인프라 구성을 기대하므로, CI에서도
      동일하게 서비스 컨테이너로 구성).

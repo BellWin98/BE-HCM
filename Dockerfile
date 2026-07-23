@@ -1,4 +1,4 @@
-FROM amazoncorretto:21-alpine-jdk
+FROM amazoncorretto:25-alpine-jdk
 
 # 빌드 결과물 위치 지정
 ARG JAR_FILE=build/libs/*.jar

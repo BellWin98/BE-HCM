@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## 프로젝트 개요
 
-BE-HCM("헬창모임")은 그룹 운동 습관 관리 앱을 위한 Spring Boot 3.5 / Java 21 백엔드입니다. 사용자는 소규모
+BE-HCM("헬창모임")은 그룹 운동 습관 관리 앱을 위한 Spring Boot 4.1 / Java 25 백엔드입니다. 사용자는 소규모
 그룹인 "운동방"에 참여해 매일 운동 인증을 올리고, 실시간으로 채팅하며, 약속을 지키지 못하면 벌금을 냅니다.
 그 외에 한국투자증권 주식 시세 연동과 FCM 푸시 알림 기능도 포함되어 있습니다.
 
@@ -133,3 +133,18 @@ BE-HCM("헬창모임")은 그룹 운동 습관 관리 앱을 위한 Spring Boot 
   만들지 말고, `ErrorCode`에 해당 도메인 주석 블록 아래에 추가하세요. 에러 메시지는 한국어로 작성합니다.
 - 생성/수정 시각이 필요한 엔티티는 `BaseTimeEntity`를 상속합니다.
 - `.cursor/rules/back-end.mdc`에 맞춰 DI는 전체적으로 생성자 주입(`@RequiredArgsConstructor`)을 사용합니다.
+
+### Spring Boot 4 관련 주의사항
+
+- **JSON은 Jackson 3(`tools.jackson.*`)를 씁니다.** `com.fasterxml.jackson`은 firebase-admin·jjwt 등이
+  전이 의존으로 끌고 와 클래스패스에 남아 있어 그냥 컴파일되지만, 런타임에 자동 구성되는 것은 Jackson 3
+  `JsonMapper`뿐이므로 새 코드에서 쓰지 마세요. `JsonNode.asText()`는 `asString()`으로 대체되었습니다.
+- **테스트 의존성은 기술별 test 스타터를 씁니다**(`spring-boot-starter-webmvc-test`,
+  `spring-boot-starter-security-test`). `spring-boot-starter-test`만으로는 MockMvc(`@AutoConfigureMockMvc`)와
+  `@WithMockUser`가 동작하지 않습니다. 각 test 스타터가 `spring-boot-starter-test`를 전이로 가져옵니다.
+- **jasypt-spring-boot는 Boot 4를 아직 공식 지원하지 않습니다**(최신 4.0.4도 Boot 3.5 기준 빌드).
+  다른 테스트는 평문 값을 쓰기 때문에 복호화 경로를 지나가지 않으므로,
+  `JasyptEncryptablePropertyTest`가 `ENC(...)` 복호화를 지키고 있습니다. jasypt나 Boot 버전을 올릴 때
+  이 테스트를 반드시 확인하세요 — 깨지면 운영에서 부팅 자체가 실패합니다.
+- 자동 구성은 전용 스타터에만 붙습니다. 예를 들어 Flyway는 `org.flywaydb:flyway-core` 직접 선언이 아니라
+  `spring-boot-starter-flyway`를 써야 합니다.

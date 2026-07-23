@@ -4,6 +4,7 @@ import com.behcm.domain.member.entity.Member;
 import com.behcm.global.common.TokenResponse;
 import io.jsonwebtoken.*;
 import io.jsonwebtoken.security.Keys;
+import io.jsonwebtoken.security.SignatureException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -12,14 +13,15 @@ import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.stereotype.Component;
 
-import java.security.Key;
+import javax.crypto.SecretKey;
 import java.util.Date;
 
 @Component
 @Slf4j
 public class JwtTokenProvider {
 
-    private final Key key;
+    // jjwt 0.12+ 의 verifyWith(...) 는 java.security.Key 가 아니라 SecretKey 를 요구한다.
+    private final SecretKey key;
     private final long accessTokenExpiration;
     private final long refreshTokenExpiration;
     private final UserDetailsService userDetailsService;
@@ -48,16 +50,16 @@ public class JwtTokenProvider {
         Date accessTokenExpiryDate = new Date(System.currentTimeMillis() + accessTokenExpiration);
         Date refreshTokenExpiryDate = new Date(System.currentTimeMillis() + refreshTokenExpiration);
         String accessToken = Jwts.builder()
-                .setSubject(email)
-                .setIssuedAt(new Date())
-                .setExpiration(accessTokenExpiryDate)
-                .signWith(key, SignatureAlgorithm.HS512)
+                .subject(email)
+                .issuedAt(new Date())
+                .expiration(accessTokenExpiryDate)
+                .signWith(key, Jwts.SIG.HS512)
                 .compact();
         String refreshToken = Jwts.builder()
-                .setSubject(email)
-                .setIssuedAt(new Date())
-                .setExpiration(refreshTokenExpiryDate)
-                .signWith(key, SignatureAlgorithm.HS512)
+                .subject(email)
+                .issuedAt(new Date())
+                .expiration(refreshTokenExpiryDate)
+                .signWith(key, Jwts.SIG.HS512)
                 .compact();
 
         return new TokenResponse(accessToken, refreshToken);
@@ -71,13 +73,13 @@ public class JwtTokenProvider {
 
     public boolean validateToken(String token) {
         try {
-            Jwts.parserBuilder()
-                    .setSigningKey(key)
+            Jwts.parser()
+                    .verifyWith(key)
                     .build()
-                    .parseClaimsJws(token);
+                    .parseSignedClaims(token);
 
             return true;
-        } catch (SecurityException ex) {
+        } catch (SignatureException ex) {
             log.error("Invalid JWT signature: {}", ex.getMessage());
         } catch (MalformedJwtException ex) {
             log.error("Invalid JWT token: {}", ex.getMessage());
@@ -101,25 +103,24 @@ public class JwtTokenProvider {
 
     private String generateToken(Authentication authentication, long tokenExpiration) {
         Member member = (Member) authentication.getPrincipal();
-        Claims claims = Jwts.claims().setSubject(member.getUsername());
-        claims.put("roles", member.getAuthorities());
         Date expiryDate = new Date(System.currentTimeMillis() + tokenExpiration);
 
         return Jwts.builder()
-                .setClaims(claims)
-                .setIssuedAt(new Date())
-                .setExpiration(expiryDate)
-                .signWith(key, SignatureAlgorithm.HS512)
+                .subject(member.getUsername())
+                .claim("roles", member.getAuthorities())
+                .issuedAt(new Date())
+                .expiration(expiryDate)
+                .signWith(key, Jwts.SIG.HS512)
                 .compact();
     }
 
     private Claims parseClaims(String accessToken) {
         try {
-            return Jwts.parserBuilder()
-                    .setSigningKey(key)
+            return Jwts.parser()
+                    .verifyWith(key)
                     .build()
-                    .parseClaimsJws(accessToken)
-                    .getBody();
+                    .parseSignedClaims(accessToken)
+                    .getPayload();
         } catch (ExpiredJwtException e) {
             return e.getClaims();
         }

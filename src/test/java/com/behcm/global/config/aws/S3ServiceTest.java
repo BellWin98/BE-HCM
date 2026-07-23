@@ -1,7 +1,5 @@
 package com.behcm.global.config.aws;
 
-import com.amazonaws.services.s3.AmazonS3Client;
-import com.amazonaws.services.s3.model.PutObjectRequest;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -14,11 +12,17 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.web.multipart.MultipartFile;
+import software.amazon.awssdk.core.sync.RequestBody;
+import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.S3Utilities;
+import software.amazon.awssdk.services.s3.model.GetUrlRequest;
+import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 
-import java.net.URL;
+import java.net.URI;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.verify;
 
@@ -28,7 +32,10 @@ class S3ServiceTest {
     private static final String BUCKET = "test-bucket";
 
     @Mock
-    private AmazonS3Client amazonS3Client;
+    private S3Client s3Client;
+
+    @Mock
+    private S3Utilities s3Utilities;
 
     @InjectMocks
     private S3Service s3Service;
@@ -39,8 +46,9 @@ class S3ServiceTest {
     @BeforeEach
     void setUp() throws Exception {
         ReflectionTestUtils.setField(s3Service, "bucket", BUCKET);
-        given(amazonS3Client.getUrl(org.mockito.ArgumentMatchers.eq(BUCKET), org.mockito.ArgumentMatchers.anyString()))
-                .willReturn(new URL("https://test-bucket.s3.amazonaws.com/key.jpg"));
+        given(s3Client.utilities()).willReturn(s3Utilities);
+        given(s3Utilities.getUrl(any(GetUrlRequest.class)))
+                .willReturn(URI.create("https://test-bucket.s3.amazonaws.com/key.jpg").toURL());
     }
 
     private MultipartFile imageFile() {
@@ -52,8 +60,8 @@ class S3ServiceTest {
     void uploadWorkoutImages_setsCacheControl() {
         s3Service.uploadWorkoutImages(List.of(imageFile()));
 
-        verify(amazonS3Client).putObject(putObjectRequestCaptor.capture());
-        assertThat(putObjectRequestCaptor.getValue().getMetadata().getCacheControl())
+        verify(s3Client).putObject(putObjectRequestCaptor.capture(), any(RequestBody.class));
+        assertThat(putObjectRequestCaptor.getValue().cacheControl())
                 .isEqualTo("public, max-age=31536000, immutable");
     }
 
@@ -63,9 +71,10 @@ class S3ServiceTest {
         s3Service.uploadProfileImage(imageFile());
         s3Service.uploadChatImage(imageFile(), 1L);
 
-        verify(amazonS3Client, org.mockito.Mockito.times(2)).putObject(putObjectRequestCaptor.capture());
+        verify(s3Client, org.mockito.Mockito.times(2))
+                .putObject(putObjectRequestCaptor.capture(), any(RequestBody.class));
         assertThat(putObjectRequestCaptor.getAllValues())
-                .allSatisfy(request -> assertThat(request.getMetadata().getCacheControl())
+                .allSatisfy(request -> assertThat(request.cacheControl())
                         .isEqualTo("public, max-age=31536000, immutable"));
     }
 
@@ -76,8 +85,8 @@ class S3ServiceTest {
 
         s3Service.uploadWorkoutImages(List.of(file));
 
-        verify(amazonS3Client).putObject(putObjectRequestCaptor.capture());
-        assertThat(putObjectRequestCaptor.getValue().getMetadata().getContentType()).isEqualTo("image/jpeg");
-        assertThat(putObjectRequestCaptor.getValue().getMetadata().getContentLength()).isEqualTo(file.getSize());
+        verify(s3Client).putObject(putObjectRequestCaptor.capture(), any(RequestBody.class));
+        assertThat(putObjectRequestCaptor.getValue().contentType()).isEqualTo("image/jpeg");
+        assertThat(putObjectRequestCaptor.getValue().contentLength()).isEqualTo(file.getSize());
     }
 }

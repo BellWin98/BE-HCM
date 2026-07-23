@@ -44,11 +44,15 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-web'
     implementation 'com.github.ulisesbocchio:jasypt-spring-boot-starter:3.0.5'
     implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.2.0'
-    implementation 'org.springframework.cloud:spring-cloud-starter-aws:2.2.6.RELEASE'
     implementation 'org.springframework.boot:spring-boot-starter-websocket'
     implementation 'org.springframework:spring-messaging'
     implementation 'org.apache.httpcomponents.client5:httpclient5'
     implementation 'org.springframework.boot:spring-boot-starter-mail'
+
+    // S3 (AWS SDK v2). SDK v1(com.amazonaws)은 2025-12 지원 종료되었고,
+    // 이를 끌어오던 spring-cloud-starter-aws 는 Boot 2.2 시절 아티팩트라 함께 제거했다.
+    implementation platform('software.amazon.awssdk:bom:2.39.6')
+    implementation 'software.amazon.awssdk:s3'
 
     // DB 마이그레이션 (flyway-mysql은 Flyway 10+에서 MySQL 지원에 별도로 필요)
     implementation 'org.flywaydb:flyway-core'

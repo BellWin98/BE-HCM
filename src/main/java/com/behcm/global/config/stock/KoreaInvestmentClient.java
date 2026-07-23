@@ -3,10 +3,11 @@ package com.behcm.global.config.stock;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.RedisTemplate;
-import org.springframework.http.*;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.HttpClientErrorException;
-import org.springframework.web.client.RestTemplate;
+import org.springframework.web.client.RestClient;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
@@ -22,7 +23,7 @@ import java.util.Map;
 public class KoreaInvestmentClient {
 
     private final KoreaInvestmentProperties properties;
-    private final RestTemplate restTemplate;
+    private final RestClient restClient;
     private final RedisTemplate<String, Object> redisTemplate;
     private final JsonMapper objectMapper = new JsonMapper();
 
@@ -46,21 +47,19 @@ public class KoreaInvestmentClient {
     }
 
     private String fetchNewAccessToken() {
-        String url = properties.getBaseUrl() + "/oauth2/tokenP";
-
-        HttpHeaders headers = new HttpHeaders();
-        headers.setContentType(MediaType.APPLICATION_JSON);
-
         Map<String, String> body = new HashMap<>();
         body.put("grant_type", "client_credentials");
         body.put("appkey", properties.getAppKey());
         body.put("appsecret", properties.getAppSecret());
 
-        HttpEntity<Map<String, String>> request = new HttpEntity<>(body, headers);
-
         try {
-            ResponseEntity<String> response = restTemplate.exchange(url, HttpMethod.POST, request, String.class);
-            JsonNode responseJson = objectMapper.readTree(response.getBody());
+            String response = restClient.post()
+                    .uri(properties.getBaseUrl() + "/oauth2/tokenP")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .body(body)
+                    .retrieve()
+                    .body(String.class);
+            JsonNode responseJson = objectMapper.readTree(response);
 
             String accessToken = responseJson.get("access_token").asString();
             String expiryTimeStr = responseJson.get("access_token_token_expired").asString();
@@ -95,25 +94,41 @@ public class KoreaInvestmentClient {
             String endpoint, String transactionId, Map<String, String> params,
             Map<String, String> customHeaders, boolean isRetry
     ) {
-        String url = buildUrl(endpoint, params);
-
-        HttpHeaders headers = new HttpHeaders();
-        headers.setContentType(MediaType.APPLICATION_JSON);
-        headers.set("authorization", "Bearer " + getAccessToken());
-        headers.set("appkey", properties.getAppKey());
-        headers.set("appsecret", properties.getAppSecret());
-        headers.set("tr_id", transactionId);
-        headers.set("custtype", "P");
-
-        if (customHeaders != null && !customHeaders.isEmpty()) {
-            customHeaders.forEach(headers::set);
-        }
-
-        HttpEntity<String> request = new HttpEntity<>(headers);
+        String accessToken = getAccessToken();
 
         try {
-            ResponseEntity<String> response = restTemplate.exchange(url, HttpMethod.GET, request, String.class);
-            JsonNode responseJson = objectMapper.readTree(response.getBody());
+            String response = restClient.get()
+                    .uri(properties.getBaseUrl(), uriBuilder -> {
+                        uriBuilder.path(endpoint);
+
+                        // 값을 queryParam 에 리터럴로 넘기면 URI 템플릿의 일부로 취급되어
+                        // 쿼리 컴포넌트에서 합법인 문자(&, = 등)가 인코딩되지 않는다.
+                        // 값을 URI 변수로 넘겨야 엄격하게 인코딩된다.
+                        Map<String, Object> queryValues = new HashMap<>();
+                        if (params != null) {
+                            params.forEach((key, value) -> {
+                                uriBuilder.queryParam(key, "{" + key + "}");
+                                queryValues.put(key, value);
+                            });
+                        }
+                        return uriBuilder.build(queryValues);
+                    })
+                    .headers(headers -> {
+                        headers.setContentType(MediaType.APPLICATION_JSON);
+                        headers.set("authorization", "Bearer " + accessToken);
+                        headers.set("appkey", properties.getAppKey());
+                        headers.set("appsecret", properties.getAppSecret());
+                        headers.set("tr_id", transactionId);
+                        headers.set("custtype", "P");
+
+                        if (customHeaders != null && !customHeaders.isEmpty()) {
+                            customHeaders.forEach(headers::set);
+                        }
+                    })
+                    .retrieve()
+                    .body(String.class);
+
+            JsonNode responseJson = objectMapper.readTree(response);
 
             if (isTokenExpiredResponse(responseJson)) {
                 return handleTokenExpiry(endpoint, transactionId, params, customHeaders, isRetry);
@@ -125,24 +140,12 @@ public class KoreaInvestmentClient {
                 log.warn("Received 401 Unauthorized, attempting token refresh");
                 return handleTokenExpiry(endpoint, transactionId, params, customHeaders, isRetry);
             }
-            log.error("Failed to call Korea Investment API: {}", url, e);
+            log.error("Failed to call Korea Investment API: {}", endpoint, e);
             throw new RuntimeException("Failed to call Korea Investment API", e);
         } catch (Exception e) {
-            log.error("Failed to call Korea Investment API: {}", url, e);
+            log.error("Failed to call Korea Investment API: {}", endpoint, e);
             throw new RuntimeException("Failed to call Korea Investment API", e);
         }
-    }
-
-    private String buildUrl(String endpoint, Map<String, String> params) {
-        StringBuilder urlBuilder = new StringBuilder(properties.getBaseUrl() + endpoint);
-
-        if (params != null && !params.isEmpty()) {
-            urlBuilder.append("?");
-            params.forEach((key, value) -> urlBuilder.append(key).append("=").append(value).append("&"));
-            urlBuilder.setLength(urlBuilder.length() - 1);
-        }
-
-        return urlBuilder.toString();
     }
 
     private boolean isTokenExpiredResponse(JsonNode responseJson) {

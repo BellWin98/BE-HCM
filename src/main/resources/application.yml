@@ -17,6 +17,14 @@ spring:
     multipart:
       max-file-size: 20MB
       max-request-size: 100MB
+  # 자동 구성된 RestClient.Builder 에 적용되는 타임아웃(global/config/RestClientConfig.java).
+  # local 프로필은 SSL 무시를 위해 요청 팩토리를 직접 지정하므로 이 값이 적용되지 않고,
+  # 같은 값을 httpclient5 ConnectionConfig 로 따로 설정한다.
+  # (Boot 4.0 에서 spring.http.client.* 는 spring.http.clients.* 로 대체되었다.)
+  http:
+    clients:
+      connect-timeout: 5s
+      read-timeout: 5s
   jpa:
     # hibernate.dialect 는 명시하지 않는다(HHH90000025).
     # JDBC 메타데이터로 Hibernate 가 MySQLDialect 를 자동 선택한다.

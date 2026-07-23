@@ -1,6 +1,6 @@
 plugins {
     id 'java'
-    id 'org.springframework.boot' version '3.5.3'
+    id 'org.springframework.boot' version '3.5.16'
     id 'io.spring.dependency-management' version '1.1.7'
 }
 
@@ -20,7 +20,7 @@ configurations {
 }
 
 ext {
-    // Spring Boot 3.5.3 기본값은 Flyway 11.7.2 이며 MySQL 8.1 까지만 지원한다.
+    // Spring Boot 3.5.x 기본값은 Flyway 11.7.2 이며 MySQL 8.1 까지만 지원한다.
     // 운영 DB(MySQL 8.4)에서 "Flyway upgrade recommended" 경고가 뜨므로 버전을 올린다(9.4 까지 지원).
     //
     // 11.x 계열의 마지막 버전으로 고정한다. Flyway 12.0.0 에서 FluentConfiguration.cleanOnValidationError()

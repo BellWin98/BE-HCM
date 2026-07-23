@@ -23,6 +23,12 @@ import java.util.*;
 public class S3Service {
 
     private static final long IMAGE_MAX_SIZE_BYTES = 20 * 1024 * 1024; // 20MB
+    /**
+     * 업로드 키가 UUID 기반이라 같은 URL의 내용이 바뀌지 않으므로 장기 캐싱이 안전하다.
+     * 이 헤더가 없으면 브라우저가 휴리스틱 캐싱(Last-Modified 경과 시간의 10%)을 적용해
+     * 방금 올린 이미지는 사실상 캐시되지 않고 조회할 때마다 다시 내려받는다.
+     */
+    private static final String IMAGE_CACHE_CONTROL = "public, max-age=31536000, immutable";
     private static final String PROFILE_IMAGE_PREFIX = "profiles/";
     private static final String CHAT_IMAGE_PREFIX = "chat/rooms/";
     private static final String WORKOUT_IMAGE_PREFIX = "workout/";
@@ -94,6 +100,7 @@ public class S3Service {
             ObjectMetadata objectMetadata = new ObjectMetadata();
             objectMetadata.setContentLength(file.getSize());
             objectMetadata.setContentType(file.getContentType());
+            objectMetadata.setCacheControl(IMAGE_CACHE_CONTROL);
 
             amazonS3Client.putObject(new PutObjectRequest(bucket, key, inputStream, objectMetadata));
             return getFileUrl(key);

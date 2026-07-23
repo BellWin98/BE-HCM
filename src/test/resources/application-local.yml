@@ -3,17 +3,18 @@ spring:
     activate:
       on-profile: local
   datasource:
-    url: jdbc:mariadb://localhost:3306/hcm?useSSL=false&characterEncoding=UTF-8&allowPublicKeyRetrieval=true
+    url: jdbc:mysql://localhost:3306/hcm?useSSL=false&characterEncoding=UTF-8&allowPublicKeyRetrieval=true
     username: root
     password: 1234
-    driver-class-name: org.mariadb.jdbc.Driver
+    driver-class-name: com.mysql.cj.jdbc.Driver
   jpa:
     properties:
       hibernate:
         format_sql: true
         highlight_sql: true
     hibernate:
-      ddl-auto: update
+      # 스키마 변경은 Flyway(db/migration)가 담당한다. Hibernate 는 검증만 한다.
+      ddl-auto: validate
     show-sql: true
   data:
     redis:

@@ -72,7 +72,14 @@ public class FcmService {
 
     /**
      * 토큰 청크 하나를 멀티캐스트로 발송하고, 만료된 토큰 목록을 반환한다.
+     * <p>
+     * firebase-admin 9.10.0(2026-07)에서 {@code token/tokens}(→ {@code addAllTokens})가
+     * {@code fid/fids} 방식으로 전환되며 deprecated 되었으나, (1) 등록 토큰은 아직 정상 동작하고
+     * 제거 기한도 없으며, (2) FID 기반 타깃 전송은 문서화되지 않았고 특히 웹 푸시(JS SDK
+     * getToken + VAPID) 예제가 없어 지금 이전하면 전송이 깨질 위험이 크다. 따라서 Firebase가
+     * FID 웹 전송을 문서화할 때까지 토큰 경로를 유지하고 경고만 억제한다.
      */
+    @SuppressWarnings("deprecation")
     private List<String> sendChunk(Long senderId, List<String> tokens, String title, String body, String tag, String url) {
         MulticastMessage message = MulticastMessage.builder()
                 .addAllTokens(tokens)

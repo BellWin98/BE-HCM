@@ -146,6 +146,7 @@ class NotificationFacadeTest {
         WorkoutRoomMember senderWrm = WorkoutRoomMember.builder().member(sender).workoutRoom(room).build();
         WorkoutRoomMember otherWrm = WorkoutRoomMember.builder().member(other).workoutRoom(room).build();
         given(workoutRoomRepository.findByIdAndIsActiveTrue(1L)).willReturn(Optional.of(room));
+        given(workoutRoomMemberRepository.existsByMemberAndWorkoutRoom(sender, room)).willReturn(true);
         given(workoutRoomMemberRepository.findByWorkoutRoomOrderByJoinedAtFetchMember(room))
                 .willReturn(List.of(senderWrm, otherWrm));
         given(fcmTokenRepository.findFcmTokensByMembers(List.of(other))).willReturn(List.of("other-token"));
@@ -155,5 +156,31 @@ class NotificationFacadeTest {
         verify(fcmService).sendGroupNotification(eq(1L), eq(List.of("other-token")), eq("title"), eq("body"), eq("CHAT-1"), eq("/path"));
         verify(fcmTokenRepository).findFcmTokensByMembers(List.of(other));
         verify(workoutRoomMemberRepository).findByWorkoutRoomOrderByJoinedAtFetchMember(room);
+    }
+
+    @Test
+    @DisplayName("notifyRoomMembers는 발신자가 방 멤버가 아니면 NOT_WORKOUT_ROOM_MEMBER 예외를 던진다")
+    void notifyRoomMembers_notMember_throwsNotWorkoutRoomMember() {
+        Member outsider = member(9L, "outsider");
+        Member owner = member(1L, "owner");
+        WorkoutRoom room = room(1L, owner);
+        given(workoutRoomRepository.findByIdAndIsActiveTrue(1L)).willReturn(Optional.of(room));
+        given(workoutRoomMemberRepository.existsByMemberAndWorkoutRoom(outsider, room)).willReturn(false);
+
+        assertThatThrownBy(() -> notificationFacade.notifyRoomMembers(1L, outsider, "title", "body", "CHAT", "/path"))
+                .isInstanceOf(CustomException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.NOT_WORKOUT_ROOM_MEMBER);
+
+        verify(fcmService, never()).sendGroupNotification(any(), any(), any(), any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("unregisterFcmToken은 FcmService에 토큰 삭제를 위임한다")
+    void unregisterFcmToken_delegatesToFcmService() {
+        Member member = member(1L, "user");
+
+        notificationFacade.unregisterFcmToken(member, "fcm-token");
+
+        verify(fcmService).deleteFcmToken(member, "fcm-token");
     }
 }

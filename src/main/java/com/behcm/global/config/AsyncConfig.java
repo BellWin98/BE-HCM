@@ -20,4 +20,15 @@ public class AsyncConfig {
         executor.initialize();
         return executor;
     }
+
+    @Bean(name = "fcmExecutor")
+    public Executor fcmExecutor() {
+        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+        executor.setCorePoolSize(2);
+        executor.setMaxPoolSize(8);
+        executor.setQueueCapacity(100); // 배치 전송이라 태스크 수가 적어 큐로 충분히 흡수 가능
+        executor.setThreadNamePrefix("Fcm-");
+        executor.initialize();
+        return executor;
+    }
 }

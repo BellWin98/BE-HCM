@@ -31,6 +31,11 @@ public class NotificationFacade {
         log.debug("토큰 등록 완료 - member: {}, token: {}", member.getEmail(), token);
     }
 
+    public void unregisterFcmToken(Member member, String token) {
+        fcmService.deleteFcmToken(member, token);
+        log.debug("토큰 해제 완료 - member: {}", member.getEmail());
+    }
+
     public void notifyAllRoomMembers(Member member, String title, String body, String type, String path) {
         List<String> fcmTokens = fcmTokenRepository.findFcmTokensByMember(member);
         fcmService.sendGroupNotification(member.getId(), fcmTokens, title, body, type + "-" + member.getId(), path);
@@ -46,6 +51,11 @@ public class NotificationFacade {
     public void notifyRoomMembers(Long roomId, Member member, String title, String body, String type, String path) {
         WorkoutRoom workoutRoom = workoutRoomRepository.findByIdAndIsActiveTrue(roomId)
                 .orElseThrow(() -> new CustomException(ErrorCode.WORKOUT_ROOM_NOT_FOUND));
+
+        // 발신자가 실제로 해당 방의 멤버인지 검증 (임의 roomId로 타 방에 푸시하는 것을 차단)
+        if (!workoutRoomMemberRepository.existsByMemberAndWorkoutRoom(member, workoutRoom)) {
+            throw new CustomException(ErrorCode.NOT_WORKOUT_ROOM_MEMBER);
+        }
 
         List<Member> targetMembers = workoutRoomMemberRepository.findByWorkoutRoomOrderByJoinedAtFetchMember(workoutRoom).stream()
                 .map(WorkoutRoomMember::getMember)

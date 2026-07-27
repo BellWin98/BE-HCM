@@ -31,6 +31,16 @@ public class NotificationController {
         return ResponseEntity.ok(ApiResponse.success(null, "FCM 토큰이 등록되었습니다."));
     }
 
+    @DeleteMapping("/fcm/token")
+    @Operation(summary = "FCM 토큰 해제", description = "로그아웃 등에서 사용자의 FCM 토큰을 등록 해제합니다.")
+    public ResponseEntity<ApiResponse<String>> unregisterFcmToken(
+            @Valid @RequestBody FcmTokenRequest request,
+            @AuthenticationPrincipal Member member
+    ) {
+        notificationFacade.unregisterFcmToken(member, request.getToken());
+        return ResponseEntity.ok(ApiResponse.success(null, "FCM 토큰이 해제되었습니다."));
+    }
+
     @PostMapping("/rooms")
     @Operation(summary = "유저가 속한 모든 방에 알림", description = "유저가 속한 모든 방의 멤버들에게 푸시 알림을 전송합니다.")
     public ResponseEntity<ApiResponse<String>> notifyAllRoomMembers(
@@ -61,6 +71,9 @@ public class NotificationController {
      * 메시지 길이 제한 (너무 긴 메시지는 생략)
      */
     private String truncateMessage(String message) {
+        if (message == null) {
+            return "";
+        }
         int maxLength = 50;
         if (message.length() > maxLength) {
             return message.substring(0, maxLength) + "...";

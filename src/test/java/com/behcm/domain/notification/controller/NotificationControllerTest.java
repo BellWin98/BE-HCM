@@ -21,6 +21,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -132,5 +133,36 @@ class NotificationControllerTest {
 
         verify(notificationFacade).notifyRoomMembers(
                 eq(5L), any(Member.class), eq("공지"), eq("공지 내용"), eq("ANNOUNCE"), eq(""));
+    }
+
+    @Test
+    @DisplayName("unregisterFcmToken은 유효한 토큰이면 해제를 위임하고 200을 반환한다")
+    void unregisterFcmToken_validToken_delegatesToFacade() throws Exception {
+        FcmTokenRequest request = new FcmTokenRequest();
+        request.setToken("fcm-token-value");
+
+        mockMvc.perform(delete("/api/notifications/fcm/token")
+                        .with(user(member()))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success", is(true)));
+
+        verify(notificationFacade).unregisterFcmToken(any(Member.class), eq("fcm-token-value"));
+    }
+
+    @Test
+    @DisplayName("unregisterFcmToken은 토큰이 비어있으면 400을 반환한다")
+    void unregisterFcmToken_blankToken_returnsBadRequest() throws Exception {
+        FcmTokenRequest request = new FcmTokenRequest();
+        request.setToken("");
+
+        mockMvc.perform(delete("/api/notifications/fcm/token")
+                        .with(user(member()))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest());
+
+        verify(notificationFacade, never()).unregisterFcmToken(any(), any());
     }
 }

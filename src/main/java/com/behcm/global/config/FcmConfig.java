@@ -40,7 +40,9 @@ public class FcmConfig {
                 log.info("FCM FirebaseApp initialized successfully.");
             }
         } catch (IOException e) {
-            e.printStackTrace();
+            // 키 파일이 없으면 FirebaseApp이 초기화되지 않아 이후 모든 발송이 실패하므로,
+            // 조용히 넘기지 말고 명확히 로깅한다.
+            log.error("FCM FirebaseApp 초기화 실패 - key path: {}. 이후 푸시 발송이 동작하지 않습니다.", path, e);
         }
     }
 }

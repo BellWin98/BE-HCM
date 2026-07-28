@@ -115,3 +115,19 @@ springdoc:
     enabled: true
     path: /swagger-ui.html
   override-with-generic-response: false
+
+# 이 파일이 main 의 application.yml 을 통째로 가리므로(위 주석 참고), actuator 노출 설정도 동일하게 맞춘다.
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health, prometheus, info
+  endpoint:
+    health:
+      show-details: always
+  health:
+    mail:
+      enabled: false
+  metrics:
+    tags:
+      application: hcm

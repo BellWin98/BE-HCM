@@ -56,6 +56,11 @@ public class SecurityConfig {
                         .requestMatchers("/api/stats/**").permitAll()
                         .requestMatchers("/login/oauth2/code/**").permitAll()
                         .requestMatchers("/api/health").permitAll()
+                        // Prometheus 스크레이핑 및 헬스체크용. management.endpoints.web.exposure.include 에서
+                        // health/prometheus/info 외 엔드포인트(env, beans, heapdump 등)는 노출하지 않으므로
+                        // 이 permitAll 은 그 세 개로 실질적으로 한정된다. 운영에서는 이 경로도 보안그룹/리버스
+                        // 프록시로 사내망(Prometheus 서버)에서만 접근 가능하도록 네트워크 단에서 추가로 제한한다.
+                        .requestMatchers("/actuator/**").permitAll()
                         .requestMatchers("/swagger-ui/**", "/v3/api-docs/**").permitAll()
                         .requestMatchers("/ws/**", "/wss/**").permitAll()
                         .requestMatchers("/api/admin/**").hasRole("ADMIN")

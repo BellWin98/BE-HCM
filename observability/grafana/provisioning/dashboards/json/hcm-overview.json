@@ -1,0 +1,89 @@
+{
+  "title": "HCM Backend Overview",
+  "uid": "hcm-backend-overview",
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "15s",
+  "time": { "from": "now-30m", "to": "now" },
+  "panels": [
+    {
+      "id": 1,
+      "title": "HTTP Request Rate (req/s)",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "targets": [
+        {
+          "expr": "sum(rate(http_server_requests_seconds_count{application=\"hcm\"}[1m])) by (uri, status)",
+          "legendFormat": "{{uri}} [{{status}}]"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "HTTP p95 Latency",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(http_server_requests_seconds_bucket{application=\"hcm\"}[5m])) by (le, uri))",
+          "legendFormat": "{{uri}}"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "JVM Heap Used",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+      "targets": [
+        {
+          "expr": "sum(jvm_memory_used_bytes{application=\"hcm\", area=\"heap\"}) by (id)",
+          "legendFormat": "{{id}}"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "title": "Process CPU Usage",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+      "targets": [
+        {
+          "expr": "process_cpu_usage{application=\"hcm\"}",
+          "legendFormat": "cpu"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "title": "HikariCP Active Connections",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 },
+      "targets": [
+        {
+          "expr": "hikaricp_connections_active{application=\"hcm\"}",
+          "legendFormat": "active"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "title": "Cache Hit Ratio (Caffeine)",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 16 },
+      "targets": [
+        {
+          "expr": "sum(rate(cache_gets_total{application=\"hcm\", result=\"hit\"}[5m])) by (cache) / sum(rate(cache_gets_total{application=\"hcm\"}[5m])) by (cache)",
+          "legendFormat": "{{cache}}"
+        }
+      ]
+    }
+  ]
+}

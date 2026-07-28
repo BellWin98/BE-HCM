@@ -32,6 +32,7 @@
 | 외부 연동 | Firebase Admin SDK 9.10.0(FCM 푸시), 한국투자증권 Open API(주식 시세, `RestTemplateConfig`/`httpclient5`), AWS SDK v2(S3) |
 | API 문서화 | springdoc-openapi-starter-webmvc-ui 3.0.3 (Swagger UI: `/swagger-ui.html`, OpenAPI: `/v3/api-docs`) |
 | 비밀값 암호화 | Jasypt(`jasypt-spring-boot-starter` 4.0.4) — YAML에 `ENC(...)` 형식으로 암호화 저장 |
+| 관측성 | Spring Boot Actuator + Micrometer(`micrometer-registry-prometheus`) — `/actuator/health`, `/actuator/prometheus` 만 노출(`management.endpoints.web.exposure.include`), 로컬용 Prometheus/Grafana는 `observability/docker-compose.yml` |
 | 컨테이너 | ![Docker](https://img.shields.io/badge/Docker-amazoncorretto:25--alpine--jdk-2496ED?logo=docker&logoColor=white) |
 | CI/CD | GitHub Actions → Docker Hub → EC2 SSH 배포(`docker-compose`) |
 
@@ -89,6 +90,10 @@ BE-HCM/
 │   └── application-secret.yml           # Jasypt로 암호화된 시크릿 (spring.profiles.include: secret)
 ├── src/test/resources/                  # 테스트 전용 설정 (application-local.yml: localhost:3306 root/1234, localhost:6379)
 ├── .github/workflows/deploy.yml         # CI(빌드/테스트) + CD(Docker 빌드/푸시 + EC2 배포)
+├── observability/                       # 로컬용 Prometheus + Grafana (앱의 /actuator/prometheus 스크레이핑)
+│   ├── docker-compose.yml
+│   ├── prometheus/prometheus.yml
+│   └── grafana/provisioning/            # 데이터소스 + 대시보드 자동 프로비저닝
 ├── Dockerfile                           # amazoncorretto:25-alpine-jdk 런타임 이미지
 ├── build.gradle
 ├── settings.gradle
@@ -177,6 +182,28 @@ export JASYPT_ENCRYPTOR_PASSWORD=[이곳에 정보 입력]
 - API: `http://localhost:8080/api`
 - Health check: `http://localhost:8080/api/health`
 - Swagger UI: `http://localhost:8080/swagger-ui.html`
+- Actuator Health: `http://localhost:8080/actuator/health`
+- Prometheus 메트릭: `http://localhost:8080/actuator/prometheus`
+
+### 관측성(Observability) — 로컬 Prometheus/Grafana
+
+앱을 `bootRun`으로 띄운 상태에서 `observability/docker-compose.yml`로 Prometheus + Grafana를 추가로
+띄우면, 앱의 `/actuator/prometheus`를 스크레이핑해 대시보드로 바로 확인할 수 있습니다(데이터소스와
+"HCM Backend Overview" 대시보드가 자동 프로비저닝됩니다).
+
+```bash
+cd observability
+docker compose up -d
+```
+
+- Prometheus: `http://localhost:9090` (Status → Targets 에서 `hcm-backend` 가 `UP` 인지 확인)
+- Grafana: `http://localhost:3001` (익명 Viewer 접속 허용) → `HCM` 폴더 → `HCM Backend Overview`
+
+`management.endpoints.web.exposure.include`(`application.yml`)에는 `health`, `prometheus`, `info` 만
+포함되어 있습니다 — `env`, `beans`, `heapdump` 등 내부 구성이 드러나는 엔드포인트는 의도적으로 노출하지
+않습니다. 이 두 엔드포인트는 `SecurityConfig`에서 `permitAll`로 열려 있으므로, 실제 운영 환경에서는 앱
+레벨 인증이 아니라 보안그룹/리버스 프록시로 Prometheus 서버만 접근 가능하도록 네트워크 단에서 제한해야
+합니다.
 
 ### 3) Docker 기반 실행
 

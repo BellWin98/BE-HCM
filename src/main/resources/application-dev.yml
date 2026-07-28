@@ -44,3 +44,9 @@ logging:
   level:
     root: INFO
     com.behcm: DEBUG
+
+# dev 는 외부에 공개된 운영 도메인이 아니므로 헬스체크 상세 정보를 노출해도 된다.
+management:
+  endpoint:
+    health:
+      show-details: always

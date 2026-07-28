@@ -125,6 +125,22 @@ BE-HCM("헬창모임")은 그룹 운동 습관 관리 앱을 위한 Spring Boot 
 - 들어오는 STOMP 프레임은 `JwtChannelInterceptor`를 통해 인증됩니다(HTTP용 `JwtAuthenticationFilter`와는
   별개로, WebSocket 채널에서 JWT를 검증).
 
+### 관측성 (Actuator / Prometheus)
+
+- `management.endpoints.web.exposure.include`(`application.yml`)는 `health`, `prometheus`, `info` 만
+  포함합니다. 새 엔드포인트를 노출할 때는 `env`/`beans`/`heapdump`처럼 내부 구성이나 자격 증명이 드러날 수
+  있는 엔드포인트인지 먼저 검토하세요.
+- `/actuator/health`, `/actuator/prometheus`는 `SecurityConfig`에서 `permitAll`입니다(Prometheus 스크레이퍼가
+  JWT를 보낼 수 없으므로). 대신 실제 운영에서는 이 경로를 보안그룹/리버스 프록시로 사내망에서만 접근
+  가능하도록 네트워크 단에서 제한해야 합니다 — 앱 레벨 인증만으로 막혀 있다고 가정하지 마세요.
+- `management.health.mail.enabled: false`로 메일 헬스 인디케이터를 꺼 두었습니다. 켜 두면 헬스체크마다
+  실제 SMTP 커넥션을 시도하고, 로컬/CI처럼 SMTP가 없는 환경에서는 항상 `DOWN`이 되어 `/actuator/health`
+  전체 status를 오염시킵니다.
+- `src/test/resources/application.yml`이 main의 `application.yml`을 통째로 가리므로(위 프로필 설명 참고),
+  management 설정을 바꿀 때는 두 파일 모두 함께 수정하세요.
+- 로컬에서 Prometheus/Grafana로 실제 메트릭을 보려면 `observability/docker-compose.yml`을 사용하세요(앱은
+  `bootRun`으로 별도 기동 — README의 "관측성(Observability)" 절 참고).
+
 ### 따라야 할 컨벤션
 
 - 컨트롤러는 `ApiResponse.success(...)` / `ApiResponse.error(...)`를 통해 `ApiResponse<T>`

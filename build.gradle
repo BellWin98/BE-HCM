@@ -13,6 +13,11 @@ java {
     }
 }
 
+// /actuator/info 에 커밋 해시·빌드 시각 등을 노출한다(management.info.build.enabled).
+springBoot {
+    buildInfo()
+}
+
 configurations {
     compileOnly {
         extendsFrom annotationProcessor
@@ -24,6 +29,8 @@ repositories {
 }
 
 dependencies {
+    implementation 'org.springframework.boot:spring-boot-starter-actuator'
+    implementation 'io.micrometer:micrometer-registry-prometheus'
     implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
     implementation 'org.springframework.boot:spring-boot-starter-data-redis'
     implementation 'org.springframework.boot:spring-boot-starter-cache'

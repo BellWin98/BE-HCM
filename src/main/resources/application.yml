@@ -109,3 +109,35 @@ springdoc:
     enabled: true
     path: /swagger-ui.html
   override-with-generic-response: false
+
+# Actuator/Prometheus. 여기서는 스크레이핑에 필요한 최소 엔드포인트만 노출하고,
+# env/beans/configprops/heapdump 등 내부 구성이 드러나는 엔드포인트는 include 하지 않는다.
+# health/prometheus 는 SecurityConfig 에서 permitAll 로 열어 두므로, 운영에서는 이 경로 자체를
+# 보안그룹/리버스 프록시로 사내망(Prometheus 서버)에서만 접근 가능하도록 네트워크 단에서도 제한한다.
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health, prometheus, info
+  endpoint:
+    health:
+      show-details: never
+  health:
+    # 메일 발송 가능 여부는 앱 자체의 liveness/readiness와 무관하다(SMTP 순단이 앱 다운을 의미하지 않음).
+    # 기본값대로 두면 매 헬스체크마다 실제 SMTP 커넥션을 맺어보고, 로컬/CI 처럼 SMTP가 없는 환경에서는
+    # 항상 DOWN 이 되어 전체 status 를 오염시킨다.
+    mail:
+      enabled: false
+  metrics:
+    tags:
+      application: hcm
+  info:
+    env:
+      enabled: true
+    build:
+      enabled: true
+
+info:
+  app:
+    name: BE-HCM
+    description: 헬창모임 그룹 운동 습관 관리 서비스 백엔드

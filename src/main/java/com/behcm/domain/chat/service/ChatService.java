@@ -9,6 +9,7 @@ import com.behcm.domain.chat.entity.ChatMessage;
 import com.behcm.domain.chat.entity.MessageType;
 import com.behcm.domain.chat.repository.ChatMessageRepository;
 import com.behcm.domain.member.entity.Member;
+import com.behcm.domain.notification.service.NotificationFacade;
 import com.behcm.domain.workout.entity.WorkoutRoom;
 import com.behcm.domain.workout.entity.WorkoutRoomMember;
 import com.behcm.domain.workout.repository.WorkoutRoomMemberRepository;
@@ -36,11 +37,14 @@ import java.util.stream.Stream;
 @Transactional
 public class ChatService {
 
+    private static final String CHAT_MESSAGE_TYPE = "CHAT";
+
     private final ChatMessageRepository chatMessageRepository;
     private final WorkoutRoomMemberRepository workoutRoomMemberRepository;
     private final WorkoutRoomRepository workoutRoomRepository;
     private final S3Service s3Service;
     private final SimpMessagingTemplate messagingTemplate;
+    private final NotificationFacade notificationFacade;
 
     public ChatImageUploadResponse uploadChatImage(Member member, Long roomId, MultipartFile file) {
         WorkoutRoom workoutRoom = workoutRoomRepository.findByIdAndIsActiveTrue(roomId)
@@ -81,6 +85,16 @@ public class ChatService {
         ChatMessageResponse response = responses.isEmpty() ? ChatMessageResponse.from(savedChatMessage) : responses.getFirst();
 
         messagingTemplate.convertAndSend("/topic/chat/room/" + roomId, response);
+
+        notifyChatMessageSent(workoutRoom, sender, request.getType(), savedChatMessage.getContent());
+    }
+
+    private void notifyChatMessageSent(WorkoutRoom workoutRoom, Member sender, MessageType type, String content) {
+        String title = type == MessageType.IMAGE
+                ? String.format("%s님이 사진을 보냈어요!", sender.getNickname())
+                : String.format("%s님이 메시지를 보냈어요!", sender.getNickname());
+        String body = type == MessageType.IMAGE ? "사진" : content;
+        notificationFacade.notifyRoomMembers(workoutRoom.getId(), sender, title, body, CHAT_MESSAGE_TYPE, "");
     }
 
     @Transactional(readOnly = true)

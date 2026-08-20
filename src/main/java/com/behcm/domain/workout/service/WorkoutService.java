@@ -31,6 +31,7 @@ import java.util.List;
 public class WorkoutService {
 
     private static final String WEEKLY_GOAL_ACHIEVED_TYPE = "WEEKLY_GOAL_ACHIEVED";
+    private static final String WORKOUT_UPLOADED_TYPE = "WORKOUT";
 
     private final WorkoutRecordRepository workoutRecordRepository;
     private final WorkoutRoomMemberRepository workoutRoomMemberRepository;
@@ -83,6 +84,7 @@ public class WorkoutService {
                     notifyWeeklyGoalAchieved(member, workoutRoom);
                 }
             }
+            notifyWorkoutUploaded(member, workoutRoom, workoutDate, request.getDuration());
         }
         member.updateTotalWorkoutDays(member.getTotalWorkoutDays() + 1);
         Member savedMember = memberRepository.save(member);
@@ -100,6 +102,13 @@ public class WorkoutService {
         String body = String.format("%s님이 이번 주 운동 목표(%d회)를 달성했어요!",
                 member.getNickname(), workoutRoom.getMinWeeklyWorkouts());
         notificationFacade.notifyRoomMembers(workoutRoom.getId(), member, title, body, WEEKLY_GOAL_ACHIEVED_TYPE, "");
+    }
+
+    private void notifyWorkoutUploaded(Member member, WorkoutRoom workoutRoom, LocalDate workoutDate, Integer duration) {
+        String dateText = workoutDate.isEqual(LocalDate.now()) ? "오늘" : workoutDate.format(DateTimeFormatter.ISO_LOCAL_DATE);
+        String title = String.format("%s님이 %s 운동을 인증했어요!", member.getNickname(), dateText);
+        String body = String.format("운동시간: %d분", duration);
+        notificationFacade.notifyRoomMembers(workoutRoom.getId(), member, title, body, WORKOUT_UPLOADED_TYPE, "");
     }
 
     private boolean isThisWeek(LocalDate targetDate) {

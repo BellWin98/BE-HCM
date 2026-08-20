@@ -2,6 +2,7 @@ package com.behcm.domain.rest.service;
 
 import com.behcm.domain.member.entity.Member;
 import com.behcm.domain.member.entity.MemberRole;
+import com.behcm.domain.notification.service.NotificationFacade;
 import com.behcm.domain.rest.dto.RestRequest;
 import com.behcm.domain.rest.entity.Rest;
 import com.behcm.domain.rest.repository.RestRepository;
@@ -21,8 +22,11 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.contains;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
 @ExtendWith(MockitoExtension.class)
@@ -33,6 +37,9 @@ class RestServiceTest {
 
     @Mock
     private WorkoutRoomMemberRepository workoutRoomMemberRepository;
+
+    @Mock
+    private NotificationFacade notificationFacade;
 
     @InjectMocks
     private RestService restService;
@@ -76,6 +83,7 @@ class RestServiceTest {
                 .hasFieldOrPropertyWithValue("errorCode", ErrorCode.WORKOUT_ROOM_NOT_FOUND);
 
         verify(restRepository, never()).save(any());
+        verify(notificationFacade, never()).notifyRoomMembers(any(), any(), any(), any(), any(), any());
     }
 
     @Test
@@ -97,6 +105,7 @@ class RestServiceTest {
                 .hasFieldOrPropertyWithValue("errorCode", ErrorCode.REST_PERIOD_OVERLAP);
 
         verify(restRepository, never()).save(any());
+        verify(notificationFacade, never()).notifyRoomMembers(any(), any(), any(), any(), any(), any());
     }
 
     @Test
@@ -110,7 +119,22 @@ class RestServiceTest {
 
         restService.registerRestDay(member, request("2026-08-01", "2026-08-05"));
 
-        verify(restRepository, org.mockito.Mockito.times(2)).save(any(Rest.class));
+        verify(restRepository, times(2)).save(any(Rest.class));
+    }
+
+    @Test
+    @DisplayName("겹치지 않는 기간이면 참여 중인 각 방의 다른 멤버들에게 휴식일 등록 알림을 보낸다")
+    void registerRestDay_nonOverlappingPeriod_notifiesEveryRoom() {
+        Member member = member();
+        WorkoutRoomMember wrm1 = wrm(member);
+        WorkoutRoomMember wrm2 = wrm(member);
+        given(workoutRoomMemberRepository.findByMember(member)).willReturn(List.of(wrm1, wrm2));
+        given(restRepository.findAllByWorkoutRoomMemberIn(List.of(wrm1, wrm2))).willReturn(List.of());
+
+        restService.registerRestDay(member, request("2026-08-01", "2026-08-05"));
+
+        verify(notificationFacade, times(2)).notifyRoomMembers(
+                any(), eq(member), contains("휴식일을 등록했어요"), eq("2026-08-01 ~ 2026-08-05"), eq("REST"), eq(""));
     }
 
     @Test

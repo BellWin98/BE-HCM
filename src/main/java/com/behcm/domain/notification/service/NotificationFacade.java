@@ -31,15 +31,10 @@ public class NotificationFacade {
         log.debug("토큰 등록 완료 - member: {}, token: {}", member.getEmail(), token);
     }
 
-    public void notifyAllRoomMembers(Member member, String title, String body, String type, String path) {
-        List<String> fcmTokens = fcmTokenRepository.findFcmTokensByMember(member);
-        fcmService.sendGroupNotification(member.getId(), fcmTokens, title, body, type + "-" + member.getId(), path);
-    }
-
     public void notifyMember(Member targetMember, String title, String body, String type, String path) {
         fcmTokenRepository.findByMember(targetMember)
                 .ifPresent(fcmToken -> fcmService.sendGroupNotification(
-                        targetMember.getId(), List.of(fcmToken.getToken()), title, body,
+                        targetMember.getId(), List.of(fcmToken.getToken()), title, truncateMessage(body),
                         type + "-" + targetMember.getId(), path));
     }
 
@@ -54,6 +49,17 @@ public class NotificationFacade {
 
         List<String> fcmTokens = fcmTokenRepository.findFcmTokensByMembers(targetMembers);
 
-        fcmService.sendGroupNotification(member.getId(), fcmTokens, title, body, type + "-" + roomId, path);
+        fcmService.sendGroupNotification(member.getId(), fcmTokens, title, truncateMessage(body), type + "-" + roomId, path);
+    }
+
+    /**
+     * 메시지 길이 제한 (너무 긴 메시지는 생략)
+     */
+    private String truncateMessage(String message) {
+        int maxLength = 50;
+        if (message != null && message.length() > maxLength) {
+            return message.substring(0, maxLength) + "...";
+        }
+        return message;
     }
 }

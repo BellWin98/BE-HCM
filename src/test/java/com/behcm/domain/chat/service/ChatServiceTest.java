@@ -10,6 +10,7 @@ import com.behcm.domain.chat.entity.MessageType;
 import com.behcm.domain.chat.repository.ChatMessageRepository;
 import com.behcm.domain.member.entity.Member;
 import com.behcm.domain.member.entity.MemberRole;
+import com.behcm.domain.notification.service.NotificationFacade;
 import com.behcm.domain.workout.entity.WorkoutRoom;
 import com.behcm.domain.workout.entity.WorkoutRoomMember;
 import com.behcm.domain.workout.repository.WorkoutRoomMemberRepository;
@@ -37,6 +38,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.contains;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -59,6 +62,9 @@ class ChatServiceTest {
 
     @Mock
     private SimpMessagingTemplate messagingTemplate;
+
+    @Mock
+    private NotificationFacade notificationFacade;
 
     @InjectMocks
     private ChatService chatService;
@@ -175,6 +181,7 @@ class ChatServiceTest {
                 .hasFieldOrPropertyWithValue("errorCode", ErrorCode.WORKOUT_ROOM_NOT_FOUND);
 
         verify(chatMessageRepository, never()).save(any());
+        verify(notificationFacade, never()).notifyRoomMembers(any(), any(), any(), any(), any(), any());
     }
 
     @Test
@@ -192,6 +199,8 @@ class ChatServiceTest {
         assertThatThrownBy(() -> chatService.sendMessage(1L, outsider, request))
                 .isInstanceOf(CustomException.class)
                 .hasFieldOrPropertyWithValue("errorCode", ErrorCode.NOT_WORKOUT_ROOM_MEMBER);
+
+        verify(notificationFacade, never()).notifyRoomMembers(any(), any(), any(), any(), any(), any());
     }
 
     @Test
@@ -210,6 +219,7 @@ class ChatServiceTest {
                 .hasFieldOrPropertyWithValue("errorCode", ErrorCode.INVALID_INPUT);
 
         verify(chatMessageRepository, never()).save(any());
+        verify(notificationFacade, never()).notifyRoomMembers(any(), any(), any(), any(), any(), any());
     }
 
     @Test
@@ -235,6 +245,7 @@ class ChatServiceTest {
         verify(messagingTemplate).convertAndSend(org.mockito.ArgumentMatchers.eq("/topic/chat/room/1"), captor.capture());
         assertThat(captor.getValue().getContent()).isEqualTo("안녕하세요");
         assertThat(captor.getValue().getSender()).isEqualTo("owner");
+        verify(notificationFacade).notifyRoomMembers(eq(1L), eq(owner), contains("메시지를 보냈어요"), eq("안녕하세요"), eq("CHAT"), eq(""));
     }
 
     @Test
@@ -258,6 +269,7 @@ class ChatServiceTest {
         chatService.sendMessage(1L, owner, request);
 
         assertThat(savedCaptor.getValue().getImageUrl()).isEqualTo("https://s3/img.png");
+        verify(notificationFacade).notifyRoomMembers(eq(1L), eq(owner), contains("사진을 보냈어요"), eq("사진"), eq("CHAT"), eq(""));
     }
 
     // ---------- getChatHistory ----------

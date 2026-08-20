@@ -2,7 +2,6 @@ package com.behcm.domain.notification.controller;
 
 import com.behcm.domain.member.entity.Member;
 import com.behcm.domain.notification.dto.FcmTokenRequest;
-import com.behcm.domain.notification.dto.NotifyRequest;
 import com.behcm.domain.notification.service.NotificationFacade;
 import com.behcm.global.common.ApiResponse;
 import io.swagger.v3.oas.annotations.Operation;
@@ -29,42 +28,5 @@ public class NotificationController {
     ) {
         notificationFacade.registerFcmToken(member, request.getToken());
         return ResponseEntity.ok(ApiResponse.success(null, "FCM 토큰이 등록되었습니다."));
-    }
-
-    @PostMapping("/rooms")
-    @Operation(summary = "유저가 속한 모든 방에 알림", description = "유저가 속한 모든 방의 멤버들에게 푸시 알림을 전송합니다.")
-    public ResponseEntity<ApiResponse<String>> notifyAllRoomMembers(
-            @Valid @RequestBody NotifyRequest request,
-            @AuthenticationPrincipal Member member
-    ) {
-        notificationFacade.notifyAllRoomMembers(
-                member, request.getTitle(), truncateMessage(request.getBody()), request.getType(),""
-        );
-        return ResponseEntity.ok(ApiResponse.success(null, request.getType() + "알림이 전송되었습니다."));
-    }
-
-    @PostMapping("/rooms/{roomId}")
-    @Operation(summary = "현재 유저가 속한 방에 알림", description = "현재 유저가 속한 방의 멤버들에게 푸시 알림을 전송합니다.")
-    public ResponseEntity<ApiResponse<String>> notifyRoomMembersForAdmin(
-            @PathVariable Long roomId,
-            @Valid @RequestBody NotifyRequest request,
-            @AuthenticationPrincipal Member member
-    ) {
-        notificationFacade.notifyRoomMembers(
-                roomId, member, request.getTitle(),
-                truncateMessage(request.getBody()), request.getType(),""
-        );
-        return ResponseEntity.ok(ApiResponse.success(null, request.getType() + "알림이 전송되었습니다."));
-    }
-
-    /**
-     * 메시지 길이 제한 (너무 긴 메시지는 생략)
-     */
-    private String truncateMessage(String message) {
-        int maxLength = 50;
-        if (message.length() > maxLength) {
-            return message.substring(0, maxLength) + "...";
-        }
-        return message;
     }
 }

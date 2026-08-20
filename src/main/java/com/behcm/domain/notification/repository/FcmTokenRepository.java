@@ -16,17 +16,5 @@ public interface FcmTokenRepository extends JpaRepository<FcmToken, Long> {
     @Query("SELECT f.token FROM FcmToken f WHERE f.member IN :members")
     List<String> findFcmTokensByMembers(@Param("members") List<Member> members);
 
-    @Query(
-            """
-                select ft.token
-                from WorkoutRoomMember me
-                join WorkoutRoomMember other on me.workoutRoom = other.workoutRoom
-                join FcmToken ft on ft.member = other.member
-                where me.member = :member
-                and other.member != :member
-            """
-    )
-    List<String> findFcmTokensByMember(@Param("member") Member member);
-
     void deleteByMember(Member member);
 }

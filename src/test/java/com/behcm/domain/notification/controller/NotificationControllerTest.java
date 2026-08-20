@@ -3,7 +3,6 @@ package com.behcm.domain.notification.controller;
 import com.behcm.domain.member.entity.Member;
 import com.behcm.domain.member.entity.MemberRole;
 import com.behcm.domain.notification.dto.FcmTokenRequest;
-import com.behcm.domain.notification.dto.NotifyRequest;
 import com.behcm.domain.notification.service.NotificationFacade;
 import tools.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.DisplayName;
@@ -76,61 +75,5 @@ class NotificationControllerTest {
                 .andExpect(jsonPath("$.success", is(true)));
 
         verify(notificationFacade).registerFcmToken(any(Member.class), eq("fcm-token-value"));
-    }
-
-    @Test
-    @DisplayName("notifyAllRoomMembers는 인증된 사용자의 모든 방 멤버에게 알림 발송을 위임한다")
-    void notifyAllRoomMembers_delegatesToFacade() throws Exception {
-        NotifyRequest request = new NotifyRequest();
-        request.setTitle("공지");
-        request.setBody("오늘도 화이팅!");
-        request.setType("ANNOUNCE");
-
-        mockMvc.perform(post("/api/notifications/rooms")
-                        .with(user(member()))
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isOk());
-
-        verify(notificationFacade).notifyAllRoomMembers(
-                any(Member.class), eq("공지"), eq("오늘도 화이팅!"), eq("ANNOUNCE"), eq(""));
-    }
-
-    @Test
-    @DisplayName("notifyAllRoomMembers는 본문이 50자를 초과하면 잘라서 전달한다")
-    void notifyAllRoomMembers_longBody_truncatesTo50Chars() throws Exception {
-        String longBody = "가".repeat(60);
-        NotifyRequest request = new NotifyRequest();
-        request.setTitle("공지");
-        request.setBody(longBody);
-        request.setType("ANNOUNCE");
-
-        mockMvc.perform(post("/api/notifications/rooms")
-                        .with(user(member()))
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isOk());
-
-        String expectedTruncated = "가".repeat(50) + "...";
-        verify(notificationFacade).notifyAllRoomMembers(
-                any(Member.class), eq("공지"), eq(expectedTruncated), eq("ANNOUNCE"), eq(""));
-    }
-
-    @Test
-    @DisplayName("notifyRoomMembersForAdmin은 지정된 방 멤버에게 알림 발송을 위임한다")
-    void notifyRoomMembersForAdmin_delegatesToFacadeWithRoomId() throws Exception {
-        NotifyRequest request = new NotifyRequest();
-        request.setTitle("공지");
-        request.setBody("공지 내용");
-        request.setType("ANNOUNCE");
-
-        mockMvc.perform(post("/api/notifications/rooms/{roomId}", 5L)
-                        .with(user(member()))
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isOk());
-
-        verify(notificationFacade).notifyRoomMembers(
-                eq(5L), any(Member.class), eq("공지"), eq("공지 내용"), eq("ANNOUNCE"), eq(""));
     }
 }

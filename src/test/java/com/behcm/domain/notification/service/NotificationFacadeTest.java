@@ -91,17 +91,6 @@ class NotificationFacadeTest {
     }
 
     @Test
-    @DisplayName("notifyAllRoomMembers는 회원이 참여한 모든 방의 멤버 토큰으로 알림을 발송한다")
-    void notifyAllRoomMembers_sendsToTokensAcrossAllRooms() {
-        Member member = member(1L, "user");
-        given(fcmTokenRepository.findFcmTokensByMember(member)).willReturn(List.of("token-a", "token-b"));
-
-        notificationFacade.notifyAllRoomMembers(member, "title", "body", "WORKOUT", "/path");
-
-        verify(fcmService).sendGroupNotification(1L, List.of("token-a", "token-b"), "title", "body", "WORKOUT-1", "/path");
-    }
-
-    @Test
     @DisplayName("notifyMember는 대상 회원의 토큰으로만 알림을 발송한다")
     void notifyMember_sendsToTargetMemberToken() {
         Member target = member(1L, "target");
@@ -138,6 +127,20 @@ class NotificationFacadeTest {
     }
 
     @Test
+    @DisplayName("notifyMember는 본문이 50자를 초과하면 잘라서 FcmService에 전달한다")
+    void notifyMember_longBody_truncatesTo50Chars() {
+        Member target = member(1L, "target");
+        FcmToken fcmToken = new FcmToken(target, "target-token");
+        given(fcmTokenRepository.findByMember(target)).willReturn(Optional.of(fcmToken));
+        String longBody = "가".repeat(60);
+        String expectedTruncated = "가".repeat(50) + "...";
+
+        notificationFacade.notifyMember(target, "title", longBody, "PENALTY_ASSIGNED", "/path");
+
+        verify(fcmService).sendGroupNotification(1L, List.of("target-token"), "title", expectedTruncated, "PENALTY_ASSIGNED-1", "/path");
+    }
+
+    @Test
     @DisplayName("notifyRoomMembers는 발신자를 제외한 나머지 방 멤버들에게만 알림을 발송한다")
     void notifyRoomMembers_excludesSenderFromTargets() {
         Member sender = member(1L, "sender");
@@ -155,5 +158,25 @@ class NotificationFacadeTest {
         verify(fcmService).sendGroupNotification(eq(1L), eq(List.of("other-token")), eq("title"), eq("body"), eq("CHAT-1"), eq("/path"));
         verify(fcmTokenRepository).findFcmTokensByMembers(List.of(other));
         verify(workoutRoomMemberRepository).findByWorkoutRoomOrderByJoinedAtFetchMember(room);
+    }
+
+    @Test
+    @DisplayName("notifyRoomMembers는 본문이 50자를 초과하면 잘라서 FcmService에 전달한다")
+    void notifyRoomMembers_longBody_truncatesTo50Chars() {
+        Member sender = member(1L, "sender");
+        Member other = member(2L, "other");
+        WorkoutRoom room = room(1L, sender);
+        WorkoutRoomMember senderWrm = WorkoutRoomMember.builder().member(sender).workoutRoom(room).build();
+        WorkoutRoomMember otherWrm = WorkoutRoomMember.builder().member(other).workoutRoom(room).build();
+        given(workoutRoomRepository.findByIdAndIsActiveTrue(1L)).willReturn(Optional.of(room));
+        given(workoutRoomMemberRepository.findByWorkoutRoomOrderByJoinedAtFetchMember(room))
+                .willReturn(List.of(senderWrm, otherWrm));
+        given(fcmTokenRepository.findFcmTokensByMembers(List.of(other))).willReturn(List.of("other-token"));
+        String longBody = "가".repeat(60);
+        String expectedTruncated = "가".repeat(50) + "...";
+
+        notificationFacade.notifyRoomMembers(1L, sender, "title", longBody, "CHAT", "/path");
+
+        verify(fcmService).sendGroupNotification(eq(1L), eq(List.of("other-token")), eq("title"), eq(expectedTruncated), eq("CHAT-1"), eq("/path"));
     }
 }

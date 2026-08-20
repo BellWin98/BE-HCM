@@ -30,6 +30,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.never;
@@ -219,6 +220,49 @@ class WorkoutServiceTest {
         workoutService.authenticateWorkout(member, request(today));
 
         assertThat(wrm.getWeeklyWorkouts()).isEqualTo(4);
-        verify(notificationFacade, never()).notifyRoomMembers(any(), any(), any(), any(), any(), any());
+        verify(notificationFacade, never()).notifyRoomMembers(any(), any(), any(), any(), eq("WEEKLY_GOAL_ACHIEVED"), any());
+    }
+
+    @Test
+    @DisplayName("정상 인증 시 오늘 날짜면 각 방의 다른 멤버들에게 '오늘' 운동 인증 알림을 보낸다")
+    void authenticateWorkout_success_notifiesRoomMembersOfUploadToday() {
+        Member member = member();
+        WorkoutRoom room1 = room(1L);
+        WorkoutRoom room2 = room(2L);
+        WorkoutRoomMember wrm1 = WorkoutRoomMember.builder().member(member).workoutRoom(room1).build();
+        WorkoutRoomMember wrm2 = WorkoutRoomMember.builder().member(member).workoutRoom(room2).build();
+        given(workoutRoomMemberRepository.findByMember(member)).willReturn(List.of(wrm1, wrm2));
+        given(workoutRecordRepository.findByMemberAndWorkoutDateAndWorkoutRoomIn(any(), any(), any()))
+                .willReturn(List.of());
+        given(s3Service.uploadWorkoutImages(any())).willReturn(List.of("https://s3/image.jpg"));
+        given(workoutRecordRepository.save(any(WorkoutRecord.class)))
+                .willAnswer(invocation -> invocation.getArgument(0));
+        given(memberRepository.save(any(Member.class))).willAnswer(invocation -> invocation.getArgument(0));
+
+        String today = LocalDate.now().toString();
+        workoutService.authenticateWorkout(member, request(today));
+
+        verify(notificationFacade).notifyRoomMembers(eq(1L), eq(member), contains("오늘"), eq("운동시간: 60분"), eq("WORKOUT"), eq(""));
+        verify(notificationFacade).notifyRoomMembers(eq(2L), eq(member), contains("오늘"), eq("운동시간: 60분"), eq("WORKOUT"), eq(""));
+    }
+
+    @Test
+    @DisplayName("오늘이 아닌 날짜로 인증하면 알림 제목에 해당 날짜가 포맷되어 들어간다")
+    void authenticateWorkout_pastDate_notifiesWithFormattedDate() {
+        Member member = member();
+        WorkoutRoom room = room(1L);
+        WorkoutRoomMember wrm = WorkoutRoomMember.builder().member(member).workoutRoom(room).build();
+        given(workoutRoomMemberRepository.findByMember(member)).willReturn(List.of(wrm));
+        given(workoutRecordRepository.findByMemberAndWorkoutDateAndWorkoutRoomIn(any(), any(), any()))
+                .willReturn(List.of());
+        given(s3Service.uploadWorkoutImages(any())).willReturn(List.of("https://s3/image.jpg"));
+        given(workoutRecordRepository.save(any(WorkoutRecord.class)))
+                .willAnswer(invocation -> invocation.getArgument(0));
+        given(memberRepository.save(any(Member.class))).willAnswer(invocation -> invocation.getArgument(0));
+
+        String threeDaysAgo = LocalDate.now().minusDays(3).toString();
+        workoutService.authenticateWorkout(member, request(threeDaysAgo));
+
+        verify(notificationFacade).notifyRoomMembers(eq(1L), eq(member), contains(threeDaysAgo), eq("운동시간: 60분"), eq("WORKOUT"), eq(""));
     }
 }

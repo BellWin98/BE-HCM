@@ -40,12 +40,12 @@ class StockControllerTest {
     @MockitoBean
     private StockService stockService;
 
-    private Member member() {
+    private Member member(MemberRole role) {
         return Member.builder()
                 .email("user@test.com")
                 .password("encoded")
                 .nickname("user")
-                .role(MemberRole.USER)
+                .role(role)
                 .build();
     }
 
@@ -57,8 +57,25 @@ class StockControllerTest {
     }
 
     @Test
-    @DisplayName("getStockPortfolio는 서비스가 만든 포트폴리오를 그대로 반환한다")
-    void getStockPortfolio_authenticated_returnsPortfolio() throws Exception {
+    @DisplayName("getStockPortfolio는 USER 권한으로 요청하면 403을 반환한다")
+    void getStockPortfolio_withUserRole_returnsForbidden() throws Exception {
+        mockMvc.perform(get("/api/stock/portfolio").with(user(member(MemberRole.USER))))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @DisplayName("getTradingProfitLoss는 USER 권한으로 요청하면 403을 반환한다")
+    void getTradingProfitLoss_withUserRole_returnsForbidden() throws Exception {
+        mockMvc.perform(post("/api/stock/trading-profit-loss")
+                        .with(user(member(MemberRole.USER)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(profitLossRequest())))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @DisplayName("getStockPortfolio는 FAMILY 권한이면 서비스가 만든 포트폴리오를 그대로 반환한다")
+    void getStockPortfolio_withFamilyRole_returnsPortfolio() throws Exception {
         StockPortfolioResponse portfolio = StockPortfolioResponse.builder()
                 .totalMarketValue(new BigDecimal("750000"))
                 .totalProfitLoss(new BigDecimal("50000"))
@@ -68,18 +85,40 @@ class StockControllerTest {
                 .build();
         given(stockService.getStockPortfolio()).willReturn(portfolio);
 
-        mockMvc.perform(get("/api/stock/portfolio").with(user(member())))
+        mockMvc.perform(get("/api/stock/portfolio").with(user(member(MemberRole.FAMILY))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.totalMarketValue", is(750000)));
     }
 
     @Test
-    @DisplayName("getTradingProfitLoss는 요청 바디를 그대로 서비스에 전달해 응답한다")
-    void getTradingProfitLoss_delegatesRequestToService() throws Exception {
+    @DisplayName("getStockPortfolio는 ADMIN 권한이어도 포트폴리오를 반환한다")
+    void getStockPortfolio_withAdminRole_returnsPortfolio() throws Exception {
+        StockPortfolioResponse portfolio = StockPortfolioResponse.builder()
+                .totalMarketValue(new BigDecimal("750000"))
+                .totalProfitLoss(BigDecimal.ZERO)
+                .totalProfitLossRate(BigDecimal.ZERO)
+                .holdings(List.of())
+                .lastUpdated("2026-07-19T00:00:00")
+                .build();
+        given(stockService.getStockPortfolio()).willReturn(portfolio);
+
+        mockMvc.perform(get("/api/stock/portfolio").with(user(member(MemberRole.ADMIN))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.totalMarketValue", is(750000)));
+    }
+
+    private TradingProfitLossRequest profitLossRequest() {
         TradingProfitLossRequest request = new TradingProfitLossRequest();
         request.setStartDate("2026-07-01");
         request.setEndDate("2026-07-19");
         request.setPeriodType("CUSTOM");
+        return request;
+    }
+
+    @Test
+    @DisplayName("getTradingProfitLoss는 요청 바디를 그대로 서비스에 전달해 응답한다")
+    void getTradingProfitLoss_delegatesRequestToService() throws Exception {
+        TradingProfitLossRequest request = profitLossRequest();
 
         TradingProfitLossResponse response = TradingProfitLossResponse.builder()
                 .period("2026-07-01 ~ 2026-07-19")
@@ -96,7 +135,7 @@ class StockControllerTest {
                 .willReturn(response);
 
         mockMvc.perform(post("/api/stock/trading-profit-loss")
-                        .with(user(member()))
+                        .with(user(member(MemberRole.FAMILY)))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isOk())

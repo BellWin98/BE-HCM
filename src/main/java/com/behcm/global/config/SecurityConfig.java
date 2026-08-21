@@ -59,6 +59,8 @@ public class SecurityConfig {
                         .requestMatchers("/swagger-ui/**", "/v3/api-docs/**").permitAll()
                         .requestMatchers("/ws/**", "/wss/**").permitAll()
                         .requestMatchers("/api/admin/**").hasRole("ADMIN")
+                        // 증권계좌 정보(보유종목·평가금액·예수금)는 계좌 소유자 그룹만 조회할 수 있다.
+                        .requestMatchers("/api/stock/**").hasAnyRole("FAMILY", "ADMIN")
                         .anyRequest().authenticated()
                 );
 

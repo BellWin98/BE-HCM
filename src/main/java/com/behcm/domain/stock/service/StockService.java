@@ -4,13 +4,21 @@ import com.behcm.domain.stock.dto.*;
 import com.behcm.domain.stock.dto.TradingProfitLossResponse.TradingProfitLossDto;
 import com.behcm.global.config.stock.KoreaInvestmentClient;
 import com.behcm.global.config.stock.KoreaInvestmentProperties;
+import com.behcm.global.exception.CustomException;
+import com.behcm.global.exception.ErrorCode;
+import jakarta.annotation.PreDestroy;
 import tools.jackson.databind.JsonNode;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
+import java.time.format.ResolverStyle;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -33,6 +41,29 @@ public class StockService {
     private static final long THROTTLE_DELAY_MS = 1000 / API_CALLS_PER_SECOND; // 50ms
     private final ExecutorService executorService = Executors.newFixedThreadPool(10);
 
+    // 연속조회 키가 끝나지 않는 경우에도 호출이 유한하도록 상한을 둔다.
+    static final int MAX_PROFIT_LOSS_PAGES = 100;
+    private static final DateTimeFormatter REQUEST_DATE_FORMAT = DateTimeFormatter.ofPattern("uuuu-MM-dd")
+            .withResolverStyle(ResolverStyle.STRICT);
+
+    @PreDestroy
+    public void shutdownExecutor() {
+        executorService.shutdown();
+        try {
+            if (!executorService.awaitTermination(5, TimeUnit.SECONDS)) {
+                executorService.shutdownNow();
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            executorService.shutdownNow();
+        }
+    }
+
+    /**
+     * 계좌가 하나뿐이므로 단일 엔트리 캐시로 충분하다. 화면을 새로고침할 때마다
+     * (1 + 보유종목수) 회의 외부 API 호출이 나가는 것을 짧은 TTL 로 억제한다.
+     */
+    @Cacheable("stockPortfolio")
     public StockPortfolioResponse getStockPortfolio() {
         Map<String, String> params = new HashMap<>();
         params.put("CANO", properties.getAccountNumber());
@@ -71,9 +102,16 @@ public class StockService {
     }
 
     public TradingProfitLossResponse getTradingProfitLoss(TradingProfitLossRequest request) {
-        log.debug("Trading profit loss request - startDate: {}, endDate: {}, periodType: {}", 
+        log.debug("Trading profit loss request - startDate: {}, endDate: {}, periodType: {}",
                 request.getStartDate(), request.getEndDate(), request.getPeriodType());
-        
+
+        // 0. 요청 검증 — null/형식오류가 아래 replace()에서 NPE 로 터져 500 이 되는 것을 막는다.
+        LocalDate startDate = parseRequestDate(request.getStartDate());
+        LocalDate endDate = parseRequestDate(request.getEndDate());
+        if (startDate.isAfter(endDate)) {
+            throw new CustomException(ErrorCode.INVALID_INPUT);
+        }
+
         // 1. 요청 파라미터 (Query Params) 설정
         Map<String, String> params = new HashMap<>();
         params.put("CANO", properties.getAccountNumber());
@@ -96,10 +134,8 @@ public class StockService {
         headers.put("tr_cont", "");
         List<TradingProfitLossDto> allTrades = new ArrayList<>();
         JsonNode lastResponse = null;
-        // 3. 반복 조회 루프 (Pagination)
-        while (true) {
-            // API 호출 (headers 맵을 추가로 전달한다고 가정)
-            // Client의 callApiWithParams 메서드가 헤더를 받을 수 있도록 수정되어야 합니다.
+        // 3. 반복 조회 루프 (Pagination) — 연속키가 끝나지 않아도 MAX_PROFIT_LOSS_PAGES 에서 멈춘다.
+        for (int page = 0; page < MAX_PROFIT_LOSS_PAGES; page++) {
             JsonNode response = koreaInvestmentClient.callApiWithParams(
                     "/uapi/domestic-stock/v1/trading/inquire-period-trade-profit",
                     "TTTC8715R",
@@ -117,39 +153,41 @@ public class StockService {
                     String tradeDate = formatTradeDate(trade.path("trad_dt").asString());
                     
                     // 매수 내역 처리 (buy_qty가 0이 아니면 매수 DTO 생성)
-                    String buyQty = trade.path("buy_qty").asString("0");
-                    if (!buyQty.equals("0")) {
+                    BigDecimal buyQty = decimal(trade, "buy_qty");
+                    if (buyQty.signum() != 0) {
                         TradingProfitLossDto buyDto = TradingProfitLossDto.builder()
                                 .stockCode(stockCode)
                                 .stockName(stockName)
                                 .tradeDate(tradeDate)
                                 .tradeType("BUY")
-                                .quantity(Integer.parseInt(buyQty))
-                                .price(new BigDecimal(trade.path("pchs_unpr").asString("0")))
-                                .amount(new BigDecimal(trade.path("buy_amt").asString("0")))
+                                .quantity(buyQty.intValue())
+                                // pchs_unpr 은 보유 포지션의 평균 매입단가라 그날 체결가와 다르다.
+                                // 매수금액/매수수량이 해당 행의 실제 체결 평균가다.
+                                .price(unitPrice(decimal(trade, "buy_amt"), buyQty, decimal(trade, "pchs_unpr")))
+                                .amount(decimal(trade, "buy_amt"))
                                 .profitLoss(BigDecimal.ZERO) // 매수 시 손익 없음
                                 .profitLossRate(BigDecimal.ZERO) // 매수 시 손익률 없음
-                                .fee(new BigDecimal(trade.path("fee").asString("0")))
+                                .fee(decimal(trade, "fee"))
                                 .tax(BigDecimal.ZERO) // 매수 시 세금 없음
                                 .build();
                         allTrades.add(buyDto);
                     }
-                    
+
                     // 매도 내역 처리 (sll_qty가 0이 아니면 매도 DTO 생성)
-                    String sllQty = trade.path("sll_qty").asString("0");
-                    if (!sllQty.equals("0")) {
+                    BigDecimal sllQty = decimal(trade, "sll_qty");
+                    if (sllQty.signum() != 0) {
                         TradingProfitLossDto sellDto = TradingProfitLossDto.builder()
                                 .stockCode(stockCode)
                                 .stockName(stockName)
                                 .tradeDate(tradeDate)
                                 .tradeType("SELL")
-                                .quantity(Integer.parseInt(sllQty))
-                                .price(new BigDecimal(trade.path("sll_pric").asString("0")))
-                                .amount(new BigDecimal(trade.path("sll_amt").asString("0")))
-                                .profitLoss(new BigDecimal(trade.path("rlzt_pfls").asString("0")))
-                                .profitLossRate(new BigDecimal(trade.path("pfls_rt").asString("0")))
-                                .fee(new BigDecimal(trade.path("fee").asString("0")))
-                                .tax(new BigDecimal(trade.path("tl_tax").asString("0"))) // null safe 처리
+                                .quantity(sllQty.intValue())
+                                .price(unitPrice(decimal(trade, "sll_amt"), sllQty, decimal(trade, "sll_pric")))
+                                .amount(decimal(trade, "sll_amt"))
+                                .profitLoss(decimal(trade, "rlzt_pfls"))
+                                .profitLossRate(decimal(trade, "pfls_rt"))
+                                .fee(decimal(trade, "fee"))
+                                .tax(decimal(trade, "tl_tax"))
                                 .build();
                         allTrades.add(sellDto);
                     }
@@ -169,11 +207,19 @@ public class StockService {
 
             // **중요: 다음 조회 시 헤더에 tr_cont = "N" 설정**
             headers.put("tr_cont", "N");
-            // (선택사항) API 호출 제한 고려하여 짧은 대기 시간 추가
+
+            if (page == MAX_PROFIT_LOSS_PAGES - 1) {
+                log.warn("Trading profit loss pagination hit the {}-page cap for {} ~ {}; results may be truncated",
+                        MAX_PROFIT_LOSS_PAGES, request.getStartDate(), request.getEndDate());
+                break;
+            }
+
+            // API 호출 제한 고려하여 짧은 대기 시간 추가
             try {
-                Thread.sleep(50);
+                Thread.sleep(THROTTLE_DELAY_MS);
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
+                break;
             }
         }
         // 7. 거래 내역 날짜순 정렬 (최신순)
@@ -184,19 +230,14 @@ public class StockService {
     }
 
     private TradingProfitLossResponse parseTradingProfitLossResponse(JsonNode response, TradingProfitLossRequest request, List<TradingProfitLossDto> allTrades) {
-        JsonNode output2 = (response != null && response.has("output2")) ? response.get("output2") : null;
+        JsonNode output2 = firstElement(response != null ? response.get("output2") : null);
 
-        // output2가 배열로 오는 경우 첫 번째 요소 사용
-        if (output2 != null && output2.isArray() && !output2.isEmpty()) {
-            output2 = output2.get(0);
-        }
-        // Null Safe 하게 값 추출
-        BigDecimal totalBuyAmount = new BigDecimal(output2 != null ? output2.path("buy_excc_amt_smtl").asString("0") : "0");
-        BigDecimal totalSellAmount = new BigDecimal(output2 != null ? output2.path("sll_excc_amt_smtl").asString("0") : "0");
-        BigDecimal totalProfitLoss = new BigDecimal(output2 != null ? output2.path("tot_rlzt_pfls").asString("0") : "0");
-        BigDecimal totalProfitLossRate = new BigDecimal(output2 != null ? output2.path("tot_pftrt").asString("0") : "0");
-        BigDecimal totalFee = new BigDecimal(output2 != null ? output2.path("tot_fee").asString("0") : "0");
-        BigDecimal totalTax = new BigDecimal(output2 != null ? output2.path("tot_tltx").asString("0") : "0");
+        BigDecimal totalBuyAmount = decimal(output2, "buy_excc_amt_smtl");
+        BigDecimal totalSellAmount = decimal(output2, "sll_excc_amt_smtl");
+        BigDecimal totalProfitLoss = decimal(output2, "tot_rlzt_pfls");
+        BigDecimal totalProfitLossRate = decimal(output2, "tot_pftrt");
+        BigDecimal totalFee = decimal(output2, "tot_fee");
+        BigDecimal totalTax = decimal(output2, "tot_tltx");
         String period = String.format("%s ~ %s", request.getStartDate(), request.getEndDate());
         return TradingProfitLossResponse.builder()
                 .period(period)
@@ -209,6 +250,68 @@ public class StockService {
                 .tradeCount(allTrades.size()) // 전체 누적 개수
                 .trades(allTrades)            // 전체 누적 리스트
                 .build();
+    }
+
+    /**
+     * 요청 날짜 문자열(yyyy-MM-dd)을 검증하며 파싱한다.
+     * null·빈 문자열·형식 오류는 모두 INVALID_INPUT 으로 변환해 500 대신 400 이 나가게 한다.
+     */
+    private LocalDate parseRequestDate(String value) {
+        if (value == null || value.isBlank()) {
+            throw new CustomException(ErrorCode.INVALID_INPUT);
+        }
+        try {
+            return LocalDate.parse(value.trim(), REQUEST_DATE_FORMAT);
+        } catch (DateTimeParseException e) {
+            throw new CustomException(ErrorCode.INVALID_INPUT);
+        }
+    }
+
+    /**
+     * 거래 행의 1주당 체결 평균가를 구한다.
+     * 한국투자증권이 내려주는 단가 필드(pchs_unpr 등)는 그날 체결가가 아니라 포지션 평균단가라
+     * 거래 내역에 그대로 쓰면 안 된다. 금액/수량이 해당 행의 실제 체결 평균가다.
+     * 금액이나 수량이 없어 계산할 수 없을 때만 API 가 준 단가로 대체한다.
+     */
+    private BigDecimal unitPrice(BigDecimal amount, BigDecimal quantity, BigDecimal fallback) {
+        if (quantity.signum() == 0 || amount.signum() == 0) {
+            return fallback;
+        }
+        return amount.divide(quantity, 2, RoundingMode.HALF_UP);
+    }
+
+    /**
+     * 배열이면 첫 요소를, 객체면 그대로 반환한다. 비었거나 null 이면 null 을 반환한다.
+     * 한국투자증권 응답의 output2 는 TR 에 따라 배열/객체가 섞여 오고, 빈 배열로 오는 경우도 있다.
+     */
+    private JsonNode firstElement(JsonNode node) {
+        if (node == null || node.isNull()) {
+            return null;
+        }
+        if (node.isArray()) {
+            return node.isEmpty() ? null : node.get(0);
+        }
+        return node;
+    }
+
+    /**
+     * 노드에서 숫자 필드를 안전하게 읽는다. 필드가 없거나 빈 문자열/비숫자면 0 을 반환한다.
+     * 한국투자증권 API 는 값이 없는 수치 필드를 빈 문자열로 내려주는 경우가 있다.
+     */
+    private BigDecimal decimal(JsonNode node, String fieldName) {
+        if (node == null) {
+            return BigDecimal.ZERO;
+        }
+        String raw = node.path(fieldName).asString("").trim();
+        if (raw.isEmpty()) {
+            return BigDecimal.ZERO;
+        }
+        try {
+            return new BigDecimal(raw);
+        } catch (NumberFormatException e) {
+            log.warn("Unparsable numeric field {}='{}', defaulting to 0", fieldName, raw);
+            return BigDecimal.ZERO;
+        }
     }
 
     /**
@@ -240,24 +343,23 @@ public class StockService {
                 .build();
         }
 
-        JsonNode output2 = response.get("output2");
+        // output2 는 배열로 올 때도 객체로 올 때도 있고, 빈 배열로 오기도 한다.
+        JsonNode summary = firstElement(response.get("output2"));
         List<StockPortfolioResponse.StockHoldingDto> holdings = new ArrayList<>();
 
         if (output1.isArray()) {
             for (JsonNode holding : output1) {
-                if (holding.get("hldg_qty") != null &&
-                    new BigDecimal(holding.get("hldg_qty").asString()).compareTo(BigDecimal.ZERO) > 0) {
-
+                if (decimal(holding, "hldg_qty").compareTo(BigDecimal.ZERO) > 0) {
                     StockPortfolioResponse.StockHoldingDto holdingDto = StockPortfolioResponse.StockHoldingDto.builder()
-                        .stockCode(holding.get("pdno").asString())
-                        .stockName(holding.get("prdt_name").asString())
-                        .quantity(Integer.parseInt(holding.get("hldg_qty").asString()))
-                        .averagePrice(new BigDecimal(holding.get("pchs_avg_pric").asString()))
-                        .currentPrice(new BigDecimal(holding.get("prpr").asString()))
-                        .marketValue(new BigDecimal(holding.get("evlu_amt").asString()))
-                        .purchasePrice(new BigDecimal(holding.get("pchs_amt").asString()))
-                        .profitLoss(new BigDecimal(holding.get("evlu_pfls_amt").asString()))
-                        .profitLossRate(new BigDecimal(holding.get("evlu_pfls_rt").asString()))
+                        .stockCode(holding.path("pdno").asString(""))
+                        .stockName(holding.path("prdt_name").asString(""))
+                        .quantity(decimal(holding, "hldg_qty").intValue())
+                        .averagePrice(decimal(holding, "pchs_avg_pric"))
+                        .currentPrice(decimal(holding, "prpr"))
+                        .marketValue(decimal(holding, "evlu_amt"))
+                        .purchasePrice(decimal(holding, "pchs_amt"))
+                        .profitLoss(decimal(holding, "evlu_pfls_amt"))
+                        .profitLossRate(decimal(holding, "evlu_pfls_rt"))
                         .sector("")
                         .dayChangeRate(null) // 초기값은 null, 이후 조회하여 설정
                         .build();
@@ -266,16 +368,20 @@ public class StockService {
                 }
             }
         }
-        
+
         // 각 종목의 전일 대비 변동률 조회 (병렬 처리)
         fetchDayChangeRates(holdings);
 
-        BigDecimal totalMarketValue = output2 != null ? new BigDecimal(output2.get(0).get("evlu_amt_smtl_amt").asString()) : BigDecimal.ZERO;
-        BigDecimal totalBuyValue = output2 != null ? new BigDecimal(output2.get(0).get("pchs_amt_smtl_amt").asString()) : BigDecimal.ZERO;
-        BigDecimal totalProfitLoss = output2 != null ? new BigDecimal(output2.get(0).get("evlu_pfls_smtl_amt").asString()) : BigDecimal.ZERO;
-        BigDecimal totalProfitLossRate = output2 != null ? new BigDecimal(String.valueOf(totalMarketValue.subtract(totalBuyValue).divide(totalBuyValue, 4, RoundingMode.HALF_UP).multiply(BigDecimal.valueOf(100)))) : BigDecimal.ZERO;
-        BigDecimal depositToday = output2 != null ? new BigDecimal(output2.get(0).get("dnca_tot_amt").asString()) : BigDecimal.ZERO;
-        BigDecimal depositD2 = output2 != null ? new BigDecimal(output2.get(0).get("prvs_rcdl_excc_amt").asString()) : BigDecimal.ZERO;
+        BigDecimal totalMarketValue = decimal(summary, "evlu_amt_smtl_amt");
+        BigDecimal totalBuyValue = decimal(summary, "pchs_amt_smtl_amt");
+        BigDecimal totalProfitLoss = decimal(summary, "evlu_pfls_smtl_amt");
+        // 매입금액이 0이면(무상증자·대용주 등) 나눌 수 없으므로 수익률은 0으로 둔다.
+        BigDecimal totalProfitLossRate = totalBuyValue.signum() == 0
+                ? BigDecimal.ZERO
+                : totalProfitLoss.divide(totalBuyValue, 4, RoundingMode.HALF_UP)
+                        .multiply(BigDecimal.valueOf(100));
+        BigDecimal depositToday = decimal(summary, "dnca_tot_amt");
+        BigDecimal depositD2 = decimal(summary, "prvs_rcdl_excc_amt");
 
         return StockPortfolioResponse.builder()
             .totalBuyValue(totalBuyValue)
@@ -319,34 +425,22 @@ public class StockService {
             return;
         }
 
-        // stockCode를 키로 하는 Map 생성 (인덱스 추적용)
-        Map<String, Integer> stockCodeToIndex = new HashMap<>();
-        for (int i = 0; i < holdings.size(); i++) {
-            stockCodeToIndex.put(holdings.get(i).getStockCode(), i);
-        }
-
+        // 호출 시작 시각을 THROTTLE_DELAY_MS 간격으로 어긋나게 배치해 초당 호출 수를 제한한다.
+        // 락을 잡은 채 sleep 하면 스레드풀이 직렬화되어 병렬 처리가 무의미해지므로, 각 작업이
+        // 자기 차례까지만 기다리도록 한다. 같은 종목을 두 번 보유한 경우도 있으므로 인덱스로 순회한다.
         List<CompletableFuture<Void>> futures = new ArrayList<>();
-        final long[] lastCallTime = {System.currentTimeMillis()};
-        final Object lock = new Object();
+        final long startTime = System.currentTimeMillis();
 
-        for (String stockCode : stockCodeToIndex.keySet()) {
+        for (int i = 0; i < holdings.size(); i++) {
+            final StockPortfolioResponse.StockHoldingDto holding = holdings.get(i);
+            final String stockCode = holding.getStockCode();
+            final long scheduledOffsetMs = i * THROTTLE_DELAY_MS;
+
             CompletableFuture<Void> future = CompletableFuture.runAsync(() -> {
                 try {
-                    // 쓰로틀링: 초당 20개 제한 준수 (호출 간격 50ms)
-                    synchronized (lock) {
-                        long currentTime = System.currentTimeMillis();
-                        long timeSinceLastCall = currentTime - lastCallTime[0];
-                        
-                        if (timeSinceLastCall < THROTTLE_DELAY_MS) {
-                            try {
-                                Thread.sleep(THROTTLE_DELAY_MS - timeSinceLastCall);
-                            } catch (InterruptedException e) {
-                                Thread.currentThread().interrupt();
-                                log.warn("Thread interrupted during throttling for stock {}", stockCode, e);
-                                return;
-                            }
-                        }
-                        lastCallTime[0] = System.currentTimeMillis();
+                    long waitMs = scheduledOffsetMs - (System.currentTimeMillis() - startTime);
+                    if (waitMs > 0) {
+                        Thread.sleep(waitMs);
                     }
 
                     // 현재가 조회 API 호출하여 전일 대비 변동률 가져오기
@@ -358,37 +452,17 @@ public class StockService {
 
                     JsonNode output = response.get("output");
                     if (output != null && output.has("prdy_ctrt")) {
-                        BigDecimal dayChangeRate = new BigDecimal(output.get("prdy_ctrt").asString());
                         // 소수점 첫째 자리까지 반올림
-                        dayChangeRate = dayChangeRate.setScale(1, RoundingMode.HALF_UP);
-                        
-                        // holding 객체의 dayChangeRate 필드 설정
-                        synchronized (holdings) {
-                            Integer index = stockCodeToIndex.get(stockCode);
-                            if (index != null && index < holdings.size()) {
-                                StockPortfolioResponse.StockHoldingDto holding = holdings.get(index);
-                                StockPortfolioResponse.StockHoldingDto updatedHolding = 
-                                    StockPortfolioResponse.StockHoldingDto.builder()
-                                        .stockCode(holding.getStockCode())
-                                        .stockName(holding.getStockName())
-                                        .quantity(holding.getQuantity())
-                                        .averagePrice(holding.getAveragePrice())
-                                        .currentPrice(holding.getCurrentPrice())
-                                        .marketValue(holding.getMarketValue())
-                                        .purchasePrice(holding.getPurchasePrice())
-                                        .profitLoss(holding.getProfitLoss())
-                                        .profitLossRate(holding.getProfitLossRate())
-                                        .sector(holding.getSector())
-                                        .dayChangeRate(dayChangeRate)
-                                        .build();
-                                holdings.set(index, updatedHolding);
-                                log.debug("Fetched dayChangeRate for {}: {}", stockCode, dayChangeRate);
-                            }
-                        }
+                        BigDecimal dayChangeRate = decimal(output, "prdy_ctrt")
+                                .setScale(1, RoundingMode.HALF_UP);
+                        holding.setDayChangeRate(dayChangeRate);
+                        log.debug("Fetched dayChangeRate for {}: {}", stockCode, dayChangeRate);
                     }
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    log.warn("Interrupted while throttling dayChangeRate fetch for stock {}", stockCode);
                 } catch (Exception e) {
-                    log.warn("Failed to fetch dayChangeRate for stock {}: {}", 
-                        stockCode, e.getMessage());
+                    log.warn("Failed to fetch dayChangeRate for stock {}: {}", stockCode, e.getMessage());
                 }
             }, executorService);
 

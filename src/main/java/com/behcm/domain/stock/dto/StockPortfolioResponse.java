@@ -4,6 +4,7 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -39,6 +40,9 @@ public class StockPortfolioResponse {
         private BigDecimal profitLoss;
         private BigDecimal profitLossRate;
         private String sector;
+
+        // 보유종목 파싱 직후에는 null 이고, 현재가 조회(fetchDayChangeRates)가 끝난 뒤 채워진다.
+        @Setter
         private BigDecimal dayChangeRate; // 전일 대비 변동률 (%)
     }
 }

@@ -3,6 +3,7 @@ package com.behcm.global.exception;
 import com.behcm.global.common.ApiResponse;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.validation.BindException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -46,6 +47,15 @@ public class GlobalExceptionHandler {
 
         return ResponseEntity.badRequest()
                 .body(ApiResponse.error(message));
+    }
+
+    // @PreAuthorize 거부는 AuthorizationDeniedException(= AccessDeniedException)으로 컨트롤러 진입 전에
+    // 던져진다. 이 핸들러가 없으면 아래 catch-all 에 걸려 403 대신 500 이 나간다.
+    @ExceptionHandler(AccessDeniedException.class)
+    public ResponseEntity<ApiResponse<Object>> handleAccessDeniedException(AccessDeniedException e) {
+        log.warn("AccessDeniedException: {}", e.getMessage());
+        return ResponseEntity.status(ErrorCode.ACCESS_DENIED.getHttpStatus())
+                .body(ApiResponse.error(ErrorCode.ACCESS_DENIED.getMessage()));
     }
 
     @ExceptionHandler(Exception.class)

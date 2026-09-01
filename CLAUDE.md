@@ -87,8 +87,22 @@ BE-HCM("헬창모임")은 그룹 운동 습관 관리 앱을 위한 Spring Boot 
 - `domain/workout` — `WorkoutRoom`(그룹), `WorkoutRoomMember`, `WorkoutRecord`(일일 운동 인증). 매주 월요일
   자정(`0 0 0 * * MON`)에 실행되는 `@Scheduled` 크론 잡인 `WorkoutSchedulingService`가 있으며, 주간 마감 및
   벌금 계산을 트리거하는 것으로 보입니다 — 주간 사이클 로직을 수정할 때 가장 먼저 확인해야 할 파일입니다.
+  **운동 인증 한 번은 참여 중인 방 수만큼 `WorkoutRecord` 로 저장됩니다**(`authenticateWorkout` 이 방마다
+  한 건씩 저장). 마이페이지 피드는 사진 중복을 피하려고 `(member, workoutDate)` 당 `max(id)` 한 건만 뽑는데,
+  리액션/댓글은 각 방의 레코드에 달리므로 대표 한 건만 집계하면 다른 방 반응이 통째로 누락됩니다 —
+  집계는 반드시 `WorkoutSocialQueryService.summarizeGrouped` 로 그날의 형제 레코드 전체를 넘겨서 합산하세요.
+  반대로 **운동방 하나를 보는 조회에는 이 일자별 정리를 붙이면 안 됩니다** — 방 안에서는 UK 로 이미 유일하고,
+  방을 걸치는 `max(id)` 를 붙이면 다른 방 레코드가 뽑혀 그 방 목록에서 기록이 사라집니다.
 - `domain/penalty` — 운동 미이행에 대한 벌금 추적/납부를 위한 `Penalty` / `PenaltyAccount` 엔티티. 운동방
   멤버십과 운동 기록에 의존합니다.
+- `domain/social` — 운동 인증에 대한 이모지 리액션(`WorkoutReaction`)과 댓글(`WorkoutComment`).
+  접근 제어는 `WorkoutRecordAccessGuard`가 담당하며(해당 인증이 올라간 운동방의 멤버만 허용),
+  피드/운동방 상세에 실리는 집계는 `WorkoutSocialQueryService.summarize(recordIds, viewer)`가
+  **항상 인증 id 목록을 한 번에 받아** 쿼리 3개로 처리합니다 — 건별 조회를 추가하면 그대로 N+1 이 됩니다.
+  리액션은 한 회원당 인증 하나에 이모지 하나(UK)이며, 다른 이모지를 누르면 행 추가가 아니라 갱신입니다.
+  푸시는 알림 피로를 고려해 댓글에만 보냅니다(리액션은 보내지 않음).
+  **`workout_reaction`/`workout_comment` 는 `workout_record` 를 FK 로 참조하므로, 회원/운동방 삭제
+  경로(`AdminMemberService`, `AdminWorkoutRoomService`)에서 반드시 운동 기록보다 먼저 지워야 합니다.**
 - `domain/chat` — WebSocket/STOMP 기반 실시간 방 채팅.
 - `domain/notification` — FCM 푸시 알림.
 - `domain/stats` — 통계/랜딩 페이지용 집계 데이터. `SecurityConfig`에서 `/api/stats/**` 엔드포인트는

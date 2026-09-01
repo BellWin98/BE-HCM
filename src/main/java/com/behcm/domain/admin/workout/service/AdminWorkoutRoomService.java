@@ -7,6 +7,8 @@ import com.behcm.domain.chat.service.ChatService;
 import com.behcm.domain.penalty.entity.Penalty;
 import com.behcm.domain.penalty.repository.PenaltyAccountRepository;
 import com.behcm.domain.penalty.repository.PenaltyRepository;
+import com.behcm.domain.social.repository.WorkoutCommentRepository;
+import com.behcm.domain.social.repository.WorkoutReactionRepository;
 import com.behcm.domain.rest.dto.RestResponse;
 import com.behcm.domain.rest.repository.RestRepository;
 import com.behcm.domain.workout.dto.SchedulePenaltyChangeRequest;
@@ -46,6 +48,8 @@ public class AdminWorkoutRoomService {
     private final PenaltyAccountRepository penaltyAccountRepository;
     private final PenaltyRepository penaltyRepository;
     private final WorkoutRoomService workoutRoomService;
+    private final WorkoutReactionRepository workoutReactionRepository;
+    private final WorkoutCommentRepository workoutCommentRepository;
 
     public Page<WorkoutRoomResponse> getRooms(String query, Boolean active, Pageable pageable) {
         String normalizedQuery = (query != null && !query.isBlank()) ? query : null;
@@ -69,7 +73,7 @@ public class AdminWorkoutRoomService {
                     .collect(Collectors.groupingBy(r -> r.getWorkoutRoomMember().getId()))
                     .entrySet().stream()
                     .collect(Collectors.toMap(Map.Entry::getKey, e -> e.getValue().stream().map(RestResponse::from).toList()));
-            recordsByMemberId = workoutRecordRepository.findByWorkoutRoomAndMemberInPerWorkoutDate(workoutRoom, memberIds).stream()
+            recordsByMemberId = workoutRecordRepository.findByWorkoutRoomAndMemberIn(workoutRoom, memberIds).stream()
                     .collect(Collectors.groupingBy(wr -> wr.getMember().getId()))
                     .entrySet().stream()
                     .collect(Collectors.toMap(Map.Entry::getKey, e -> e.getValue().stream().map(WorkoutRecordResponse::from).toList()));
@@ -121,6 +125,10 @@ public class AdminWorkoutRoomService {
 
         List<WorkoutRoomMember> members = workoutRoomMemberRepository.findByWorkoutRoomOrderByJoinedAt(workoutRoom);
         restRepository.deleteAllByWorkoutRoomMemberIn(members);
+
+        // 리액션/댓글은 workout_record 를 참조하므로 반드시 먼저 지운다.
+        workoutReactionRepository.deleteAllByWorkoutRoom(workoutRoom);
+        workoutCommentRepository.deleteAllByWorkoutRoom(workoutRoom);
 
         workoutRecordRepository.deleteByWorkoutRoom(workoutRoom);
 

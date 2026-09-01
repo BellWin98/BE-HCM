@@ -5,6 +5,8 @@ import com.behcm.domain.chat.repository.ChatMessageRepository;
 import com.behcm.domain.member.entity.Member;
 import com.behcm.domain.member.entity.MemberRole;
 import com.behcm.domain.member.repository.MemberRepository;
+import com.behcm.domain.social.repository.WorkoutCommentRepository;
+import com.behcm.domain.social.repository.WorkoutReactionRepository;
 import com.behcm.domain.member.repository.MemberSettingsRepository;
 import com.behcm.domain.notification.repository.FcmTokenRepository;
 import com.behcm.domain.penalty.repository.PenaltyRepository;
@@ -30,6 +32,8 @@ import java.util.List;
 public class AdminMemberService {
 
     private final MemberRepository memberRepository;
+    private final WorkoutReactionRepository workoutReactionRepository;
+    private final WorkoutCommentRepository workoutCommentRepository;
     private final WorkoutRoomMemberRepository workoutRoomMemberRepository;
     private final WorkoutRecordRepository workoutRecordRepository;
     private final ChatMessageRepository chatMessageRepository;
@@ -91,6 +95,11 @@ public class AdminMemberService {
             workoutRoomMemberRepository.deleteAll(workoutRoomMembers);
         }
 
+        // 리액션/댓글 삭제 (workout_record 를 참조하므로 반드시 먼저 지워야 FK 제약에 걸리지 않는다).
+        // 본인이 남긴 것과 본인 인증에 달린 남의 것을 함께 지운다.
+        workoutReactionRepository.deleteAllByMemberOrRecordOwner(memberToDelete);
+        workoutCommentRepository.deleteAllByMemberOrRecordOwner(memberToDelete);
+
         // WorkoutRecord 삭제
         workoutRecordRepository.deleteByMember(memberToDelete);
 
@@ -115,6 +124,10 @@ public class AdminMemberService {
             restRepository.deleteAllByWorkoutRoomMemberIn(members);
             penaltyRepository.deleteAllByWorkoutRoomMemberIn(members);
         }
+
+        // 리액션/댓글 삭제 (workout_record 참조. 반드시 먼저 지운다)
+        workoutReactionRepository.deleteAllByWorkoutRoom(workoutRoom);
+        workoutCommentRepository.deleteAllByWorkoutRoom(workoutRoom);
 
         // WorkoutRecord 삭제
         workoutRecordRepository.deleteByWorkoutRoom(workoutRoom);

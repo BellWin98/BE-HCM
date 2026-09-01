@@ -6,6 +6,8 @@ import com.behcm.domain.member.entity.Member;
 import com.behcm.domain.member.entity.MemberRole;
 import com.behcm.domain.penalty.repository.PenaltyAccountRepository;
 import com.behcm.domain.penalty.repository.PenaltyRepository;
+import com.behcm.domain.social.repository.WorkoutCommentRepository;
+import com.behcm.domain.social.repository.WorkoutReactionRepository;
 import com.behcm.domain.rest.dto.RestResponse;
 import com.behcm.domain.rest.entity.Rest;
 import com.behcm.domain.rest.repository.RestRepository;
@@ -25,6 +27,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
+import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.Page;
@@ -39,6 +42,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -66,6 +70,12 @@ class AdminWorkoutRoomServiceTest {
 
     @Mock
     private PenaltyAccountRepository penaltyAccountRepository;
+
+    @Mock
+    private WorkoutReactionRepository workoutReactionRepository;
+
+    @Mock
+    private WorkoutCommentRepository workoutCommentRepository;
 
     @InjectMocks
     private AdminWorkoutRoomService adminWorkoutRoomService;
@@ -189,7 +199,8 @@ class AdminWorkoutRoomServiceTest {
         given(workoutRoomRepository.findById(1L)).willReturn(Optional.of(room));
         given(workoutRoomMemberRepository.findByWorkoutRoomOrderByJoinedAtFetchMember(room))
                 .willReturn(List.of(workoutRoomMember1, workoutRoomMember2));
-        given(workoutRecordRepository.findByWorkoutRoomAndMemberInPerWorkoutDate(eq(room), any()))
+        // 운동방 안에서는 (회원, 날짜)가 UK 로 유일하므로 별도 일자별 정리 없이 그 방의 기록을 그대로 읽는다.
+        given(workoutRecordRepository.findByWorkoutRoomAndMemberIn(eq(room), any()))
                 .willReturn(List.of(workoutRecord));
         given(restRepository.findAllByWorkoutRoomMemberIn(List.of(workoutRoomMember1, workoutRoomMember2)))
                 .willReturn(List.of(rest));
@@ -203,7 +214,7 @@ class AdminWorkoutRoomServiceTest {
         verify(workoutRoomMemberRepository, never()).findByWorkoutRoomOrderByJoinedAt(any());
         verify(workoutRecordRepository, never()).findAllByMemberPerWorkoutDate(any());
         verify(restRepository, never()).findAllByWorkoutRoomMember(any());
-        verify(workoutRecordRepository, times(1)).findByWorkoutRoomAndMemberInPerWorkoutDate(any(), any());
+        verify(workoutRecordRepository, times(1)).findByWorkoutRoomAndMemberIn(any(), any());
         verify(restRepository, times(1)).findAllByWorkoutRoomMemberIn(any());
     }
 
@@ -273,5 +284,31 @@ class AdminWorkoutRoomServiceTest {
         verify(workoutRoomMemberRepository).deleteAll(members);
         verify(workoutRoomRepository).delete(room);
     }
-}
 
+    @Test
+    @DisplayName("deleteRoom은 운동 기록보다 먼저 리액션/댓글을 삭제한다")
+    void deleteRoom_deletesSocialDataBeforeWorkoutRecords() {
+        // workout_reaction / workout_comment 는 workout_record 를 FK 로 참조한다.
+        // 순서가 뒤집히면 운영에서 방 삭제가 FK 제약 위반으로 실패한다.
+        WorkoutRoom room = WorkoutRoom.builder()
+                .name("Room 1")
+                .minWeeklyWorkouts(3)
+                .penaltyPerMiss(1000L)
+                .maxMembers(10)
+                .entryCode("ENTRY01")
+                .owner(member())
+                .build();
+
+        given(workoutRoomRepository.findById(1L)).willReturn(Optional.of(room));
+        given(workoutRoomMemberRepository.findByWorkoutRoomOrderByJoinedAt(room)).willReturn(List.of());
+        given(penaltyRepository.findAllByWorkoutRoomId(room.getId())).willReturn(List.of());
+        given(penaltyAccountRepository.findByWorkoutRoom(room)).willReturn(Optional.empty());
+
+        adminWorkoutRoomService.deleteRoom(1L);
+
+        InOrder inOrder = inOrder(workoutReactionRepository, workoutCommentRepository, workoutRecordRepository);
+        inOrder.verify(workoutReactionRepository).deleteAllByWorkoutRoom(room);
+        inOrder.verify(workoutCommentRepository).deleteAllByWorkoutRoom(room);
+        inOrder.verify(workoutRecordRepository).deleteByWorkoutRoom(room);
+    }
+}

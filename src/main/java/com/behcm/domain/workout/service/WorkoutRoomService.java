@@ -3,6 +3,8 @@ package com.behcm.domain.workout.service;
 import com.behcm.domain.member.entity.Member;
 import com.behcm.domain.member.entity.MemberRole;
 import com.behcm.domain.rest.dto.RestResponse;
+import com.behcm.domain.social.dto.WorkoutSocialSummary;
+import com.behcm.domain.social.service.WorkoutSocialQueryService;
 import com.behcm.domain.rest.repository.RestRepository;
 import com.behcm.domain.workout.dto.*;
 import com.behcm.domain.workout.entity.WorkoutRecord;
@@ -44,6 +46,7 @@ public class WorkoutRoomService {
     private final WorkoutRoomMemberRepository workoutRoomMemberRepository;
     private final WorkoutRecordRepository workoutRecordRepository;
     private final RestRepository restRepository;
+    private final WorkoutSocialQueryService workoutSocialQueryService;
 
     public WorkoutRoomResponse createWorkoutRoom(Member owner, CreateWorkoutRoomRequest request) {
         validateWorkoutRoomLimit(owner);
@@ -84,6 +87,7 @@ public class WorkoutRoomService {
 
         final Map<Long, List<RestResponse>> restByWrmId;
         final Map<Long, List<WorkoutRecordResponse>> recordsByMemberId;
+        final Map<Long, WorkoutSocialSummary> socialByRecordId;
         if (!members.isEmpty()) {
             List<Long> memberIds = members.stream()
                     .map(wrm -> wrm.getMember().getId())
@@ -92,13 +96,20 @@ public class WorkoutRoomService {
                     .collect(Collectors.groupingBy(r -> r.getWorkoutRoomMember().getId()))
                     .entrySet().stream()
                     .collect(Collectors.toMap(Map.Entry::getKey, e -> e.getValue().stream().map(RestResponse::from).toList()));
-            recordsByMemberId = workoutRecordRepository.findByWorkoutRoomAndMemberIn(workoutRoom, memberIds).stream()
+            List<WorkoutRecord> roomRecords = workoutRecordRepository.findByWorkoutRoomAndMemberIn(workoutRoom, memberIds);
+            // 방 전체 인증의 리액션/댓글 집계를 한 번에 조회한다. 인증 건별로 조회하면 그대로 N+1 이 된다.
+            socialByRecordId = workoutSocialQueryService.summarize(
+                    roomRecords.stream().map(WorkoutRecord::getId).toList(), member);
+            recordsByMemberId = roomRecords.stream()
                     .collect(Collectors.groupingBy(wr -> wr.getMember().getId()))
                     .entrySet().stream()
-                    .collect(Collectors.toMap(Map.Entry::getKey, e -> e.getValue().stream().map(WorkoutRecordResponse::from).toList()));
+                    .collect(Collectors.toMap(Map.Entry::getKey, e -> e.getValue().stream()
+                            .map(wr -> WorkoutRecordResponse.of(wr, socialByRecordId.get(wr.getId())))
+                            .toList()));
         } else {
             restByWrmId = Collections.emptyMap();
             recordsByMemberId = Collections.emptyMap();
+            socialByRecordId = Collections.emptyMap();
         }
 
         List<WorkoutRoomMemberResponse> workoutRoomMembers = members.stream()
@@ -113,7 +124,7 @@ public class WorkoutRoomService {
         return currentMemberWorkoutRecordOpt.map(workoutRecord -> new WorkoutRoomDetailResponse(
                 WorkoutRoomResponse.from(workoutRoom),
                 workoutRoomMembers,
-                WorkoutRecordResponse.from(workoutRecord))).orElseGet(() -> new WorkoutRoomDetailResponse(WorkoutRoomResponse.from(workoutRoom), workoutRoomMembers, null));
+                WorkoutRecordResponse.of(workoutRecord, socialByRecordId.get(workoutRecord.getId())))).orElseGet(() -> new WorkoutRoomDetailResponse(WorkoutRoomResponse.from(workoutRoom), workoutRoomMembers, null));
     }
 
     @Transactional(readOnly = true)

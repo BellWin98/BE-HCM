@@ -25,7 +25,8 @@ import java.util.List;
         },
         indexes = {
                 // 회원별 일자별 최신 기록 조회(findAllByMemberPerWorkoutDate 계열)의 상관 서브쿼리
-                // max(created_at) where member = ? and workout_date = ? 를 index-only 로 만든다.
+                // max(id) where member = ? and workout_date = ? 를 index-only 로 만든다.
+                // InnoDB 세컨더리 인덱스 리프에 PK(id)가 함께 들어가므로 이 인덱스만으로 끝난다.
                 // 위 UK 는 workout_room_id 가 중간에 있어 workout_date 를 탈 수 없다.
                 @Index(
                         name = "idx_workout_record_member_date_created",

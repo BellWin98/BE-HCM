@@ -61,6 +61,14 @@ public enum ErrorCode {
     // Rest
     REST_PERIOD_OVERLAP(HttpStatus.BAD_REQUEST, "이미 등록된 휴식일이 있습니다. 제외 후 재등록해주세요."),
 
+    // Toss Stock
+    TOSS_ACCOUNT_NOT_CONFIGURED(HttpStatus.NOT_FOUND, "연동되지 않은 토스증권 계좌입니다."),
+    TOSS_ACCOUNT_NOT_FOUND(HttpStatus.NOT_FOUND, "토스증권 계좌를 찾을 수 없습니다."),
+    TOSS_TOKEN_ISSUE_FAILED(HttpStatus.INTERNAL_SERVER_ERROR, "토스증권 인증에 실패했습니다."),
+    TOSS_UNAUTHORIZED(HttpStatus.INTERNAL_SERVER_ERROR, "토스증권 API 인증이 거부되었습니다."),
+    TOSS_RATE_LIMITED(HttpStatus.TOO_MANY_REQUESTS, "토스증권 API 요청 한도를 초과했습니다. 잠시 후 다시 시도해주세요."),
+    TOSS_API_FAILED(HttpStatus.BAD_GATEWAY, "토스증권 API 호출에 실패했습니다."),
+
     // Common
     INTERNAL_SERVER_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "서버 내부 오류가 발생했습니다."),
     INVALID_INPUT(HttpStatus.BAD_REQUEST, "잘못된 입력값입니다."),

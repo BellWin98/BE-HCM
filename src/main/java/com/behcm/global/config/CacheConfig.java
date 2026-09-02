@@ -45,10 +45,43 @@ public class CacheConfig {
                         .build()
         );
 
+        // 토스증권은 소유자(나·엄마·아빠)마다 계좌가 달라 엔트리가 사람 수만큼 필요하다.
+        // 보유주식 응답 하나로 자산 화면과 실현손익의 원가 시딩을 모두 처리한다.
+        CaffeineCache tossHoldingsCache = new CaffeineCache(
+                "tossHoldings",
+                Caffeine.newBuilder()
+                        .expireAfterWrite(30, TimeUnit.SECONDS)
+                        .maximumSize(10)
+                        .build()
+        );
+
+        // 실현손익은 계좌 개설 이후 전체 주문을 재생해야 계산되므로 페이징 비용이 크다.
+        // 수익분석 탭에서 기간을 바꿀 때마다 전체를 다시 읽지 않도록 조금 길게 잡는다.
+        CaffeineCache tossOrderHistoryCache = new CaffeineCache(
+                "tossOrderHistory",
+                Caffeine.newBuilder()
+                        .expireAfterWrite(5, TimeUnit.MINUTES)
+                        .maximumSize(10)
+                        .build()
+        );
+
+        // 환율은 계좌와 무관해 소유자가 달라도 값이 같으므로 통화쌍 하나로 공유한다.
+        // 토스가 1분 주기로 갱신하니 그보다 짧게 잡아야 화면 값이 뒤처지지 않는다.
+        CaffeineCache tossExchangeRateCache = new CaffeineCache(
+                "tossExchangeRate",
+                Caffeine.newBuilder()
+                        .expireAfterWrite(30, TimeUnit.SECONDS)
+                        .maximumSize(1)
+                        .build()
+        );
+
         cacheManager.setCaches(List.of(
                 memberProfileCache,
                 workoutRoomDetailCache,
-                stockPortfolioCache
+                stockPortfolioCache,
+                tossHoldingsCache,
+                tossOrderHistoryCache,
+                tossExchangeRateCache
         ));
 
         return cacheManager;

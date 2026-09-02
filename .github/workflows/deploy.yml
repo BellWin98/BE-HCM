@@ -29,9 +29,10 @@ jobs:
           - 3306:3306
         options: >-
           --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -p1234"
-          --health-interval=10s
-          --health-timeout=5s
-          --health-retries=10
+          --health-interval=5s
+          --health-timeout=10s
+          --health-retries=30
+          --health-start-period=20s
       redis:
         image: redis:7-alpine
         ports:

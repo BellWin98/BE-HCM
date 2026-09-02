@@ -7,6 +7,7 @@ import com.behcm.domain.member.entity.MemberRole;
 import com.behcm.domain.member.repository.MemberRepository;
 import com.behcm.domain.social.repository.WorkoutCommentRepository;
 import com.behcm.domain.social.repository.WorkoutReactionRepository;
+import com.behcm.domain.tossstock.repository.TossAccessRepository;
 import com.behcm.domain.member.repository.MemberSettingsRepository;
 import com.behcm.domain.notification.repository.FcmTokenRepository;
 import com.behcm.domain.penalty.repository.PenaltyRepository;
@@ -25,6 +26,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Set;
 
 @Service
 @RequiredArgsConstructor
@@ -42,11 +44,19 @@ public class AdminMemberService {
     private final WorkoutRoomRepository workoutRoomRepository;
     private final PenaltyRepository penaltyRepository;
     private final RestRepository restRepository;
+    private final TossAccessRepository tossAccessRepository;
 
     public Page<AdminMemberResponse> getMembers(String query, MemberRole role, Pageable pageable) {
         String normalizedQuery = (query != null && !query.isBlank()) ? query : null;
         Page<Member> members = memberRepository.searchAdminMembers(normalizedQuery, role, pageable);
-        return members.map(AdminMemberResponse::from);
+
+        // 토스 접근 여부는 페이지 전체를 한 번에 조회한다. 건별 exists 를 돌리면 그대로 N+1 이 된다.
+        List<Long> memberIds = members.getContent().stream().map(Member::getId).toList();
+        Set<Long> tossGranted = memberIds.isEmpty()
+                ? Set.of()
+                : tossAccessRepository.findGrantedMemberIds(memberIds);
+
+        return members.map(member -> AdminMemberResponse.from(member, tossGranted.contains(member.getId())));
     }
 
     @Transactional
@@ -57,7 +67,7 @@ public class AdminMemberService {
         member.changeRole(newRole);
         Member saved = memberRepository.save(member);
 
-        return AdminMemberResponse.from(saved);
+        return AdminMemberResponse.from(saved, tossAccessRepository.existsByMemberId(saved.getId()));
     }
 
     @Transactional
@@ -94,6 +104,9 @@ public class AdminMemberService {
             penaltyRepository.deleteAllByWorkoutRoomMemberIn(workoutRoomMembers);
             workoutRoomMemberRepository.deleteAll(workoutRoomMembers);
         }
+
+        // 토스 접근 권한 삭제 (member 를 FK 로 참조하므로 회원보다 먼저 지워야 한다).
+        tossAccessRepository.deleteByMemberId(memberId);
 
         // 리액션/댓글 삭제 (workout_record 를 참조하므로 반드시 먼저 지워야 FK 제약에 걸리지 않는다).
         // 본인이 남긴 것과 본인 인증에 달린 남의 것을 함께 지운다.

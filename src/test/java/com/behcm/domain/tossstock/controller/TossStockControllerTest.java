@@ -6,6 +6,7 @@ import com.behcm.domain.tossstock.dto.TossOwnerResponse;
 import com.behcm.domain.tossstock.dto.TossPortfolioResponse;
 import com.behcm.domain.tossstock.dto.TossRealizedProfitRequest;
 import com.behcm.domain.tossstock.dto.TossRealizedProfitResponse;
+import com.behcm.domain.tossstock.service.TossAccessChecker;
 import com.behcm.domain.tossstock.service.TossStockService;
 import com.behcm.global.config.toss.TossAccountOwner;
 import org.junit.jupiter.api.DisplayName;
@@ -30,6 +31,11 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+/**
+ * 인가는 role 이 아니라 {@link TossAccessChecker} 가 판정하므로, 여기서는 checker 를 목으로 두고
+ * 허용/차단이 컨트롤러에 반영되는지만 본다. ADMIN 우대나 toss_access 조회 같은 판정 규칙 자체는
+ * TossAccessCheckerTest 가 담당한다.
+ */
 @SpringBootTest
 @AutoConfigureMockMvc
 class TossStockControllerTest {
@@ -43,6 +49,9 @@ class TossStockControllerTest {
     @MockitoBean
     private TossStockService tossStockService;
 
+    @MockitoBean
+    private TossAccessChecker tossAccessChecker;
+
     private Member member(MemberRole role) {
         return Member.builder()
                 .email("user@test.com")
@@ -50,6 +59,17 @@ class TossStockControllerTest {
                 .nickname("user")
                 .role(role)
                 .build();
+    }
+
+    /** 토스 접근이 허용된 회원. 역할과 무관하게 toss_access 에 등록되어 있으면 통과한다. */
+    private Member grantedMember() {
+        given(tossAccessChecker.canAccess(any())).willReturn(true);
+        return member(MemberRole.USER);
+    }
+
+    private Member deniedMember() {
+        given(tossAccessChecker.canAccess(any())).willReturn(false);
+        return member(MemberRole.USER);
     }
 
     private TossRealizedProfitRequest realizedProfitRequest() {
@@ -68,17 +88,28 @@ class TossStockControllerTest {
     }
 
     @Test
-    @DisplayName("getPortfolio는 USER 권한으로 요청하면 403을 반환한다")
-    void getPortfolio_withUserRole_returnsForbidden() throws Exception {
+    @DisplayName("getPortfolio는 토스 접근 권한이 없으면 403을 반환한다")
+    void getPortfolio_withoutTossAccess_returnsForbidden() throws Exception {
         mockMvc.perform(get("/api/toss-stock/portfolio")
                         .param("owner", "ME")
-                        .with(user(member(MemberRole.USER))))
+                        .with(user(deniedMember())))
                 .andExpect(status().isForbidden());
     }
 
     @Test
-    @DisplayName("getPortfolio는 FAMILY 권한이면 조회 결과를 반환한다")
-    void getPortfolio_withFamilyRole_returnsPortfolio() throws Exception {
+    @DisplayName("getPortfolio는 FAMILY 역할만으로는 접근할 수 없다")
+    void getPortfolio_withFamilyRoleButNoGrant_returnsForbidden() throws Exception {
+        given(tossAccessChecker.canAccess(any())).willReturn(false);
+
+        mockMvc.perform(get("/api/toss-stock/portfolio")
+                        .param("owner", "ME")
+                        .with(user(member(MemberRole.FAMILY))))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @DisplayName("getPortfolio는 토스 접근 권한이 있으면 조회 결과를 반환한다")
+    void getPortfolio_withTossAccess_returnsPortfolio() throws Exception {
         given(tossStockService.getPortfolio(TossAccountOwner.ME)).willReturn(
                 TossPortfolioResponse.builder()
                         .owner("ME")
@@ -91,7 +122,7 @@ class TossStockControllerTest {
 
         mockMvc.perform(get("/api/toss-stock/portfolio")
                         .param("owner", "ME")
-                        .with(user(member(MemberRole.FAMILY))))
+                        .with(user(grantedMember())))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.ownerName", is("나")))
                 .andExpect(jsonPath("$.data.totalProfitLossRate", is(15.16)));
@@ -102,29 +133,36 @@ class TossStockControllerTest {
     void getPortfolio_withUnknownOwner_returnsBadRequest() throws Exception {
         mockMvc.perform(get("/api/toss-stock/portfolio")
                         .param("owner", "UNCLE")
-                        .with(user(member(MemberRole.FAMILY))))
+                        .with(user(grantedMember())))
                 .andExpect(status().isBadRequest());
     }
 
     @Test
-    @DisplayName("getOwners는 FAMILY 권한이면 연동된 계좌 목록을 반환한다")
-    void getOwners_withFamilyRole_returnsConfiguredOwners() throws Exception {
+    @DisplayName("getOwners는 토스 접근 권한이 있으면 연동된 계좌 목록을 반환한다")
+    void getOwners_withTossAccess_returnsConfiguredOwners() throws Exception {
         given(tossStockService.getOwners()).willReturn(List.of(
                 new TossOwnerResponse("ME", "나"),
                 new TossOwnerResponse("MOM", "엄마")
         ));
 
-        mockMvc.perform(get("/api/toss-stock/owners").with(user(member(MemberRole.FAMILY))))
+        mockMvc.perform(get("/api/toss-stock/owners").with(user(grantedMember())))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data[0].owner", is("ME")))
                 .andExpect(jsonPath("$.data[1].displayName", is("엄마")));
     }
 
     @Test
-    @DisplayName("getRealizedProfit은 USER 권한으로 요청하면 403을 반환한다")
-    void getRealizedProfit_withUserRole_returnsForbidden() throws Exception {
+    @DisplayName("getOwners는 토스 접근 권한이 없으면 403을 반환한다")
+    void getOwners_withoutTossAccess_returnsForbidden() throws Exception {
+        mockMvc.perform(get("/api/toss-stock/owners").with(user(deniedMember())))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @DisplayName("getRealizedProfit은 토스 접근 권한이 없으면 403을 반환한다")
+    void getRealizedProfit_withoutTossAccess_returnsForbidden() throws Exception {
         mockMvc.perform(post("/api/toss-stock/realized-profit")
-                        .with(user(member(MemberRole.USER)))
+                        .with(user(deniedMember()))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(realizedProfitRequest())))
                 .andExpect(status().isForbidden());
@@ -137,15 +175,15 @@ class TossStockControllerTest {
         request.setStartDate("2026/01/01");
 
         mockMvc.perform(post("/api/toss-stock/realized-profit")
-                        .with(user(member(MemberRole.FAMILY)))
+                        .with(user(grantedMember()))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isBadRequest());
     }
 
     @Test
-    @DisplayName("getRealizedProfit은 FAMILY 권한이면 계산 결과를 반환한다")
-    void getRealizedProfit_withFamilyRole_returnsRealizedProfit() throws Exception {
+    @DisplayName("getRealizedProfit은 토스 접근 권한이 있으면 계산 결과를 반환한다")
+    void getRealizedProfit_withTossAccess_returnsRealizedProfit() throws Exception {
         given(tossStockService.getRealizedProfit(any())).willReturn(
                 TossRealizedProfitResponse.builder()
                         .owner("ME")
@@ -159,7 +197,7 @@ class TossStockControllerTest {
         );
 
         mockMvc.perform(post("/api/toss-stock/realized-profit")
-                        .with(user(member(MemberRole.FAMILY)))
+                        .with(user(grantedMember()))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(realizedProfitRequest())))
                 .andExpect(status().isOk())

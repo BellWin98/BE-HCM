@@ -26,11 +26,15 @@ import java.util.List;
  * <p>{@code owner} 를 enum 이 아니라 문자열로 받는 이유: Spring 의 기본 enum 컨버터는 변환 실패 시
  * MethodArgumentTypeMismatchException 을 던지는데 GlobalExceptionHandler 가 이를 다루지 않아 500 이 나간다.
  * 직접 변환해 400 으로 떨어뜨린다.
+ *
+ * <p>접근 권한은 role 이 아니라 {@code TossAccessChecker} 가 판정한다 — ADMIN 이거나 {@code toss_access} 에
+ * 등록된 회원만 허용한다. {@code @PreAuthorize} 를 클래스 레벨에 두는 것은 의도적이다: 엔드포인트가
+ * 추가돼도 기본이 차단이어야 한다.
  */
 @RestController
 @RequestMapping("/api/toss-stock")
 @RequiredArgsConstructor
-@PreAuthorize("hasAnyRole('FAMILY', 'ADMIN')")
+@PreAuthorize("@tossAccessChecker.canAccess(authentication.principal)")
 public class TossStockController {
 
     private final TossStockService tossStockService;

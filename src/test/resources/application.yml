@@ -16,6 +16,13 @@ spring:
     multipart:
       max-file-size: 20MB
       max-request-size: 100MB
+  datasource:
+    hikari:
+      # @SpringBootTest 는 목 빈 구성이 다를 때마다 별도 컨텍스트를 띄우고, 컨텍스트마다 커넥션 풀을
+      # 하나씩 들고 캐시에 남는다. 기본값(10)이면 컨텍스트가 늘어나는 순간 MySQL 의
+      # max_connections(151)를 넘겨 "Too many connections" 로 컨텍스트 로딩이 무더기로 실패한다.
+      # 테스트는 단일 스레드로 돌므로 컨텍스트당 2 개면 충분하다.
+      maximum-pool-size: 2
   jpa:
     # hibernate.dialect 는 명시하지 않는다(HHH90000025) — main 의 application.yml 과 동일하게 맞춘다.
     properties:

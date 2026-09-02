@@ -50,6 +50,7 @@ public class TossStockService {
     private final TossAccountResolver accountResolver;
     private final TossHoldingsReader holdingsReader;
     private final TossOrderHistoryReader orderHistoryReader;
+    private final TossExchangeRateReader exchangeRateReader;
     private final TossRealizedProfitCalculator realizedProfitCalculator;
 
     private static final String BUYING_POWER_PATH = "/api/v1/buying-power";
@@ -57,6 +58,8 @@ public class TossStockService {
             .withResolverStyle(ResolverStyle.STRICT);
     private static final int MONEY_SCALE = 2;
     private static final int RATE_SCALE = 2;
+    /** 원화는 보조단위가 없어 환산 결과를 정수로 맞춘다. */
+    private static final int KRW_SCALE = 0;
     private static final BigDecimal HUNDRED = BigDecimal.valueOf(100);
 
     /**
@@ -87,10 +90,17 @@ public class TossStockService {
 
         JsonNode totalPurchase = holdings.path("totalPurchaseAmount");
         JsonNode marketValue = holdings.path("marketValue").path("amount");
+        JsonNode marketValueAfterCost = holdings.path("marketValue").path("amountAfterCost");
         JsonNode profitLoss = holdings.path("profitLoss");
         JsonNode profitLossAmount = profitLoss.path("amount");
+        JsonNode profitLossAmountAfterCost = profitLoss.path("amountAfterCost");
         JsonNode dailyProfitLoss = holdings.path("dailyProfitLoss");
         JsonNode dailyProfitLossAmount = dailyProfitLoss.path("amount");
+
+        // 해외 종목이 없으면 환산할 것이 없으므로 환율을 조회하지 않는다.
+        JsonNode exchangeRate = hasUsdHolding ? fetchUsdKrwRate(owner) : null;
+        BigDecimal usdKrwRate = TossJsonSupport.nullableDecimal(exchangeRate, "rate");
+        KrwConverter converter = new KrwConverter(hasUsdHolding, usdKrwRate);
 
         return TossPortfolioResponse.builder()
                 .owner(owner.name())
@@ -105,11 +115,87 @@ public class TossStockService {
                 .dailyProfitLossKrw(TossJsonSupport.decimal(dailyProfitLossAmount, "krw"))
                 .dailyProfitLossUsd(TossJsonSupport.nullableDecimal(dailyProfitLossAmount, "usd"))
                 .dailyProfitLossRate(TossJsonSupport.percent(dailyProfitLoss, "rate"))
+                .totalMarketValueAfterCostKrw(TossJsonSupport.decimal(marketValueAfterCost, "krw"))
+                .totalMarketValueAfterCostUsd(TossJsonSupport.nullableDecimal(marketValueAfterCost, "usd"))
+                .totalProfitLossAfterCostKrw(TossJsonSupport.decimal(profitLossAmountAfterCost, "krw"))
+                .totalProfitLossAfterCostUsd(TossJsonSupport.nullableDecimal(profitLossAmountAfterCost, "usd"))
+                .totalProfitLossRateAfterCost(TossJsonSupport.percent(profitLoss, "rateAfterCost"))
+                .usdKrwRate(usdKrwRate)
+                .usdKrwMidRate(TossJsonSupport.nullableDecimal(exchangeRate, "midRate"))
+                .usdKrwRateChangeType(TossJsonSupport.text(exchangeRate, "rateChangeType"))
+                .usdKrwRateAsOf(TossJsonSupport.text(exchangeRate, "validFrom"))
+                .totalPurchaseAmountInKrw(converter.convert(totalPurchase))
+                .totalMarketValueInKrw(converter.convert(marketValue))
+                .totalProfitLossInKrw(converter.convert(profitLossAmount))
+                .totalProfitLossAfterCostInKrw(converter.convert(profitLossAmountAfterCost))
+                .dailyProfitLossInKrw(converter.convert(dailyProfitLossAmount))
+                .overseasWeightPercent(converter.overseasWeightPercent(marketValue))
                 .cashBuyingPowerKrw(fetchBuyingPower(owner, accountSeq, "KRW"))
                 .cashBuyingPowerUsd(hasUsdHolding ? fetchBuyingPower(owner, accountSeq, "USD") : null)
                 .holdings(holdingDtos)
                 .lastUpdated(LocalDateTime.now().toString())
                 .build();
+    }
+
+    /**
+     * 통화별로 나뉜 금액({@code {krw, usd}})을 원화 하나로 합친다.
+     *
+     * <p>환산이 불가능한 상태(해외 종목이 있는데 환율을 못 받음)에서는 <b>null</b> 을 돌려준다.
+     * 0 으로 채우면 해외 자산이 통째로 사라진 것처럼 보이기 때문이다.
+     */
+    private record KrwConverter(boolean hasUsdHolding, BigDecimal usdKrwRate) {
+
+        private boolean unavailable() {
+            return hasUsdHolding && usdKrwRate == null;
+        }
+
+        /** @param amount {@code krw}/{@code usd} 를 가진 노드 */
+        private BigDecimal convert(JsonNode amount) {
+            if (unavailable()) {
+                return null;
+            }
+            return raw(amount).setScale(KRW_SCALE, RoundingMode.HALF_UP);
+        }
+
+        private BigDecimal overseasWeightPercent(JsonNode marketValue) {
+            if (unavailable()) {
+                return null;
+            }
+            BigDecimal total = raw(marketValue);
+            if (total.signum() == 0) {
+                return BigDecimal.ZERO.setScale(RATE_SCALE);
+            }
+            return overseasInKrw(marketValue)
+                    .divide(total, 12, RoundingMode.HALF_UP)
+                    .multiply(HUNDRED)
+                    .setScale(RATE_SCALE, RoundingMode.HALF_UP);
+        }
+
+        /** 반올림 전 합계. 비중 계산이 반올림 오차를 물려받지 않도록 원값으로 다룬다. */
+        private BigDecimal raw(JsonNode amount) {
+            return TossJsonSupport.decimal(amount, "krw").add(overseasInKrw(amount));
+        }
+
+        private BigDecimal overseasInKrw(JsonNode amount) {
+            BigDecimal usd = TossJsonSupport.nullableDecimal(amount, "usd");
+            if (usd == null || usdKrwRate == null) {
+                return BigDecimal.ZERO;
+            }
+            return usd.multiply(usdKrwRate);
+        }
+    }
+
+    /**
+     * USD→KRW 환율. 이 값이 없다고 자산 화면 전체를 죽이지 않는다 — 통화별 합계는 그대로 유효하다.
+     * 실패 시 null 을 반환해 환산 필드들이 통째로 null 이 되게 한다.
+     */
+    private JsonNode fetchUsdKrwRate(TossAccountOwner owner) {
+        try {
+            return exchangeRateReader.readUsdToKrw(owner);
+        } catch (Exception e) {
+            log.warn("Failed to fetch Toss USD/KRW exchange rate (owner={})", owner, e);
+            return null;
+        }
     }
 
     private TossHoldingDto toHoldingDto(JsonNode item) {

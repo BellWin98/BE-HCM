@@ -65,12 +65,23 @@ public class CacheConfig {
                         .build()
         );
 
+        // 환율은 계좌와 무관해 소유자가 달라도 값이 같으므로 통화쌍 하나로 공유한다.
+        // 토스가 1분 주기로 갱신하니 그보다 짧게 잡아야 화면 값이 뒤처지지 않는다.
+        CaffeineCache tossExchangeRateCache = new CaffeineCache(
+                "tossExchangeRate",
+                Caffeine.newBuilder()
+                        .expireAfterWrite(30, TimeUnit.SECONDS)
+                        .maximumSize(1)
+                        .build()
+        );
+
         cacheManager.setCaches(List.of(
                 memberProfileCache,
                 workoutRoomDetailCache,
                 stockPortfolioCache,
                 tossHoldingsCache,
-                tossOrderHistoryCache
+                tossOrderHistoryCache,
+                tossExchangeRateCache
         ));
 
         return cacheManager;

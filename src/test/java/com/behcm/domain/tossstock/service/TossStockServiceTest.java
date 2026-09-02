@@ -33,6 +33,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.BDDMockito.then;
+import static org.mockito.Mockito.never;
 
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.LENIENT)
@@ -54,6 +56,8 @@ class TossStockServiceTest {
     private TossHoldingsReader holdingsReader;
     @Mock
     private TossOrderHistoryReader orderHistoryReader;
+    @Mock
+    private TossExchangeRateReader exchangeRateReader;
 
     private TossStockService service;
 
@@ -62,7 +66,7 @@ class TossStockServiceTest {
         // 실현손익 계산기는 실제 구현을 쓴다 — 이 서비스의 핵심 동작이 계산 결과의 조립이기 때문이다.
         service = new TossStockService(
                 tossInvestClient, properties, accountResolver,
-                holdingsReader, orderHistoryReader, new TossRealizedProfitCalculator()
+                holdingsReader, orderHistoryReader, exchangeRateReader, new TossRealizedProfitCalculator()
         );
         given(accountResolver.resolveAccountSeq(OWNER)).willReturn(ACCOUNT_SEQ);
     }
@@ -108,6 +112,147 @@ class TossStockServiceTest {
               ]
             }
             """;
+
+    /** 국내는 손실(-13,100원), 해외는 이익(+$110.40)이라 전체 환산 손익률만 플러스가 되는 계좌. */
+    private static final String MIXED_HOLDINGS = """
+            {
+              "totalPurchaseAmount": {"krw": "2754400", "usd": "2290.20"},
+              "marketValue": {
+                "amount": {"krw": "2741300", "usd": "2400.60"},
+                "amountAfterCost": {"krw": "2735000", "usd": "2394.10"}
+              },
+              "profitLoss": {
+                "amount": {"krw": "-13100", "usd": "110.40"},
+                "amountAfterCost": {"krw": "-19400", "usd": "104.90"},
+                "rate": "0.0236",
+                "rateAfterCost": "0.0212"
+              },
+              "dailyProfitLoss": {
+                "amount": {"krw": "18700", "usd": "21.30"},
+                "rate": "0.0080"
+              },
+              "items": [
+                {
+                  "symbol": "005930",
+                  "name": "삼성전자",
+                  "marketCountry": "KR",
+                  "currency": "KRW",
+                  "quantity": "12",
+                  "lastPrice": "73400",
+                  "averagePurchasePrice": "68200",
+                  "marketValue": {"purchaseAmount": "818400", "amount": "880800", "amountAfterCost": "878200"},
+                  "profitLoss": {
+                    "amount": "62400", "amountAfterCost": "60290",
+                    "rate": "0.0763", "rateAfterCost": "0.0737"
+                  },
+                  "dailyProfitLoss": {"amount": "-3500", "rate": "-0.0040"},
+                  "cost": {"commission": "2110", "tax": null}
+                },
+                {
+                  "symbol": "NVDA",
+                  "name": "엔비디아",
+                  "marketCountry": "US",
+                  "currency": "USD",
+                  "quantity": "8",
+                  "lastPrice": "141.60",
+                  "averagePurchasePrice": "118.20",
+                  "marketValue": {"purchaseAmount": "945.60", "amount": "1132.80", "amountAfterCost": "1127.30"},
+                  "profitLoss": {
+                    "amount": "187.20", "amountAfterCost": "183.90",
+                    "rate": "0.1980", "rateAfterCost": "0.1945"
+                  },
+                  "dailyProfitLoss": {"amount": "37.20", "rate": "0.0340"},
+                  "cost": {"commission": "5.50", "tax": null}
+                }
+              ]
+            }
+            """;
+
+    private static final String USD_KRW_RATE = """
+            {
+              "baseCurrency": "USD",
+              "quoteCurrency": "KRW",
+              "rate": "1382.4",
+              "midRate": "1375",
+              "basisPoint": "53.8",
+              "rateChangeType": "UP",
+              "validFrom": "2026-09-02T14:07:00+09:00",
+              "validUntil": "2026-09-02T14:08:00+09:00"
+            }
+            """;
+
+    @Test
+    @DisplayName("해외 종목이 있으면 환율로 원화 환산 합계를 채운다")
+    void getPortfolio_withUsdHoldings_addsKrwConvertedTotals() {
+        given(holdingsReader.read(OWNER, ACCOUNT_SEQ)).willReturn(json(MIXED_HOLDINGS));
+        given(exchangeRateReader.readUsdToKrw(OWNER)).willReturn(json(USD_KRW_RATE));
+
+        TossPortfolioResponse portfolio = service.getPortfolio(OWNER);
+
+        assertThat(portfolio.getUsdKrwRate()).isEqualByComparingTo("1382.4");
+        assertThat(portfolio.getUsdKrwMidRate()).isEqualByComparingTo("1375");
+        assertThat(portfolio.getUsdKrwRateChangeType()).isEqualTo("UP");
+        assertThat(portfolio.getUsdKrwRateAsOf()).isEqualTo("2026-09-02T14:07:00+09:00");
+
+        // 2,741,300 + 2,400.60 × 1,382.4 = 6,059,889.44
+        assertThat(portfolio.getTotalMarketValueInKrw()).isEqualByComparingTo("6059889");
+        assertThat(portfolio.getTotalPurchaseAmountInKrw()).isEqualByComparingTo("5920372");
+        // 국내가 -13,100 이어도 해외 이익을 환산해 더하면 전체는 플러스다.
+        assertThat(portfolio.getTotalProfitLossInKrw()).isEqualByComparingTo("139517");
+        assertThat(portfolio.getTotalProfitLossAfterCostInKrw()).isEqualByComparingTo("125614");
+        assertThat(portfolio.getDailyProfitLossInKrw()).isEqualByComparingTo("48145");
+        assertThat(portfolio.getOverseasWeightPercent()).isEqualByComparingTo("54.76");
+    }
+
+    @Test
+    @DisplayName("요약 세후 손익을 매핑한다")
+    void getPortfolio_mapsOverviewAfterCostFigures() {
+        given(holdingsReader.read(OWNER, ACCOUNT_SEQ)).willReturn(json(MIXED_HOLDINGS));
+        given(exchangeRateReader.readUsdToKrw(OWNER)).willReturn(json(USD_KRW_RATE));
+
+        TossPortfolioResponse portfolio = service.getPortfolio(OWNER);
+
+        assertThat(portfolio.getTotalMarketValueAfterCostKrw()).isEqualByComparingTo("2735000");
+        assertThat(portfolio.getTotalMarketValueAfterCostUsd()).isEqualByComparingTo("2394.10");
+        assertThat(portfolio.getTotalProfitLossAfterCostKrw()).isEqualByComparingTo("-19400");
+        assertThat(portfolio.getTotalProfitLossAfterCostUsd()).isEqualByComparingTo("104.90");
+        assertThat(portfolio.getTotalProfitLossRateAfterCost()).isEqualByComparingTo("2.12");
+    }
+
+    @Test
+    @DisplayName("환율 조회가 실패하면 환산 합계를 null로 남기고 나머지는 그대로 반환한다")
+    void getPortfolio_whenExchangeRateFails_leavesConvertedTotalsNull() {
+        given(holdingsReader.read(OWNER, ACCOUNT_SEQ)).willReturn(json(MIXED_HOLDINGS));
+        given(exchangeRateReader.readUsdToKrw(OWNER))
+                .willThrow(new CustomException(ErrorCode.TOSS_API_FAILED));
+
+        TossPortfolioResponse portfolio = service.getPortfolio(OWNER);
+
+        // 0 으로 채우면 해외 자산이 통째로 사라진 것처럼 보인다. 환산 불가는 null 이어야 한다.
+        assertThat(portfolio.getUsdKrwRate()).isNull();
+        assertThat(portfolio.getTotalMarketValueInKrw()).isNull();
+        assertThat(portfolio.getTotalProfitLossInKrw()).isNull();
+        assertThat(portfolio.getOverseasWeightPercent()).isNull();
+        // 환산과 무관한 값들은 살아 있어야 한다.
+        assertThat(portfolio.getHoldings()).hasSize(2);
+        assertThat(portfolio.getTotalMarketValueKrw()).isEqualByComparingTo("2741300");
+        assertThat(portfolio.getTotalMarketValueUsd()).isEqualByComparingTo("2400.60");
+    }
+
+    @Test
+    @DisplayName("해외 종목이 없으면 환율을 조회하지 않고 국내 금액을 그대로 환산 합계로 쓴다")
+    void getPortfolio_withoutUsdHoldings_skipsExchangeRateLookup() {
+        given(holdingsReader.read(OWNER, ACCOUNT_SEQ)).willReturn(json(DOMESTIC_HOLDINGS));
+
+        TossPortfolioResponse portfolio = service.getPortfolio(OWNER);
+
+        then(exchangeRateReader).should(never()).readUsdToKrw(any());
+        // 환산할 것이 없으니 환율은 없지만, 합계 자체는 국내 금액으로 확정된다.
+        assertThat(portfolio.getUsdKrwRate()).isNull();
+        assertThat(portfolio.getTotalMarketValueInKrw()).isEqualByComparingTo("7200000");
+        assertThat(portfolio.getTotalProfitLossInKrw()).isEqualByComparingTo("700000");
+        assertThat(portfolio.getOverseasWeightPercent()).isEqualByComparingTo("0");
+    }
 
     @Test
     @DisplayName("손익률을 소수비율에서 퍼센트로 변환한다")

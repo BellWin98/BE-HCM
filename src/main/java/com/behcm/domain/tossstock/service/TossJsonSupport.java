@@ -55,6 +55,22 @@ final class TossJsonSupport {
     }
 
     /**
+     * 문자열 필드를 읽되 값이 없으면 null 을 유지한다.
+     * 응답 자체가 없는 경우(환율 조회 실패 등)도 node 가 null 로 들어와 null 이 된다.
+     */
+    static String text(JsonNode node, String fieldName) {
+        if (node == null) {
+            return null;
+        }
+        JsonNode field = node.path(fieldName);
+        if (field.isMissingNode() || field.isNull()) {
+            return null;
+        }
+        String raw = field.asString("").trim();
+        return raw.isEmpty() ? null : raw;
+    }
+
+    /**
      * 소수비율로 오는 손익률을 퍼센트로 변환한다. 0.1516 -> 15.16
      */
     static BigDecimal percent(JsonNode node, String fieldName) {

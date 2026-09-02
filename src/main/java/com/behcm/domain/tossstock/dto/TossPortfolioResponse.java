@@ -42,6 +42,41 @@ public class TossPortfolioResponse {
     /** 일간 손익률(%). */
     private BigDecimal dailyProfitLossRate;
 
+    /** 세금/수수료 공제 후 평가금액·손익. 토스가 요약 레벨에도 내려주는 값이다. */
+    private BigDecimal totalMarketValueAfterCostKrw;
+    private BigDecimal totalMarketValueAfterCostUsd;
+    private BigDecimal totalProfitLossAfterCostKrw;
+    private BigDecimal totalProfitLossAfterCostUsd;
+    /** 세금/수수료 공제 후 전체 손익률(%). 위 손익률과 마찬가지로 원화 환산 기준이다. */
+    private BigDecimal totalProfitLossRateAfterCost;
+
+    /**
+     * 적용 환율(1 USD = ? KRW). 해외 종목이 없거나 환율 조회에 실패하면 null.
+     * 화면에 환산 금액을 보여주는 이상 어떤 환율을 썼는지도 같이 보여줘야 한다.
+     */
+    private BigDecimal usdKrwRate;
+    /** 매매기준율(은행간 mid rate). */
+    private BigDecimal usdKrwMidRate;
+    /** 환율 등락 구분. UP | EQUAL | DOWN. */
+    private String usdKrwRateChangeType;
+    /** 이 환율의 유효 시작 시각. */
+    private String usdKrwRateAsOf;
+
+    /**
+     * 국내 금액 + 해외 금액×환율. 통화별로 나뉜 위 합계와 달리 <b>계좌 전체</b>를 가리킨다.
+     *
+     * <p>해외 종목이 없으면 환산할 것이 없으므로 국내 금액이 그대로 들어간다.
+     * 해외 종목이 있는데 환율 조회에 실패하면 <b>전부 null</b> 이다 — 0 으로 채우면
+     * 해외 자산이 통째로 사라진 것처럼 보인다.
+     */
+    private BigDecimal totalPurchaseAmountInKrw;
+    private BigDecimal totalMarketValueInKrw;
+    private BigDecimal totalProfitLossInKrw;
+    private BigDecimal totalProfitLossAfterCostInKrw;
+    private BigDecimal dailyProfitLossInKrw;
+    /** 원화 환산 평가금액에서 해외가 차지하는 비중(%). */
+    private BigDecimal overseasWeightPercent;
+
     /** 현금 매수가능금액(미수 미발생 기준). 한투의 예수금에 대응하는 가장 가까운 값. */
     private BigDecimal cashBuyingPowerKrw;
     private BigDecimal cashBuyingPowerUsd;

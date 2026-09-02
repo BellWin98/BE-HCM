@@ -66,18 +66,6 @@ jobs:
       - name: Grant execute permission for gradlew
         run: chmod +x ./gradlew
 
-      - name: Wait for MySQL to be ready
-        run: |
-          for i in {1..30}; do
-            if mysqladmin ping -h127.0.0.1 -uroot -p1234 2>/dev/null; then
-              echo "MySQL is ready"
-              exit 0
-            fi
-            echo "Waiting for MySQL... ($i/30)"
-            sleep 2
-          done
-          exit 1        
-
       - name: Build with Gradle (테스트 포함)
         run: ./gradlew clean build --no-daemon
 

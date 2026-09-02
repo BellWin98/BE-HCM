@@ -5,7 +5,11 @@ import com.behcm.domain.member.entity.Member;
 import com.behcm.domain.member.entity.MemberSettings;
 import com.behcm.domain.member.repository.MemberRepository;
 import com.behcm.domain.member.repository.MemberSettingsRepository;
+import com.behcm.domain.social.dto.GroupedSocialSummary;
+import com.behcm.domain.social.dto.WorkoutSocialSummary;
+import com.behcm.domain.social.service.WorkoutSocialQueryService;
 import com.behcm.domain.workout.dto.WorkoutFeedItemResponse;
+import com.behcm.domain.workout.dto.WorkoutFeedRoomResponse;
 import com.behcm.domain.workout.enums.PeriodType;
 import com.behcm.domain.workout.entity.WorkoutRecord;
 import com.behcm.domain.workout.repository.WorkoutRecordRepository;
@@ -23,8 +27,11 @@ import org.springframework.web.multipart.MultipartFile;
 import java.time.LocalDate;
 import java.time.DayOfWeek;
 import java.time.YearMonth;
+import java.util.Collection;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -34,6 +41,7 @@ public class MemberService {
     private final MemberRepository memberRepository;
     private final WorkoutRecordRepository workoutRecordRepository;
     private final MemberSettingsRepository memberSettingsRepository;
+    private final WorkoutSocialQueryService workoutSocialQueryService;
     private final S3Service s3Service;
 
     public ProfileImageUploadResponse uploadProfileImage(Member member, MultipartFile image) {
@@ -92,12 +100,62 @@ public class MemberService {
         }
 
         if (effectivePeriodType == PeriodType.ALL) {
-            return workoutRecordRepository.findAllByMemberPerWorkoutDate(member, pageable)
-                    .map(WorkoutFeedItemResponse::from);
+            return toFeed(workoutRecordRepository.findAllByMemberPerWorkoutDate(member, pageable), member);
         }
 
-        return workoutRecordRepository.findAllByMemberPerWorkoutDateAndWorkoutDateBetween(member, startDate, endDate, pageable)
-                .map(WorkoutFeedItemResponse::from);
+        return toFeed(
+                workoutRecordRepository.findAllByMemberPerWorkoutDateAndWorkoutDateBetween(member, startDate, endDate, pageable),
+                member
+        );
+    }
+
+    /**
+     * 대표 인증 목록에 리액션/댓글을 채워 피드로 만든다.
+     *
+     * 운동 인증 한 번은 참여 중인 방 수만큼 레코드로 저장되고 피드 쿼리는 그중 대표 한 건만 뽑는데,
+     * 리액션/댓글은 각 방의 레코드에 따로 달린다. 그래서 대표 한 건이 아니라 그날의 형제 레코드 전체를
+     * 집계 대상으로 넘긴다. 집계 대상은 페이지 전체를 한 번에 모아 조회한다 — 건별로 조회하면 그대로
+     * N+1 이 된다.
+     */
+    private Page<WorkoutFeedItemResponse> toFeed(Page<WorkoutRecord> workoutRecords, Member viewer) {
+        List<LocalDate> workoutDates = workoutRecords.getContent().stream()
+                .map(WorkoutRecord::getWorkoutDate)
+                .distinct()
+                .toList();
+        if (workoutDates.isEmpty()) {
+            return workoutRecords.map(workoutRecord ->
+                    WorkoutFeedItemResponse.of(workoutRecord, WorkoutSocialSummary.empty(), List.of()));
+        }
+
+        Map<LocalDate, List<RoomRecordRef>> refsByDate = workoutRecordRepository
+                .findRoomBreakdownByMemberAndWorkoutDateIn(viewer, workoutDates).stream()
+                .map(row -> new RoomRecordRef((LocalDate) row[0], (Long) row[1], (Long) row[2], (String) row[3]))
+                .collect(Collectors.groupingBy(RoomRecordRef::workoutDate));
+
+        Map<Long, Collection<Long>> groups = workoutRecords.getContent().stream()
+                .collect(Collectors.toMap(
+                        WorkoutRecord::getId,
+                        workoutRecord -> refsByDate.getOrDefault(workoutRecord.getWorkoutDate(), List.of()).stream()
+                                .map(RoomRecordRef::recordId)
+                                .collect(Collectors.<Long>toList())
+                ));
+        Map<Long, GroupedSocialSummary> socialByRepresentativeId =
+                workoutSocialQueryService.summarizeGrouped(groups, viewer);
+
+        return workoutRecords.map(workoutRecord -> {
+            GroupedSocialSummary grouped = socialByRepresentativeId
+                    .getOrDefault(workoutRecord.getId(), GroupedSocialSummary.empty());
+            List<WorkoutFeedRoomResponse> rooms = refsByDate
+                    .getOrDefault(workoutRecord.getWorkoutDate(), List.of()).stream()
+                    .map(ref -> WorkoutFeedRoomResponse.of(
+                            ref.roomId(), ref.roomName(), ref.recordId(), grouped.getByRecordId().get(ref.recordId())))
+                    .toList();
+            return WorkoutFeedItemResponse.of(workoutRecord, grouped.getTotal(), rooms);
+        });
+    }
+
+    /** findRoomBreakdownByMemberAndWorkoutDateIn 의 (workoutDate, recordId, roomId, roomName) 행. */
+    private record RoomRecordRef(LocalDate workoutDate, Long recordId, Long roomId, String roomName) {
     }
 
     @Transactional

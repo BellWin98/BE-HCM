@@ -74,7 +74,7 @@ public class WorkoutCommentService {
         if (Objects.equals(owner.getId(), author.getId())) {
             return;
         }
-        String title = String.format("%s님이 회원님의 운동 인증에 댓글을 남겼어요!", author.getNickname());
+        String title = String.format("%s님이 회원님의 %s 운동 인증에 댓글을 남겼어요!", author.getNickname(), workoutRecord.getWorkoutDate());
         notificationFacade.notifyMember(owner, title, content, COMMENT_TYPE, "");
     }
 }

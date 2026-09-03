@@ -10,15 +10,6 @@ BE-HCM("헬창모임")은 그룹 운동 습관 관리 앱을 위한 Spring Boot 
 
 ## 명령어
 
-```bash
-./gradlew build              # 전체 빌드(컴파일 + 테스트 실행)
-./gradlew build -x test      # 테스트 없이 빌드(CI에서 사용)
-./gradlew test               # 전체 테스트 실행
-./gradlew test --tests "com.behcm.domain.workout.service.WorkoutRoomServiceTest"      # 특정 테스트 클래스만 실행
-./gradlew test --tests "com.behcm.domain.workout.service.WorkoutRoomServiceTest.methodName"  # 특정 테스트 메서드만 실행
-./gradlew bootRun            # 로컬 실행(기본적으로 `local` Spring 프로필 사용)
-```
-
 별도로 설정된 lint 태스크는 없으며, `./gradlew build`(컴파일 + 테스트)로 코드 정합성을 검증합니다.
 
 ## 테스트 작성 원칙 (TDD)
@@ -40,12 +31,6 @@ BE-HCM("헬창모임")은 그룹 운동 습관 관리 앱을 위한 Spring Boot 
   있지는 않습니다.
 - YAML 내 비밀값은 Jasypt로 암호화되어 있으며(`ENC(...)`), 부팅 시 `JASYPT_ENCRYPTOR_PASSWORD` 환경변수로
   복호화됩니다(`global/config/JasyptConfig.java`).
-- Docker 이미지(`Dockerfile`)는 기본적으로 `SPRING_PROFILES_ACTIVE=prod`이며, `build/libs/*.jar` 경로의
-  빌드 산출물을 기대합니다.
-- CI/CD는 GitHub Actions(`.github/workflows/deploy.yml`)로 구성되어 있습니다: `main`/`dev` 브랜치에 push되면
-  Gradle로 빌드(테스트는 스킵)한 뒤 Docker 이미지를 빌드/푸시하고(`main`은 `latest` 태그, 그 외는 `dev` 태그),
-  해당 GitHub Environment(`production` / `development`)의 시크릿을 사용해 EC2에 SSH로 접속해
-  `docker-compose up -d`를 실행합니다.
 
 ## DB 스키마 변경 (Flyway)
 
@@ -79,11 +64,6 @@ BE-HCM("헬창모임")은 그룹 운동 습관 관리 앱을 위한 Spring Boot 
 
 ### 패키지 구조 (레이어 우선이 아닌 도메인 주도 구조)
 
-`com.behcm`은 `domain/*`(기능별 모듈)과 `global/*`(공통 인프라)로 나뉩니다. 각 도메인 모듈은 동일하게
-`controller/ → service/ → repository/` 계층을 따르며, 필요에 따라 `dto/`, `entity/`를 포함합니다.
-
-- `domain/auth` — 회원가입/로그인, JWT 발급, OAuth2(Google/Kakao/Naver) 소셜 로그인, 이메일 인증.
-- `domain/member` — 회원 프로필/계정.
 - `domain/workout` — `WorkoutRoom`(그룹), `WorkoutRoomMember`, `WorkoutRecord`(일일 운동 인증). 매주 월요일
   자정(`0 0 0 * * MON`)에 실행되는 `@Scheduled` 크론 잡인 `WorkoutSchedulingService`가 있으며, 주간 마감 및
   벌금 계산을 트리거하는 것으로 보입니다 — 주간 사이클 로직을 수정할 때 가장 먼저 확인해야 할 파일입니다.
@@ -93,8 +73,6 @@ BE-HCM("헬창모임")은 그룹 운동 습관 관리 앱을 위한 Spring Boot 
   집계는 반드시 `WorkoutSocialQueryService.summarizeGrouped` 로 그날의 형제 레코드 전체를 넘겨서 합산하세요.
   반대로 **운동방 하나를 보는 조회에는 이 일자별 정리를 붙이면 안 됩니다** — 방 안에서는 UK 로 이미 유일하고,
   방을 걸치는 `max(id)` 를 붙이면 다른 방 레코드가 뽑혀 그 방 목록에서 기록이 사라집니다.
-- `domain/penalty` — 운동 미이행에 대한 벌금 추적/납부를 위한 `Penalty` / `PenaltyAccount` 엔티티. 운동방
-  멤버십과 운동 기록에 의존합니다.
 - `domain/social` — 운동 인증에 대한 이모지 리액션(`WorkoutReaction`)과 댓글(`WorkoutComment`).
   접근 제어는 `WorkoutRecordAccessGuard`가 담당하며(해당 인증이 올라간 운동방의 멤버만 허용),
   피드/운동방 상세에 실리는 집계는 `WorkoutSocialQueryService.summarize(recordIds, viewer)`가
@@ -103,39 +81,16 @@ BE-HCM("헬창모임")은 그룹 운동 습관 관리 앱을 위한 Spring Boot 
   푸시는 알림 피로를 고려해 댓글에만 보냅니다(리액션은 보내지 않음).
   **`workout_reaction`/`workout_comment` 는 `workout_record` 를 FK 로 참조하므로, 회원/운동방 삭제
   경로(`AdminMemberService`, `AdminWorkoutRoomService`)에서 반드시 운동 기록보다 먼저 지워야 합니다.**
-- `domain/chat` — WebSocket/STOMP 기반 실시간 방 채팅.
-- `domain/notification` — FCM 푸시 알림.
 - `domain/stats` — 통계/랜딩 페이지용 집계 데이터. `SecurityConfig`에서 `/api/stats/**` 엔드포인트는
   `permitAll`로 설정되어 있다는 점에 유의하세요.
-- `domain/stock` — 한국투자증권 API를 통한 주식/시세 데이터 연동.
-- `domain/rest` — 기타 REST 엔드포인트.
-- `domain/admin` — `admin/member`, `admin/workout` 등 관리자 전용 하위 API로, `ROLE_ADMIN` 권한이 필요합니다
-  (`SecurityConfig`의 `/api/admin/**`).
-- `domain/common` — 도메인 간 공유되는 아주 작은 요소들(예: `/api/health`용 `HealthCheckController`).
-- `global/config` — Spring `@Configuration` 클래스 모음: `SecurityConfig`, `RedisConfig`,
-  `CacheConfig`(Caffeine), `AsyncConfig`, `RestTemplateConfig`, `JasyptConfig`, `FcmConfig`, 그리고 하위
-  패키지로 `aws`(S3), `stock`(한국투자증권 클라이언트), `swagger`(OpenAPI/Springdoc),
-  `websocket`(STOMP 브로커 + JWT 채널 인터셉터)이 있습니다.
-- `global/security` — JWT provider/filter/entry point 및 OAuth2 성공/실패 핸들러.
-- `global/exception` — `CustomException` + `ErrorCode` enum(모든 에러 메시지는 한국어이며, `// Workout Room`,
-  `// Chat`처럼 도메인별 주석으로 그룹화되어 있음) + `GlobalExceptionHandler`(`@ControllerAdvice`).
-- `global/common` — 컨트롤러가 반환하는 일관된 `{success, message, data}` 형태의 `ApiResponse<T>`와, JPA
-  엔티티의 생성/수정 시각 감사(auditing)를 위한 베이스 클래스인 `BaseTimeEntity`.
 
 ### 인증 및 보안
 
 - Stateless JWT 인증(`SessionCreationPolicy.STATELESS`)과 함께 OAuth2 로그인(Google/Kakao/Naver)을 지원하며,
   OAuth2 로그인 성공 시에도 `OAuth2AuthenticationSuccessHandler`를 통해 JWT를 발급합니다.
-- 인증 없이 접근 가능한(permitAll) 경로: `/api/auth/**`, `/api/oauth2/**`, `/api/stats/**`,
-  `/login/oauth2/code/**`, `/api/health`, `/swagger-ui/**`, `/v3/api-docs/**`, `/ws/**`, `/wss/**`.
-- `/api/admin/**`은 `ROLE_ADMIN` 권한이 필요하며, 그 외 모든 요청은 인증이 필요합니다.
-- CORS는 `localhost:*`와 `https://www.bellwin.co.kr` / `https://dev.bellwin.co.kr`로 제한되며, `/api/**`와
-  `/login/oauth2/**` 경로에 적용됩니다.
 
 ### 실시간 채팅 (WebSocket/STOMP)
 
-- `/wss` 경로에 STOMP 엔드포인트가 있으며(SockJS 폴백 지원), 메시지 브로커는 `/topic`, 클라이언트→서버
-  전송 prefix는 `/app`입니다(`global/config/websocket/WebSocketConfig.java`).
 - 들어오는 STOMP 프레임은 `JwtChannelInterceptor`를 통해 인증됩니다(HTTP용 `JwtAuthenticationFilter`와는
   별개로, WebSocket 채널에서 JWT를 검증).
 

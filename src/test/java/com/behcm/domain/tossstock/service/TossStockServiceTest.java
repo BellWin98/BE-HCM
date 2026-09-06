@@ -182,8 +182,8 @@ class TossStockServiceTest {
             """;
 
     @Test
-    @DisplayName("해외 종목이 있으면 환율로 원화 환산 합계를 채운다")
-    void getPortfolio_withUsdHoldings_addsKrwConvertedTotals() {
+    @DisplayName("해외 종목이 있으면 환율 정보를 참고 표기용으로 담는다")
+    void getPortfolio_withUsdHoldings_mapsExchangeRateFields() {
         given(holdingsReader.read(OWNER, ACCOUNT_SEQ)).willReturn(json(MIXED_HOLDINGS));
         given(exchangeRateReader.readUsdToKrw(OWNER)).willReturn(json(USD_KRW_RATE));
 
@@ -194,14 +194,11 @@ class TossStockServiceTest {
         assertThat(portfolio.getUsdKrwRateChangeType()).isEqualTo("UP");
         assertThat(portfolio.getUsdKrwRateAsOf()).isEqualTo("2026-09-02T14:07:00+09:00");
 
-        // 2,741,300 + 2,400.60 × 1,382.4 = 6,059,889.44
-        assertThat(portfolio.getTotalMarketValueInKrw()).isEqualByComparingTo("6059889");
-        assertThat(portfolio.getTotalPurchaseAmountInKrw()).isEqualByComparingTo("5920372");
-        // 국내가 -13,100 이어도 해외 이익을 환산해 더하면 전체는 플러스다.
-        assertThat(portfolio.getTotalProfitLossInKrw()).isEqualByComparingTo("139517");
-        assertThat(portfolio.getTotalProfitLossAfterCostInKrw()).isEqualByComparingTo("125614");
-        assertThat(portfolio.getDailyProfitLossInKrw()).isEqualByComparingTo("48145");
-        assertThat(portfolio.getOverseasWeightPercent()).isEqualByComparingTo("54.76");
+        // 환율을 받아도 금액은 통화별로 그대로 둔다 — 환산하면 매수 시점 환율과 다른 값이 된다.
+        assertThat(portfolio.getTotalMarketValueKrw()).isEqualByComparingTo("2741300");
+        assertThat(portfolio.getTotalMarketValueUsd()).isEqualByComparingTo("2400.60");
+        assertThat(portfolio.getTotalPurchaseAmountKrw()).isEqualByComparingTo("2754400");
+        assertThat(portfolio.getTotalPurchaseAmountUsd()).isEqualByComparingTo("2290.20");
     }
 
     @Test
@@ -220,38 +217,37 @@ class TossStockServiceTest {
     }
 
     @Test
-    @DisplayName("환율 조회가 실패하면 환산 합계를 null로 남기고 나머지는 그대로 반환한다")
-    void getPortfolio_whenExchangeRateFails_leavesConvertedTotalsNull() {
+    @DisplayName("환율 조회가 실패해도 통화별 합계는 그대로 반환한다")
+    void getPortfolio_whenExchangeRateFails_keepsCurrencyTotals() {
         given(holdingsReader.read(OWNER, ACCOUNT_SEQ)).willReturn(json(MIXED_HOLDINGS));
         given(exchangeRateReader.readUsdToKrw(OWNER))
                 .willThrow(new CustomException(ErrorCode.TOSS_API_FAILED));
 
         TossPortfolioResponse portfolio = service.getPortfolio(OWNER);
 
-        // 0 으로 채우면 해외 자산이 통째로 사라진 것처럼 보인다. 환산 불가는 null 이어야 한다.
+        // 환율은 참고 표기 전용이라, 못 받으면 표기만 사라지고 화면은 그대로 선다.
         assertThat(portfolio.getUsdKrwRate()).isNull();
-        assertThat(portfolio.getTotalMarketValueInKrw()).isNull();
-        assertThat(portfolio.getTotalProfitLossInKrw()).isNull();
-        assertThat(portfolio.getOverseasWeightPercent()).isNull();
-        // 환산과 무관한 값들은 살아 있어야 한다.
+        assertThat(portfolio.getUsdKrwMidRate()).isNull();
+        assertThat(portfolio.getUsdKrwRateChangeType()).isNull();
+        assertThat(portfolio.getUsdKrwRateAsOf()).isNull();
+
         assertThat(portfolio.getHoldings()).hasSize(2);
         assertThat(portfolio.getTotalMarketValueKrw()).isEqualByComparingTo("2741300");
         assertThat(portfolio.getTotalMarketValueUsd()).isEqualByComparingTo("2400.60");
     }
 
     @Test
-    @DisplayName("해외 종목이 없으면 환율을 조회하지 않고 국내 금액을 그대로 환산 합계로 쓴다")
+    @DisplayName("해외 종목이 없으면 환율을 조회하지 않는다")
     void getPortfolio_withoutUsdHoldings_skipsExchangeRateLookup() {
         given(holdingsReader.read(OWNER, ACCOUNT_SEQ)).willReturn(json(DOMESTIC_HOLDINGS));
 
         TossPortfolioResponse portfolio = service.getPortfolio(OWNER);
 
+        // 국내 전용 계좌에는 환율을 보여줄 자리가 없다 — 호출 자체를 아낀다.
         then(exchangeRateReader).should(never()).readUsdToKrw(any());
-        // 환산할 것이 없으니 환율은 없지만, 합계 자체는 국내 금액으로 확정된다.
         assertThat(portfolio.getUsdKrwRate()).isNull();
-        assertThat(portfolio.getTotalMarketValueInKrw()).isEqualByComparingTo("7200000");
-        assertThat(portfolio.getTotalProfitLossInKrw()).isEqualByComparingTo("700000");
-        assertThat(portfolio.getOverseasWeightPercent()).isEqualByComparingTo("0");
+        assertThat(portfolio.getTotalMarketValueKrw()).isEqualByComparingTo("7200000");
+        assertThat(portfolio.getTotalMarketValueUsd()).isNull();
     }
 
     @Test

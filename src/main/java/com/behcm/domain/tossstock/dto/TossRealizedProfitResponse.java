@@ -65,8 +65,15 @@ public class TossRealizedProfitResponse {
 
         private String symbol;
         private String name;
-        /** yyyy-MM-dd */
+        /** yyyy-MM-dd. 일자별 묶음·정렬 키로 쓴다. */
         private String tradeDate;
+        /**
+         * 체결 시각 (yyyy-MM-dd'T'HH:mm:ss, KST 기준의 로컬 시각).
+         *
+         * <p>{@link #tradeDate} 와 중복되어 보이지만 용도가 다르다 — 화면은 같은 날 여러 번 나눠 체결된
+         * 건을 구분해야 하고(시·분까지 보여준다), 목록을 일자 단위로 묶는 화면은 날짜 키가 따로 필요하다.
+         */
+        private String tradeDateTime;
         /** BUY | SELL */
         private String tradeType;
         /** KRW | USD */

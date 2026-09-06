@@ -18,12 +18,12 @@ class TossRealizedProfitCalculatorTest {
     private final TossRealizedProfitCalculator calculator = new TossRealizedProfitCalculator();
 
     private Fill buy(String symbol, String date, String qty, String amount, String commission) {
-        return new Fill(symbol, "KRW", TradeSide.BUY, LocalDate.parse(date),
+        return new Fill(symbol, "KRW", TradeSide.BUY, LocalDate.parse(date).atTime(9, 5),
                 new BigDecimal(qty), new BigDecimal(amount), new BigDecimal(commission), BigDecimal.ZERO);
     }
 
     private Fill sell(String symbol, String date, String qty, String amount, String commission, String tax) {
-        return new Fill(symbol, "KRW", TradeSide.SELL, LocalDate.parse(date),
+        return new Fill(symbol, "KRW", TradeSide.SELL, LocalDate.parse(date).atTime(9, 5),
                 new BigDecimal(qty), new BigDecimal(amount), new BigDecimal(commission), new BigDecimal(tax));
     }
 

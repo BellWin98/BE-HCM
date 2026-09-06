@@ -15,7 +15,8 @@ import java.util.List;
  * <ul>
  *   <li>손익률은 토스가 소수비율(0.1516)로 주지만, 여기서는 <b>퍼센트(15.16)</b>로 변환해 담는다.
  *       프론트가 기존 한투 화면과 같은 포맷터를 쓸 수 있게 하기 위함이다.</li>
- *   <li>국내(KRW)·미국(USD) 종목이 섞이므로 합산 금액이 통화별로 분리된다. 해외 종목이 없으면 usd 는 null.</li>
+ *   <li>국내(KRW)·미국(USD) 종목이 섞이므로 합산 금액이 통화별로 분리된다. 해외 종목이 없으면 usd 는 null.
+ *       통화를 넘어 합산하지 않는다 — 환율로 환산하면 매수 시점과 다른 값이 되기 때문이다.</li>
  *   <li>D+2 예수금 개념이 없다. 토스가 주는 것은 현금 매수가능금액뿐이다.</li>
  * </ul>
  */
@@ -34,7 +35,11 @@ public class TossPortfolioResponse {
     private BigDecimal totalMarketValueUsd;
     private BigDecimal totalProfitLossKrw;
     private BigDecimal totalProfitLossUsd;
-    /** 전체 손익률(%). 토스가 원화 환산 기준으로 계산해 준 값. */
+    /**
+     * 전체 손익률(%). 토스가 <b>국내·해외를 원화 환산해 합친</b> 기준으로 계산해 준 값이다.
+     * 위 통화별 금액들과 모집단이 다르므로 한쪽 통화만 보는 화면에 붙이면 안 된다
+     * (금액은 마이너스인데 비율은 플러스인 줄이 나온다).
+     */
     private BigDecimal totalProfitLossRate;
 
     private BigDecimal dailyProfitLossKrw;
@@ -47,12 +52,15 @@ public class TossPortfolioResponse {
     private BigDecimal totalMarketValueAfterCostUsd;
     private BigDecimal totalProfitLossAfterCostKrw;
     private BigDecimal totalProfitLossAfterCostUsd;
-    /** 세금/수수료 공제 후 전체 손익률(%). 위 손익률과 마찬가지로 원화 환산 기준이다. */
+    /** 세금/수수료 공제 후 전체 손익률(%). 위 손익률과 마찬가지로 원화 환산 합산 기준이다. */
     private BigDecimal totalProfitLossRateAfterCost;
 
     /**
      * 적용 환율(1 USD = ? KRW). 해외 종목이 없거나 환율 조회에 실패하면 null.
-     * 화면에 환산 금액을 보여주는 이상 어떤 환율을 썼는지도 같이 보여줘야 한다.
+     *
+     * <p>금액 환산에는 <b>쓰지 않는다</b> — 평단·매입금액·손익은 매수/매도 시점 환율로 확정된
+     * 과거 금액이라 오늘 환율을 곱하면 실제로 치른 원화도, 앞으로 손에 쥘 원화도 아닌 값이 된다.
+     * 참고 표기("$1 = ₩1,382.4")로만 내려준다.
      */
     private BigDecimal usdKrwRate;
     /** 매매기준율(은행간 mid rate). */
@@ -61,21 +69,6 @@ public class TossPortfolioResponse {
     private String usdKrwRateChangeType;
     /** 이 환율의 유효 시작 시각. */
     private String usdKrwRateAsOf;
-
-    /**
-     * 국내 금액 + 해외 금액×환율. 통화별로 나뉜 위 합계와 달리 <b>계좌 전체</b>를 가리킨다.
-     *
-     * <p>해외 종목이 없으면 환산할 것이 없으므로 국내 금액이 그대로 들어간다.
-     * 해외 종목이 있는데 환율 조회에 실패하면 <b>전부 null</b> 이다 — 0 으로 채우면
-     * 해외 자산이 통째로 사라진 것처럼 보인다.
-     */
-    private BigDecimal totalPurchaseAmountInKrw;
-    private BigDecimal totalMarketValueInKrw;
-    private BigDecimal totalProfitLossInKrw;
-    private BigDecimal totalProfitLossAfterCostInKrw;
-    private BigDecimal dailyProfitLossInKrw;
-    /** 원화 환산 평가금액에서 해외가 차지하는 비중(%). */
-    private BigDecimal overseasWeightPercent;
 
     /** 현금 매수가능금액(미수 미발생 기준). 한투의 예수금에 대응하는 가장 가까운 값. */
     private BigDecimal cashBuyingPowerKrw;

@@ -25,6 +25,7 @@ import tools.jackson.databind.ObjectMapper;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 
@@ -339,7 +340,13 @@ class TossStockServiceTest {
 
     private Fill fill(String symbol, String currency, TradeSide side, String date,
                       String quantity, String amount, String commission, String tax) {
-        return new Fill(symbol, currency, side, LocalDate.parse(date),
+        return fillAt(symbol, currency, side, LocalDate.parse(date).atTime(9, 5),
+                quantity, amount, commission, tax);
+    }
+
+    private Fill fillAt(String symbol, String currency, TradeSide side, LocalDateTime executedAt,
+                        String quantity, String amount, String commission, String tax) {
+        return new Fill(symbol, currency, side, executedAt,
                 new BigDecimal(quantity), new BigDecimal(amount), new BigDecimal(commission), new BigDecimal(tax));
     }
 
@@ -374,6 +381,25 @@ class TossStockServiceTest {
         assertThat(response.getTrades().get(0).getProfitLoss()).isEqualByComparingTo("5000");
         assertThat(response.getTrades().get(0).getName()).isEqualTo("삼성전자");
         assertThat(response.isEstimated()).isFalse();
+    }
+
+    @Test
+    @DisplayName("체결 시각을 시·분까지 내려주고, 같은 날 체결은 시각 최신순으로 정렬한다")
+    void getRealizedProfit_exposesExecutionTimeAndSortsSameDayFillsByTime() {
+        // 하루에 여러 번 나눠 팔면 날짜만으로는 어느 체결이 어느 것인지 화면에서 구분할 수 없다.
+        stubHistory(List.of(
+                fill("005930", "KRW", TradeSide.BUY, "2026-02-01", "20", "20000", "0", "0"),
+                fillAt("005930", "KRW", TradeSide.SELL, LocalDateTime.parse("2026-02-10T09:31:15"),
+                        "10", "15000", "0", "0"),
+                fillAt("005930", "KRW", TradeSide.SELL, LocalDateTime.parse("2026-02-10T14:32:00"),
+                        "10", "16000", "0", "0")
+        ), Map.of("005930", "삼성전자"));
+
+        TossRealizedProfitResponse response = service.getRealizedProfit(request("2026-02-01", "2026-02-28"));
+
+        assertThat(response.getTrades()).extracting("tradeDateTime")
+                .containsExactly("2026-02-10T14:32", "2026-02-10T09:31:15", "2026-02-01T09:05");
+        assertThat(response.getTrades().get(0).getTradeDate()).isEqualTo("2026-02-10");
     }
 
     @Test

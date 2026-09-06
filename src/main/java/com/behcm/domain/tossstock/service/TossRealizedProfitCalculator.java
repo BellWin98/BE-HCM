@@ -5,6 +5,7 @@ import org.springframework.stereotype.Component;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -35,17 +36,27 @@ public class TossRealizedProfitCalculator {
 
     /**
      * 체결 1건. 금액은 모두 해당 종목의 거래통화 기준이다.
+     *
+     * <p>체결 시각은 날짜가 아니라 <b>분·초까지</b> 들고 다닌다. 같은 날 여러 번 나눠 체결되면
+     * 날짜만으로는 순서를 세울 수 없고(이동평균 원가는 순서에 의존한다), 화면도 어느 체결이
+     * 어느 것인지 구분할 수 없다.
      */
     public record Fill(
             String symbol,
             String currency,
             TradeSide side,
-            LocalDate tradeDate,
+            LocalDateTime executedAt,
             BigDecimal quantity,
             BigDecimal amount,
             BigDecimal commission,
             BigDecimal tax
-    ) { }
+    ) {
+
+        /** 기간 필터·일자 표기에 쓰는 체결 일자. */
+        public LocalDate tradeDate() {
+            return executedAt.toLocalDate();
+        }
+    }
 
     /**
      * 체결 1건 + 계산된 실현손익.

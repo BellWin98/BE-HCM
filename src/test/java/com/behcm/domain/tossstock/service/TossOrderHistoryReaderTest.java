@@ -14,6 +14,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 
@@ -134,6 +135,21 @@ class TossOrderHistoryReaderTest {
         assertThat(fills.get(0).tradeDate()).isEqualTo("2026-01-02");
         assertThat(fills.get(1).side()).isEqualTo(TradeSide.SELL);
         assertThat(fills.get(1).tradeDate()).isEqualTo("2026-03-10");
+    }
+
+    @Test
+    @DisplayName("체결 시각을 시·분까지 보존한다")
+    void readAll_keepsExecutionTimeOfDay() {
+        // 화면이 거래일시를 시·분까지 보여주려면 날짜로 잘라 버리면 안 된다.
+        stubOrders(json("""
+                {"orders": [%s], "nextCursor": null, "hasNext": false}
+                """.formatted(order("005930", "BUY", "10", "10000", "\"2026-01-02T14:32:11+09:00\""))));
+        stubNames("[]");
+
+        Fill fill = reader.readAll(OWNER, ACCOUNT_SEQ).fills().get(0);
+
+        assertThat(fill.executedAt()).isEqualTo(LocalDateTime.parse("2026-01-02T14:32:11"));
+        assertThat(fill.tradeDate()).isEqualTo("2026-01-02");
     }
 
     @Test

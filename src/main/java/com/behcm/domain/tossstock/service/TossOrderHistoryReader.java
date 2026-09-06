@@ -55,7 +55,7 @@ public class TossOrderHistoryReader {
 
     @Cacheable(value = "tossOrderHistory", key = "#owner")
     public OrderHistory readAll(TossAccountOwner owner, Long accountSeq) {
-        List<TimestampedFill> collected = new ArrayList<>();
+        List<Fill> collected = new ArrayList<>();
         String cursor = null;
 
         for (int page = 0; page < MAX_ORDER_PAGES; page++) {
@@ -90,15 +90,13 @@ public class TossOrderHistoryReader {
         }
 
         // 이동평균 원가는 순서에 의존한다. API 정렬을 신뢰하지 않고 명시적으로 오름차순 정렬한다.
-        collected.sort(Comparator.comparing(TimestampedFill::executedAt));
+        collected.sort(Comparator.comparing(Fill::executedAt));
 
-        List<Fill> fills = collected.stream().map(TimestampedFill::fill).toList();
+        List<Fill> fills = List.copyOf(collected);
         return new OrderHistory(fills, resolveNames(owner, fills));
     }
 
-    private record TimestampedFill(LocalDateTime executedAt, Fill fill) { }
-
-    private java.util.Optional<TimestampedFill> toFill(JsonNode order) {
+    private java.util.Optional<Fill> toFill(JsonNode order) {
         JsonNode execution = order.path("execution");
         BigDecimal filledQuantity = TossJsonSupport.decimal(execution, "filledQuantity");
 
@@ -114,7 +112,7 @@ public class TossOrderHistoryReader {
             return java.util.Optional.empty();
         }
 
-        // 체결 시각이 없으면 주문 시각으로 대체한다(순서 결정용).
+        // 체결 시각이 없으면 주문 시각으로 대체한다(순서 결정과 화면의 거래일시 표기에 쓴다).
         LocalDateTime executedAt = parseDateTime(execution.path("filledAt").asString(""));
         if (executedAt == null) {
             executedAt = parseDateTime(order.path("orderedAt").asString(""));
@@ -124,17 +122,16 @@ public class TossOrderHistoryReader {
             return java.util.Optional.empty();
         }
 
-        Fill fill = new Fill(
+        return java.util.Optional.of(new Fill(
                 order.path("symbol").asString(""),
                 order.path("currency").asString("KRW"),
                 tradeSide,
-                executedAt.toLocalDate(),
+                executedAt,
                 filledQuantity,
                 TossJsonSupport.decimal(execution, "filledAmount"),
                 TossJsonSupport.decimal(execution, "commission"),
                 TossJsonSupport.decimal(execution, "tax")
-        );
-        return java.util.Optional.of(new TimestampedFill(executedAt, fill));
+        ));
     }
 
     /**

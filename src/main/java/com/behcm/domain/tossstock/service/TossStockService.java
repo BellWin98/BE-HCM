@@ -222,7 +222,8 @@ public class TossStockService {
         }
 
         // 최신순 정렬 — 한투 화면과 동일한 순서를 유지한다.
-        trades.sort((left, right) -> right.getTradeDate().compareTo(left.getTradeDate()));
+        // 같은 날 여러 번 체결된 건은 시각까지 비교해야 최신 체결이 위로 온다.
+        trades.sort((left, right) -> right.getTradeDateTime().compareTo(left.getTradeDateTime()));
 
         List<CurrencyTotals> totals = totalsByCurrency.entrySet().stream()
                 .map(entry -> entry.getValue().toDto(entry.getKey()))
@@ -276,6 +277,7 @@ public class TossStockService {
                 .symbol(fill.symbol())
                 .name(names.getOrDefault(fill.symbol(), fill.symbol()))
                 .tradeDate(fill.tradeDate().toString())
+                .tradeDateTime(fill.executedAt().toString())
                 .tradeType(fill.side().name())
                 .currency(fill.currency())
                 .quantity(quantity)

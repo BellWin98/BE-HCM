@@ -17,10 +17,8 @@ import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 
 /**
  * 종료된 주문의 체결 내역을 계좌 전체 기간에 대해 읽어 온다.
@@ -38,14 +36,11 @@ public class TossOrderHistoryReader {
     private final TossInvestClient tossInvestClient;
 
     private static final String ORDERS_PATH = "/api/v1/orders";
-    private static final String STOCKS_PATH = "/api/v1/stocks";
 
     /** 토스 주문 목록의 페이지 크기 상한. */
     private static final int PAGE_SIZE = 100;
     /** 커서가 끝나지 않는 경우에도 호출이 유한하도록 상한을 둔다. */
     static final int MAX_ORDER_PAGES = 100;
-    /** 종목 기본정보 조회의 심볼 개수 상한. */
-    private static final int SYMBOL_BATCH_SIZE = 200;
 
     /**
      * 체결 목록(시간 오름차순)과 종목명 매핑.
@@ -135,42 +130,11 @@ public class TossOrderHistoryReader {
     }
 
     /**
-     * 주문 응답에는 종목명이 없으므로 종목 기본정보 API 로 한 번에 채운다(최대 200건씩).
-     * 종목명 조회가 실패해도 손익 자체는 유효하므로 심볼로 대체하고 계속 진행한다.
+     * 주문 응답에는 종목명이 없으므로 종목 기본정보 API 로 채운다.
+     * 미체결 목록도 같은 사정이라 배치·실패 처리 규칙은 {@link TossStockNameResolver} 한 곳에 있다.
      */
     private Map<String, String> resolveNames(TossAccountOwner owner, List<Fill> fills) {
-        Set<String> symbols = new LinkedHashSet<>();
-        for (Fill fill : fills) {
-            if (fill.symbol() != null && !fill.symbol().isBlank()) {
-                symbols.add(fill.symbol());
-            }
-        }
-        if (symbols.isEmpty()) {
-            return Map.of();
-        }
-
-        Map<String, String> names = new HashMap<>();
-        List<String> batch = new ArrayList<>(symbols);
-        for (int start = 0; start < batch.size(); start += SYMBOL_BATCH_SIZE) {
-            List<String> chunk = batch.subList(start, Math.min(start + SYMBOL_BATCH_SIZE, batch.size()));
-            try {
-                JsonNode stocks = tossInvestClient.get(
-                        owner, STOCKS_PATH, Map.of("symbols", String.join(",", chunk)));
-                if (stocks.isArray()) {
-                    for (JsonNode stock : stocks) {
-                        String symbol = stock.path("symbol").asString("");
-                        String name = stock.path("name").asString("");
-                        if (!symbol.isBlank() && !name.isBlank()) {
-                            names.put(symbol, name);
-                        }
-                    }
-                }
-            } catch (Exception e) {
-                log.warn("Failed to resolve Toss stock names for {} symbols; falling back to symbols",
-                        chunk.size(), e);
-            }
-        }
-        return names;
+        return TossStockNameResolver.resolve(tossInvestClient, owner, fills.stream().map(Fill::symbol).toList());
     }
 
     /**

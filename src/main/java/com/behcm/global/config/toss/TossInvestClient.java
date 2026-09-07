@@ -4,6 +4,7 @@ import com.behcm.global.exception.CustomException;
 import com.behcm.global.exception.ErrorCode;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -28,8 +29,15 @@ import java.util.Map;
  *   <li>응답이 {@code {"result": ...}} envelope 이고, 에러는 {@code {"error": {...}}} + HTTP 상태코드다.</li>
  * </ul>
  *
- * <p><b>조회 전용이다.</b> 토스 Open API 에는 주문 생성·정정·취소가 포함되어 있으나 이 클라이언트는
- * GET 만 노출한다 — 실수로도 주문이 나가지 않게 하기 위한 의도적인 제약이다.
+ * <p><b>공개 API 는 조회 전용이다.</b> 토스 Open API 에는 주문 생성·정정·취소가 포함되어 있으나
+ * 이 클래스가 {@code public} 으로 노출하는 것은 GET 뿐이다 — 실수로도 주문이 나가지 않게 하기 위한
+ * 의도적인 제약이다.
+ *
+ * <p>주문 기능이 추가되며 쓰기 경로가 생겼지만 그 제약은 없어진 게 아니라 <b>좁아졌다</b>:
+ * {@link #post}는 package-private 이고, 호출자는 같은 패키지의 {@link TossOrderClient} 하나뿐이며,
+ * 그 컴포넌트는 ADMIN 만 통과하는 컨트롤러({@code TossAccessChecker#canTrade}) 뒤에서만 쓰인다.
+ * 즉 경계를 주석이 아니라 <b>컴파일러가</b> 지킨다 — 도메인 패키지에서는 POST 를 부를 방법이 없다.
+ * 새 쓰기 경로가 필요하면 이 패키지 안에 두고 같은 인가 뒤에 붙여야 한다.
  */
 @Slf4j
 @Component
@@ -62,14 +70,39 @@ public class TossInvestClient {
      * @return 응답 envelope 에서 {@code result} 를 벗겨낸 노드
      */
     public JsonNode get(TossAccountOwner owner, String path, Map<String, String> queryParams, Long accountSeq) {
-        return execute(owner, path, queryParams, accountSeq, false, 0);
+        return execute(owner, HttpMethod.GET, path, queryParams, null, accountSeq, false, true, false, 0);
     }
 
+    /**
+     * 쓰기 요청. <b>package-private 이다</b> — {@link TossOrderClient} 만 호출할 수 있다(클래스 javadoc 참조).
+     *
+     * <p>재시도 정책이 GET 과 다르다:
+     * <ul>
+     *   <li><b>401</b>: 토큰 만료다. 요청이 원장에 닿기 전에 거부된 것이라 재발급 후 1회 재시도해도 안전하다.</li>
+     *   <li><b>429</b>: {@code idempotent} 일 때만 재시도한다. 멱등키({@code clientOrderId}) 없이 재시도하면
+     *       한도 응답과 실제 접수가 엇갈렸을 때 주문이 두 번 들어간다.</li>
+     *   <li><b>IO 예외(타임아웃)</b>: 재시도하지 않는다. 이미 접수됐을 수 있다.</li>
+     * </ul>
+     *
+     * @param idempotent 본문에 멱등키가 실려 있어 같은 요청을 다시 보내도 안전한지
+     */
+    JsonNode post(TossAccountOwner owner, String path, Object body, Long accountSeq, boolean idempotent) {
+        return execute(owner, HttpMethod.POST, path, Map.of(), body, accountSeq, true, idempotent, false, 0);
+    }
+
+    /**
+     * @param writePath    주문 경로인지. 에러를 {@link TossOrderErrorMapper} 로 세분화할지 결정한다.
+     * @param retryOnLimit 429 를 재시도해도 되는지
+     */
     private JsonNode execute(
             TossAccountOwner owner,
+            HttpMethod method,
             String path,
             Map<String, String> queryParams,
+            Object body,
             Long accountSeq,
+            boolean writePath,
+            boolean retryOnLimit,
             boolean isAuthRetry,
             int rateLimitAttempt
     ) {
@@ -77,7 +110,7 @@ public class TossInvestClient {
 
         ResponseEntity<String> response;
         try {
-            response = restClient.get()
+            RestClient.RequestBodySpec request = restClient.method(method)
                     .uri(properties.getApi().getBaseUrl(), uriBuilder -> {
                         uriBuilder.path(path);
                         // 값을 리터럴로 넘기면 URI 템플릿의 일부로 취급되어 쿼리 컴포넌트에서
@@ -100,37 +133,47 @@ public class TossInvestClient {
                         if (accountSeq != null) {
                             headers.set(ACCOUNT_HEADER, String.valueOf(accountSeq));
                         }
-                    })
+                    });
+
+            if (body != null) {
+                request = request.contentType(MediaType.APPLICATION_JSON).body(body);
+            }
+
+            response = request
                     .retrieve()
                     // 기본 예외 변환을 끄고 상태코드와 본문을 직접 다룬다.
                     // 토스는 에러 본문에 code/requestId 를 주므로 그대로 버리면 원인 추적이 불가능하다.
-                    .onStatus(status -> true, (request, clientResponse) -> { })
+                    .onStatus(status -> true, (req, clientResponse) -> { })
                     .toEntity(String.class);
         } catch (Exception e) {
-            log.error("Toss API call failed: {} (owner={})", path, owner, e);
+            // 여기서 재시도하지 않는다 — 쓰기 요청이라면 이미 접수됐을 수 있다(소켓 타임아웃 5초).
+            log.error("Toss API call failed: {} {} (owner={})", method, path, owner, e);
             throw new CustomException(ErrorCode.TOSS_API_FAILED);
         }
 
         HttpStatus status = HttpStatus.resolve(response.getStatusCode().value());
-        String body = response.getBody();
+        String responseBody = response.getBody();
 
         if (response.getStatusCode().is2xxSuccessful()) {
-            return unwrapResult(body, path);
+            return unwrapResult(responseBody, path);
         }
 
         // 토큰 만료 — 캐시를 비우고 한 번만 재발급 후 재시도한다.
+        // 401 은 요청이 처리되기 전에 거부된 것이므로 쓰기 경로에서도 안전하다.
         if (status == HttpStatus.UNAUTHORIZED && !isAuthRetry) {
             log.info("Toss API returned 401, refreshing token (owner={})", owner);
             tokenStore.evict(owner);
-            return execute(owner, path, queryParams, accountSeq, true, rateLimitAttempt);
+            return execute(owner, method, path, queryParams, body, accountSeq,
+                    writePath, retryOnLimit, true, rateLimitAttempt);
         }
 
-        if (status == HttpStatus.TOO_MANY_REQUESTS && rateLimitAttempt < MAX_RATE_LIMIT_RETRIES) {
+        if (status == HttpStatus.TOO_MANY_REQUESTS && retryOnLimit && rateLimitAttempt < MAX_RATE_LIMIT_RETRIES) {
             backoff(response, owner, path);
-            return execute(owner, path, queryParams, accountSeq, isAuthRetry, rateLimitAttempt + 1);
+            return execute(owner, method, path, queryParams, body, accountSeq,
+                    writePath, true, isAuthRetry, rateLimitAttempt + 1);
         }
 
-        throw toException(status, body, path, owner);
+        throw toException(status, responseBody, path, owner, writePath);
     }
 
     /**
@@ -182,21 +225,37 @@ public class TossInvestClient {
 
     /**
      * 토스 에러 envelope 을 우리 예외로 변환한다. requestId 는 CS 문의 시 필요하므로 로그에 남긴다.
+     *
+     * <p>주문 경로는 상태코드만으로 부족하다 — 잔고 부족과 장 마감과 거래정지가 전부 422 로 오는데
+     * 사용자가 다음에 할 행동은 셋 다 다르다. 그래서 {@code code} 까지 보고
+     * {@link TossOrderErrorMapper} 로 세분화한다. 토스의 원문 메시지는 로그에만 남기고
+     * 사용자 응답에는 싣지 않는다(문구가 바뀌면 화면이 함께 흔들리고 내부 용어가 샌다).
      */
-    private CustomException toException(HttpStatus status, String body, String path, TossAccountOwner owner) {
+    private CustomException toException(
+            HttpStatus status, String body, String path, TossAccountOwner owner, boolean writePath) {
         String code = "";
+        String message = "";
         String requestId = "";
+        String data = "";
         if (body != null && !body.isBlank()) {
             try {
                 JsonNode error = objectMapper.readTree(body).path("error");
                 code = error.path("code").asString("");
+                message = error.path("message").asString("");
                 requestId = error.path("requestId").asString("");
+                JsonNode dataNode = error.get("data");
+                // 호가 단위(tickSize/nearestPrices) 같은 부가 정보는 화면으로 내보내지 않고 여기 남긴다.
+                data = dataNode == null || dataNode.isNull() ? "" : dataNode.toString();
             } catch (Exception e) {
                 log.debug("Failed to parse Toss error body for {}", path);
             }
         }
-        log.error("Toss API error: path={}, owner={}, status={}, code={}, requestId={}",
-                path, owner, status, code, requestId);
+        log.error("Toss API error: path={}, owner={}, status={}, code={}, requestId={}, message={}, data={}",
+                path, owner, status, code, requestId, message, data);
+
+        if (writePath) {
+            return new CustomException(TossOrderErrorMapper.toErrorCode(status, code));
+        }
 
         if (status == HttpStatus.TOO_MANY_REQUESTS) {
             return new CustomException(ErrorCode.TOSS_RATE_LIMITED);

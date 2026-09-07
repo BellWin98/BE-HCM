@@ -68,4 +68,28 @@ class TossAccessControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.hasAccess", is(false)));
     }
+
+    @Test
+    @DisplayName("getMyAccess는 주문 권한 여부(canTrade)도 함께 내려준다")
+    void getMyAccess_reportsTradePermission() throws Exception {
+        // 프론트가 매수·매도 버튼을 그릴지 정하는 값이다. 표시 제어일 뿐 실제 차단은 서버가 한다.
+        given(tossAccessChecker.canAccess(any())).willReturn(true);
+        given(tossAccessChecker.canTrade(any())).willReturn(true);
+
+        mockMvc.perform(get("/api/toss-stock/access").with(user(member())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.canTrade", is(true)));
+    }
+
+    @Test
+    @DisplayName("getMyAccess는 조회 권한만 있으면 canTrade=false 를 내려준다")
+    void getMyAccess_viewOnlyMemberCannotTrade() throws Exception {
+        given(tossAccessChecker.canAccess(any())).willReturn(true);
+        given(tossAccessChecker.canTrade(any())).willReturn(false);
+
+        mockMvc.perform(get("/api/toss-stock/access").with(user(member())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.hasAccess", is(true)))
+                .andExpect(jsonPath("$.data.canTrade", is(false)));
+    }
 }

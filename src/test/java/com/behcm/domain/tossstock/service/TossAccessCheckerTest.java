@@ -83,4 +83,29 @@ class TossAccessCheckerTest {
 
         verify(tossAccessRepository, never()).existsByMemberId(null);
     }
+
+    @Test
+    @DisplayName("canTrade 는 ADMIN 만 허용한다 — 조회 권한이 있어도 주문은 낼 수 없다")
+    void canTrade_onlyAllowsAdmin() {
+        // toss_access 는 "가족 자산을 볼 수 있다"는 뜻이지 "남의 계좌로 주문을 낼 수 있다"는 뜻이 아니다.
+        assertThat(tossAccessChecker.canTrade(member(1L, MemberRole.ADMIN))).isTrue();
+        assertThat(tossAccessChecker.canTrade(member(2L, MemberRole.USER))).isFalse();
+        assertThat(tossAccessChecker.canTrade(member(3L, MemberRole.FAMILY))).isFalse();
+    }
+
+    @Test
+    @DisplayName("canTrade 는 toss_access 를 조회하지 않는다")
+    void canTrade_neverLooksUpTossAccess() {
+        tossAccessChecker.canTrade(member(2L, MemberRole.USER));
+
+        // 등록 여부와 무관하게 role 만 본다. 조회가 섞이면 "등록하면 주문도 된다"로 오해할 여지가 생긴다.
+        verify(tossAccessRepository, never()).existsByMemberId(2L);
+    }
+
+    @Test
+    @DisplayName("canTrade 는 Member 가 아닌 principal 을 거부한다")
+    void canTrade_withNonMemberPrincipal_returnsFalse() {
+        assertThat(tossAccessChecker.canTrade("anonymousUser")).isFalse();
+        assertThat(tossAccessChecker.canTrade(null)).isFalse();
+    }
 }

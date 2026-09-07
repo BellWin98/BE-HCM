@@ -31,4 +31,16 @@ public class TossAccessChecker {
         if (member.getId() == null) return false;
         return tossAccessRepository.existsByMemberId(member.getId());
     }
+
+    /**
+     * 주문 실행 권한. 조회({@link #canAccess})와 달리 <b>ADMIN 만</b> 허용한다 —
+     * {@code toss_access} 는 "가족의 자산을 볼 수 있다"는 뜻이지 "남의 계좌로 주문을 낼 수 있다"는
+     * 뜻이 아니다. 돈이 실제로 움직이는 동작이므로 조회보다 좁게 가져간다.
+     *
+     * <p>role 만 보므로 DB 조회가 없고, 따라서 {@code @Transactional} 도 필요 없다.
+     * 조회를 섞지 않는 것은 의도적이다 — 섞으면 "등록하면 주문도 된다"로 읽힌다.
+     */
+    public boolean canTrade(Object principal) {
+        return principal instanceof Member member && member.getRole() == MemberRole.ADMIN;
+    }
 }

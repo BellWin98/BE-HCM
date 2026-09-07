@@ -1,9 +1,12 @@
 package com.behcm.domain.tossstock.controller;
 
+import com.behcm.domain.tossstock.dto.TossOrderableResponse;
 import com.behcm.domain.tossstock.dto.TossOwnerResponse;
 import com.behcm.domain.tossstock.dto.TossPortfolioResponse;
 import com.behcm.domain.tossstock.dto.TossRealizedProfitRequest;
 import com.behcm.domain.tossstock.dto.TossRealizedProfitResponse;
+import com.behcm.domain.tossstock.dto.TossStockSearchResponse;
+import com.behcm.domain.tossstock.service.TossOrderService;
 import com.behcm.domain.tossstock.service.TossStockService;
 import com.behcm.global.common.ApiResponse;
 import com.behcm.global.config.toss.TossAccountOwner;
@@ -38,6 +41,7 @@ import java.util.List;
 public class TossStockController {
 
     private final TossStockService tossStockService;
+    private final TossOrderService tossOrderService;
 
     @GetMapping("/owners")
     public ResponseEntity<ApiResponse<List<TossOwnerResponse>>> getOwners() {
@@ -50,6 +54,35 @@ public class TossStockController {
     ) {
         TossPortfolioResponse portfolio = tossStockService.getPortfolio(TossAccountOwner.from(owner));
         return ResponseEntity.ok(ApiResponse.success(portfolio));
+    }
+
+    /**
+     * 종목 검색. 주문이 아니라 조회이므로 주문 권한 없이도 쓸 수 있다.
+     *
+     * <p>토스에는 검색 API 가 없어 우리가 들고 있는 유니버스에서 찾는다 — 외부 호출이 없으므로
+     * 타이핑마다 불려도 비용이 거의 없고, 계좌와 무관한 시장 데이터라 {@code owner} 도 받지 않는다.
+     */
+    @GetMapping("/search")
+    public ResponseEntity<ApiResponse<List<TossStockSearchResponse>>> searchStocks(
+            @RequestParam("query") String query,
+            @RequestParam(value = "limit", defaultValue = "20") int limit
+    ) {
+        return ResponseEntity.ok(ApiResponse.success(tossOrderService.searchStocks(query, limit)));
+    }
+
+    /**
+     * 주문 화면을 채울 값 한 벌(현재가·상하한가·매수가능금액·매도가능수량).
+     * 토스에서는 네 개의 다른 엔드포인트라 서버가 모아서 한 번에 준다.
+     */
+    @GetMapping("/orderable")
+    public ResponseEntity<ApiResponse<TossOrderableResponse>> getOrderable(
+            @RequestParam("owner") String owner,
+            @RequestParam("symbol") String symbol,
+            @RequestParam(value = "side", defaultValue = "BUY") String side
+    ) {
+        TossOrderableResponse orderable =
+                tossOrderService.getOrderable(TossAccountOwner.from(owner), symbol, side);
+        return ResponseEntity.ok(ApiResponse.success(orderable));
     }
 
     @PostMapping("/realized-profit")

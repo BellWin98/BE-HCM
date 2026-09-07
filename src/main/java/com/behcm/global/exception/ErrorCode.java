@@ -73,6 +73,31 @@ public enum ErrorCode {
     TOSS_RATE_LIMITED(HttpStatus.TOO_MANY_REQUESTS, "토스증권 API 요청 한도를 초과했습니다. 잠시 후 다시 시도해주세요."),
     TOSS_API_FAILED(HttpStatus.BAD_GATEWAY, "토스증권 API 호출에 실패했습니다."),
 
+    // Toss Stock - 종목
+    TOSS_STOCK_NOT_FOUND(HttpStatus.NOT_FOUND, "종목을 찾을 수 없습니다."),
+    TOSS_STOCK_UNIVERSE_NOT_READY(HttpStatus.SERVICE_UNAVAILABLE, "종목 목록을 준비 중입니다. 잠시 후 다시 시도해주세요."),
+
+    // Toss Stock - 주문
+    // 토스가 주는 원문 메시지는 그대로 노출하지 않는다 — 문구가 언제든 바뀌어 테스트가 흔들리고
+    // 내부 용어가 샐 수 있다. code/message/requestId 는 로그로만 남기고 여기 문구로 치환한다.
+    TOSS_ORDER_INVALID(HttpStatus.BAD_REQUEST, "주문 정보가 올바르지 않습니다."),
+    TOSS_ORDER_LOC_NOT_SUPPORTED(HttpStatus.BAD_REQUEST, "LOC 주문은 미국 주식만 가능합니다."),
+    TOSS_ORDER_HIGH_VALUE_CONFIRM_REQUIRED(HttpStatus.BAD_REQUEST, "1억원 이상 주문은 금액 확인이 필요합니다."),
+    TOSS_ORDER_IN_PROGRESS(HttpStatus.CONFLICT, "이미 처리 중인 주문입니다. 미체결 주문을 확인해주세요."),
+    TOSS_ORDER_IDEMPOTENCY_CONFLICT(HttpStatus.UNPROCESSABLE_ENTITY, "주문 내용이 변경되었습니다. 다시 시도해주세요."),
+    TOSS_ORDER_INSUFFICIENT_BUYING_POWER(HttpStatus.UNPROCESSABLE_ENTITY, "주문 가능 금액이 부족합니다."),
+    TOSS_ORDER_HOURS_CLOSED(HttpStatus.UNPROCESSABLE_ENTITY, "지금은 주문할 수 있는 시간이 아닙니다."),
+    TOSS_ORDER_PRICE_OUT_OF_RANGE(HttpStatus.UNPROCESSABLE_ENTITY, "주문 가격이 상·하한가를 벗어났습니다."),
+    TOSS_ORDER_STOCK_RESTRICTED(HttpStatus.UNPROCESSABLE_ENTITY, "거래가 제한된 종목입니다."),
+    TOSS_ORDER_TYPE_NOT_ALLOWED(HttpStatus.UNPROCESSABLE_ENTITY, "이 종목에는 사용할 수 없는 주문 유형입니다."),
+    TOSS_ORDER_OPPOSITE_PENDING(HttpStatus.UNPROCESSABLE_ENTITY, "같은 종목에 반대 방향의 미체결 주문이 있습니다."),
+    TOSS_ORDER_MAX_AMOUNT_EXCEEDED(HttpStatus.UNPROCESSABLE_ENTITY, "1회 주문 한도를 초과했습니다."),
+    TOSS_ORDER_ACCOUNT_RESTRICTED(HttpStatus.UNPROCESSABLE_ENTITY, "계좌 상태로 인해 주문할 수 없습니다."),
+    TOSS_ORDER_PREREQUISITE_REQUIRED(HttpStatus.UNPROCESSABLE_ENTITY, "토스증권 앱에서 사전 동의·교육 이수가 필요합니다."),
+    TOSS_ORDER_REJECTED(HttpStatus.UNPROCESSABLE_ENTITY, "주문이 거부되었습니다."),
+    TOSS_ORDER_NOT_CANCELABLE(HttpStatus.UNPROCESSABLE_ENTITY, "취소할 수 없는 주문입니다."),
+    TOSS_MAINTENANCE(HttpStatus.SERVICE_UNAVAILABLE, "토스증권이 점검 중입니다. 잠시 후 다시 시도해주세요."),
+
     // Common
     INTERNAL_SERVER_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "서버 내부 오류가 발생했습니다."),
     INVALID_INPUT(HttpStatus.BAD_REQUEST, "잘못된 입력값입니다."),

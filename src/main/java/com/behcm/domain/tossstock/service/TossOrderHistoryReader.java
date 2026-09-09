@@ -42,8 +42,10 @@ import java.util.concurrent.ConcurrentMap;
  * 확정</b>이라는 상태 기준을 쓴다. 이 방식은 응답 정렬 순서를 신뢰하지 않아도 된다.
  *
  * <p>캐시 TTL 은 정합성 장치가 아니라 자가 치유 안전망일 뿐이다. 정합성은 이 워터마크가 지킨다 —
- * {@code TossOrderCacheEvictor} 는 우리 서버를 거친 주문만 비울 수 있어서, 토스 앱에서 낸 주문은
- * 여기서 잡지 못하면 아무도 잡지 못한다.
+ * 애초에 캐시를 비우는 방식으로는 부족하다. {@code TossOrderCacheEvictor} 는 우리 서버를 거친
+ * 주문만 알 수 있는데, 토스 주문내역에는 <b>앱에서 낸 주문까지</b> 들어오기 때문이다.
+ * 그래서 이 캐시는 evict 대상이 아니다 — 우리 서버로 낸 주문도 접수일이 오늘이라 재조회 구간에
+ * 이미 포함되므로, 비워 봐야 전체 페이징만 한 번 더 하게 된다.
  */
 @Slf4j
 @Component
@@ -56,7 +58,7 @@ public class TossOrderHistoryReader {
 
     private static final String ORDERS_PATH = "/api/v1/orders";
 
-    /** {@code CacheConfig} 에 등록된 이름. {@code TossOrderCacheEvictor} 가 같은 이름·같은 키로 비운다. */
+    /** {@code CacheConfig} 에 등록된 이름. 스냅샷을 직접 넣고 빼므로 {@code @Cacheable} 은 쓰지 않는다. */
     static final String CACHE_NAME = "tossOrderHistory";
 
     /** 토스 주문 목록의 페이지 크기 상한. */

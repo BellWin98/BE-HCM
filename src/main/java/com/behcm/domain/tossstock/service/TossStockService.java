@@ -196,12 +196,21 @@ public class TossStockService {
             throw new CustomException(ErrorCode.INVALID_INPUT);
         }
 
+        long startedAt = System.nanoTime();
         Long accountSeq = accountResolver.resolveAccountSeq(owner);
+
+        long historyStartedAt = System.nanoTime();
         OrderHistory history = orderHistoryReader.readAll(owner, accountSeq);
+        long historyNanos = System.nanoTime() - historyStartedAt;
+
+        long seedStartedAt = System.nanoTime();
+        Map<String, BigDecimal> seeds = seedAveragePrices(owner, accountSeq);
+        long seedNanos = System.nanoTime() - seedStartedAt;
 
         // 계좌 전체 기간을 재생해 원가를 만든 뒤, 조회 기간에 해당하는 체결만 화면에 보낸다.
-        List<RealizedFill> allRealized = realizedProfitCalculator.calculate(
-                history.fills(), seedAveragePrices(owner, accountSeq));
+        long calcStartedAt = System.nanoTime();
+        List<RealizedFill> allRealized = realizedProfitCalculator.calculate(history.fills(), seeds);
+        long calcNanos = System.nanoTime() - calcStartedAt;
 
         List<TossTradeDto> trades = new ArrayList<>();
         Map<String, TotalsAccumulator> totalsByCurrency = new LinkedHashMap<>();
@@ -228,6 +237,15 @@ public class TossStockService {
         List<CurrencyTotals> totals = totalsByCurrency.entrySet().stream()
                 .map(entry -> entry.getValue().toDto(entry.getKey()))
                 .toList();
+
+        // 구간별 소요 시간. history 안에서 전체 재적재였는지 증분이었는지는
+        // TossOrderHistoryReader 가 남기는 mode=full|incremental 줄이 알려준다.
+        log.info("Toss realized profit: owner={}, period={}~{}, fills={}, trades={}, "
+                        + "history={}ms, seed={}ms, calc={}ms, total={}ms",
+                owner, request.getStartDate(), request.getEndDate(),
+                history.fills().size(), trades.size(),
+                historyNanos / 1_000_000L, seedNanos / 1_000_000L, calcNanos / 1_000_000L,
+                (System.nanoTime() - startedAt) / 1_000_000L);
 
         return TossRealizedProfitResponse.builder()
                 .owner(owner.name())

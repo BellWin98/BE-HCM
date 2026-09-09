@@ -56,11 +56,14 @@ public class CacheConfig {
         );
 
         // 실현손익은 계좌 개설 이후 전체 주문을 재생해야 계산되므로 페이징 비용이 크다.
-        // 수익분석 탭에서 기간을 바꿀 때마다 전체를 다시 읽지 않도록 조금 길게 잡는다.
+        // TossOrderHistoryReader 가 이 스냅샷을 들고, 살아 있는 주문을 기준으로 변할 수 있는 구간만
+        // 다시 읽는다. 그래서 여기 TTL 은 정합성 장치가 아니라 알 수 없는 이유로 스냅샷이 어긋났을 때의
+        // 자가 치유 안전망일 뿐이라 길게 잡는다. 무제한으로 두지 않는 이유도 그것이다 —
+        // 워터마크 이전에 잘못 들어간 값은 다시 읽히지 않아 영구히 고착된다.
         CaffeineCache tossOrderHistoryCache = new CaffeineCache(
                 "tossOrderHistory",
                 Caffeine.newBuilder()
-                        .expireAfterWrite(5, TimeUnit.MINUTES)
+                        .expireAfterWrite(6, TimeUnit.HOURS)
                         .maximumSize(10)
                         .build()
         );

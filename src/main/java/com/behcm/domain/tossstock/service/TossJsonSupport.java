@@ -5,6 +5,9 @@ import tools.jackson.databind.JsonNode;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 
 /**
  * 토스증권 응답 파싱 헬퍼.
@@ -68,6 +71,40 @@ final class TossJsonSupport {
         }
         String raw = field.asString("").trim();
         return raw.isEmpty() ? null : raw;
+    }
+
+    /**
+     * ISO 8601(KST) 시각 필드를 읽는다. 파싱할 수 없으면 null.
+     *
+     * <p>주문 응답의 {@code orderedAt}·{@code filledAt} 이 오프셋이 붙은 형태, 붙지 않은 형태,
+     * 날짜만 있는 형태로 섞여 온다. 주문내역과 미체결 목록이 같은 필드를 읽으므로 규칙을 여기 둔다 —
+     * {@link TossStockNameResolver} 를 한 곳에 모은 것과 같은 이유다.
+     */
+    static LocalDateTime dateTime(JsonNode node, String fieldName) {
+        return dateTime(text(node, fieldName));
+    }
+
+    static LocalDateTime dateTime(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        String trimmed = value.trim();
+        try {
+            return OffsetDateTime.parse(trimmed).toLocalDateTime();
+        } catch (Exception ignored) {
+            // 오프셋이 없는 형태를 시도한다.
+        }
+        try {
+            return LocalDateTime.parse(trimmed);
+        } catch (Exception ignored) {
+            // 날짜만 있는 형태를 시도한다.
+        }
+        try {
+            return LocalDate.parse(trimmed).atStartOfDay();
+        } catch (Exception e) {
+            log.warn("Unparsable Toss timestamp: {}", trimmed);
+            return null;
+        }
     }
 
     /**

@@ -15,8 +15,10 @@ import org.mockito.quality.Strictness;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -202,5 +204,59 @@ class TossOpenOrderReaderTest {
         stubNames("[]");
 
         assertThat(read().get(0).price()).isNull();
+    }
+
+    // ---------------------------------------------------------------------
+    // 실현손익 증분 동기화가 쓰는 워터마크
+    // ---------------------------------------------------------------------
+
+    @Test
+    @DisplayName("살아 있는 주문 중 가장 이른 접수 시각을 돌려준다")
+    void earliestOrderedAt_returnsOldestOpenOrder() {
+        // 이 시각 이후로 접수된 CLOSED 주문만 아직 변할 수 있다 — 실현손익 재조회의 하한선이다.
+        stubOrders("""
+                {"orders": [
+                  {"orderId": "a", "symbol": "005930", "side": "BUY", "orderType": "LIMIT",
+                   "status": "PENDING", "quantity": "10", "currency": "KRW",
+                   "orderedAt": "2026-03-20T13:00:00+09:00",
+                   "execution": {"filledQuantity": "0"}},
+                  {"orderId": "b", "symbol": "000660", "side": "SELL", "orderType": "LIMIT",
+                   "status": "PARTIAL_FILLED", "quantity": "5", "currency": "KRW",
+                   "orderedAt": "2026-03-18T09:30:00+09:00",
+                   "execution": {"filledQuantity": "2"}}
+                ], "nextCursor": null, "hasNext": false}
+                """);
+
+        Optional<LocalDateTime> earliest = reader.earliestOrderedAt(OWNER, ACCOUNT_SEQ);
+
+        assertThat(earliest).contains(LocalDateTime.parse("2026-03-18T09:30:00"));
+    }
+
+    @Test
+    @DisplayName("살아 있는 주문이 없으면 비어 있는 값을 준다")
+    void earliestOrderedAt_withNoOpenOrders_isEmpty() {
+        stubOrders("""
+                {"orders": [], "nextCursor": null, "hasNext": false}
+                """);
+
+        assertThat(reader.earliestOrderedAt(OWNER, ACCOUNT_SEQ)).isEmpty();
+    }
+
+    @Test
+    @DisplayName("워터마크 조회는 종목명을 채우지 않는다")
+    void earliestOrderedAt_doesNotResolveNames() {
+        // 화면에 그리는 목록이 아니라 날짜 하나만 필요하다. 이름까지 받으면 호출이 공짜로 하나 늘어난다.
+        stubOrders("""
+                {"orders": [
+                  {"orderId": "a", "symbol": "005930", "side": "BUY", "orderType": "LIMIT",
+                   "status": "PENDING", "quantity": "10", "currency": "KRW",
+                   "orderedAt": "2026-03-20T13:00:00+09:00",
+                   "execution": {"filledQuantity": "0"}}
+                ], "nextCursor": null, "hasNext": false}
+                """);
+
+        reader.earliestOrderedAt(OWNER, ACCOUNT_SEQ);
+
+        verify(tossInvestClient, never()).get(eq(OWNER), eq(STOCKS_PATH), any());
     }
 }

@@ -5,12 +5,15 @@ import com.behcm.global.config.toss.TossInvestClient;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.cache.CacheManager;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
+
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -39,6 +42,9 @@ class TossOrderCacheEvictorTest {
 
     @Autowired
     private TossHoldingsReader holdingsReader;
+
+    @Autowired
+    private TossOrderHistoryReader orderHistoryReader;
 
     @Autowired
     private TossOrderCacheEvictor cacheEvictor;
@@ -102,5 +108,23 @@ class TossOrderCacheEvictorTest {
     void evictedCachesAreRegistered() {
         // 등록되지 않은 이름으로 evict 하면 주문은 성공했는데 응답만 실패하는 최악의 조합이 나온다.
         assertThat(cacheManager.getCacheNames()).contains("tossHoldings", "tossOrderHistory");
+    }
+
+    @Test
+    @DisplayName("주문 후 evict 하면 주문내역 스냅샷도 비워져 전체 기간을 다시 읽는다")
+    void evictsOrderHistorySnapshot() {
+        // 증분 동기화는 캐시된 스냅샷을 기준으로 재조회 창을 잡는다. evict 로 스냅샷이 사라지면
+        // 창이 아니라 전체를 다시 읽어야 한다 — 그렇지 않으면 오래된 체결이 영영 비어 있게 된다.
+        given(tossInvestClient.get(eq(TossAccountOwner.ME), eq("/api/v1/orders"), any(), any()))
+                .willReturn(objectMapper.readTree("{\"orders\":[],\"nextCursor\":null,\"hasNext\":false}"));
+
+        orderHistoryReader.readAll(TossAccountOwner.ME, 1L);
+        cacheEvictor.evictAccountCaches(TossAccountOwner.ME);
+        orderHistoryReader.readAll(TossAccountOwner.ME, 1L);
+
+        ArgumentCaptor<Map<String, String>> params = ArgumentCaptor.forClass(Map.class);
+        verify(tossInvestClient, times(2))
+                .get(eq(TossAccountOwner.ME), eq("/api/v1/orders"), params.capture(), any());
+        assertThat(params.getAllValues()).allSatisfy(p -> assertThat(p).doesNotContainKey("from"));
     }
 }

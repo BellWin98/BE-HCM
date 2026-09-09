@@ -13,6 +13,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
+import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -104,17 +105,20 @@ class TossOrderCacheEvictorTest {
     }
 
     @Test
-    @DisplayName("evict 대상 캐시가 모두 CacheConfig 에 등록되어 있다")
+    @DisplayName("evict 대상 캐시가 CacheConfig 에 등록되어 있다")
     void evictedCachesAreRegistered() {
         // 등록되지 않은 이름으로 evict 하면 주문은 성공했는데 응답만 실패하는 최악의 조합이 나온다.
-        assertThat(cacheManager.getCacheNames()).contains("tossHoldings", "tossOrderHistory");
+        assertThat(cacheManager.getCacheNames()).contains("tossHoldings");
+        // evict 대상은 아니지만 TossOrderHistoryReader 가 직접 쓰므로 등록은 되어 있어야 한다.
+        assertThat(cacheManager.getCacheNames()).contains("tossOrderHistory");
     }
 
     @Test
-    @DisplayName("주문 후 evict 하면 주문내역 스냅샷도 비워져 전체 기간을 다시 읽는다")
-    void evictsOrderHistorySnapshot() {
-        // 증분 동기화는 캐시된 스냅샷을 기준으로 재조회 창을 잡는다. evict 로 스냅샷이 사라지면
-        // 창이 아니라 전체를 다시 읽어야 한다 — 그렇지 않으면 오래된 체결이 영영 비어 있게 된다.
+    @DisplayName("주문 후 evict 해도 주문내역 스냅샷은 유지한다")
+    void keepsOrderHistorySnapshotOnEvict() {
+        // 방금 낸 주문의 orderedAt 은 오늘이라 재조회 창(min(미체결 최솟값, syncedAt-3일))에 반드시 들어온다.
+        // 즉 워터마크가 이미 덮으므로, 여기서 스냅샷까지 버리면 다음 조회가 전체 페이징을 다시 도는
+        // 비용만 생긴다 — 하필 주문 직후가 수익분석을 가장 많이 보는 시점이다.
         given(tossInvestClient.get(eq(TossAccountOwner.ME), eq("/api/v1/orders"), any(), any()))
                 .willReturn(objectMapper.readTree("{\"orders\":[],\"nextCursor\":null,\"hasNext\":false}"));
 
@@ -123,8 +127,16 @@ class TossOrderCacheEvictorTest {
         orderHistoryReader.readAll(TossAccountOwner.ME, 1L);
 
         ArgumentCaptor<Map<String, String>> params = ArgumentCaptor.forClass(Map.class);
-        verify(tossInvestClient, times(2))
+        verify(tossInvestClient, org.mockito.Mockito.atLeastOnce())
                 .get(eq(TossAccountOwner.ME), eq("/api/v1/orders"), params.capture(), any());
-        assertThat(params.getAllValues()).allSatisfy(p -> assertThat(p).doesNotContainKey("from"));
+
+        List<Map<String, String>> closedCalls = params.getAllValues().stream()
+                .filter(p -> "CLOSED".equals(p.get("status")))
+                .toList();
+
+        assertThat(closedCalls).hasSize(2);
+        assertThat(closedCalls.get(0)).doesNotContainKey("from");
+        // 두 번째는 전체가 아니라 증분이어야 한다.
+        assertThat(closedCalls.get(1)).containsKey("from");
     }
 }

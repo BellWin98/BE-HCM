@@ -17,7 +17,7 @@ import org.springframework.stereotype.Service;
 import java.util.List;
 
 /**
- * 주문 오케스트레이션: 소유자 해석 → 검증 → 토스 호출 → 캐시 무효화.
+ * 주문 오케스트레이션: 소유자 해석 → 검증 → 토스 호출.
  *
  * <p>조회({@code TossStockService})와 클래스를 나눈 이유는 인가 경계가 다르기 때문이다.
  * 조회는 {@code toss_access} 를 받은 가족 전원, 주문은 ADMIN 만이다 —
@@ -31,7 +31,6 @@ public class TossOrderService {
     private final TossAccountResolver accountResolver;
     private final TossOrderValidator orderValidator;
     private final TossOrderClient tossOrderClient;
-    private final TossOrderCacheEvictor cacheEvictor;
     private final TossOpenOrderReader openOrderReader;
     private final TossOrderableReader orderableReader;
     private final TossStockSearchService searchService;
@@ -69,9 +68,9 @@ public class TossOrderService {
     /**
      * 주문을 낸다.
      *
-     * <p>캐시 무효화는 <b>성공한 뒤에만</b> 한다. 실패한 주문 때문에 잔고 조회를 다시 시키는 것은
-     * 외부 호출만 늘리는 일이다. 반대로 성공했는데 비우지 않으면, 방금 거래한 사람이
-     * 30초 묵은 잔고를 보게 된다.
+     * <p>주문 뒤 캐시를 비우는 단계는 없다. 보유주식은 캐시하지 않으므로 다음 조회가 곧 최신이고
+     * ({@link TossHoldingsReader}), 주문내역 스냅샷은 워터마크로 재조회 구간을 잡아 방금 낸 주문을
+     * 이미 덮는다({@link TossOrderHistoryReader}).
      */
     public TossOrderResponse placeOrder(TossOrderRequest request) {
         TossAccountOwner owner = TossAccountOwner.from(request.getOwner());
@@ -80,7 +79,6 @@ public class TossOrderService {
         TossOrderValidator.ValidatedOrder validated = orderValidator.validate(owner, request);
         PlacedOrder placed = tossOrderClient.place(owner, accountSeq, validated.command());
 
-        cacheEvictor.evictAccountCaches(owner);
         return new TossOrderResponse(placed.orderId(), placed.clientOrderId());
     }
 
@@ -92,9 +90,6 @@ public class TossOrderService {
         }
 
         Long accountSeq = accountResolver.resolveAccountSeq(owner);
-        String canceled = tossOrderClient.cancel(owner, accountSeq, orderId);
-
-        cacheEvictor.evictAccountCaches(owner);
-        return canceled;
+        return tossOrderClient.cancel(owner, accountSeq, orderId);
     }
 }

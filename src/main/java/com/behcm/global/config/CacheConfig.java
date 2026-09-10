@@ -45,16 +45,6 @@ public class CacheConfig {
                         .build()
         );
 
-        // 토스증권은 소유자(나·엄마·아빠)마다 계좌가 달라 엔트리가 사람 수만큼 필요하다.
-        // 보유주식 응답 하나로 자산 화면과 실현손익의 원가 시딩을 모두 처리한다.
-        CaffeineCache tossHoldingsCache = new CaffeineCache(
-                "tossHoldings",
-                Caffeine.newBuilder()
-                        .expireAfterWrite(30, TimeUnit.SECONDS)
-                        .maximumSize(10)
-                        .build()
-        );
-
         // 실현손익은 계좌 개설 이후 전체 주문을 재생해야 계산되므로 페이징 비용이 크다.
         // TossOrderHistoryReader 가 이 스냅샷을 들고, 살아 있는 주문을 기준으로 변할 수 있는 구간만
         // 다시 읽는다. 그래서 여기 TTL 은 정합성 장치가 아니라 알 수 없는 이유로 스냅샷이 어긋났을 때의
@@ -82,7 +72,6 @@ public class CacheConfig {
                 memberProfileCache,
                 workoutRoomDetailCache,
                 stockPortfolioCache,
-                tossHoldingsCache,
                 tossOrderHistoryCache,
                 tossExchangeRateCache
         ));

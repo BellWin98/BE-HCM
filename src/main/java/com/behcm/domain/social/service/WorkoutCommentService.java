@@ -10,6 +10,7 @@ import com.behcm.domain.workout.entity.WorkoutRecord;
 import com.behcm.global.exception.CustomException;
 import com.behcm.global.exception.ErrorCode;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -19,6 +20,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.Objects;
 
 @Service
+@Slf4j
 @RequiredArgsConstructor
 @Transactional
 public class WorkoutCommentService {
@@ -39,6 +41,7 @@ public class WorkoutCommentService {
                 .build());
 
         notifyRecordOwner(member, workoutRecord, request.getContent());
+        log.debug("Comment added (recordId={}, commentId={}, memberId={})", recordId, comment.getId(), member.getId());
 
         return CommentResponse.of(comment, member);
     }
@@ -57,6 +60,7 @@ public class WorkoutCommentService {
         }
 
         workoutCommentRepository.delete(comment);
+        log.debug("Comment deleted (recordId={}, commentId={}, memberId={})", recordId, commentId, member.getId());
     }
 
     @Transactional(readOnly = true)

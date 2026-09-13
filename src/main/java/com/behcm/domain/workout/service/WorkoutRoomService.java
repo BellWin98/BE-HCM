@@ -68,6 +68,10 @@ public class WorkoutRoomService {
                 .workoutRoom(savedWorkoutRoom)
                 .build();
         workoutRoomMemberRepository.save(workoutRoomMember);
+        // 입장코드는 남기지 않는다.
+        log.info("Workout room created (roomId={}, ownerId={}, minWeeklyWorkouts={}, penaltyEnabled={}, penaltyPerMiss={}, maxMembers={})",
+                savedWorkoutRoom.getId(), owner.getId(), savedWorkoutRoom.getMinWeeklyWorkouts(),
+                savedWorkoutRoom.getPenaltyEnabled(), savedWorkoutRoom.getPenaltyPerMiss(), savedWorkoutRoom.getMaxMembers());
 
         return WorkoutRoomResponse.from(savedWorkoutRoom);
     }
@@ -157,6 +161,8 @@ public class WorkoutRoomService {
                 .workoutRoom(workoutRoom)
                 .build();
         workoutRoomMemberRepository.save(workoutRoomMember);
+        log.info("Member joined workout room (roomId={}, memberId={}, members={}/{})",
+                workoutRoom.getId(), member.getId(), workoutRoom.getCurrentMemberCount(), workoutRoom.getMaxMembers());
 
         return WorkoutRoomResponse.from(workoutRoom);
     }
@@ -171,6 +177,7 @@ public class WorkoutRoomService {
 
         String newEntryCode = generateUniqueEntryCode(workoutRoom.getEntryCode());
         workoutRoom.updateEntryCode(newEntryCode);
+        log.info("Entry code regenerated (roomId={})", roomId);
 
         return WorkoutRoomResponse.from(workoutRoom);
     }
@@ -197,6 +204,10 @@ public class WorkoutRoomService {
         validatePenaltyEffectiveDate(request.getEffectiveDate());
 
         workoutRoom.schedulePenaltyChange(request.getPenaltyEnabled(), request.getPenaltyPerMiss(), request.getEffectiveDate());
+        // 벌금 설정은 돈에 직접 닿는다. 누가(MDC memberId) 언제 무엇을 예약했는지 남긴다.
+        log.info("Penalty change scheduled (roomId={}, enabled={}->{}, perMiss={}->{}, effectiveDate={})",
+                workoutRoom.getId(), workoutRoom.getPenaltyEnabled(), request.getPenaltyEnabled(),
+                workoutRoom.getPenaltyPerMiss(), request.getPenaltyPerMiss(), request.getEffectiveDate());
 
         return WorkoutRoomResponse.from(workoutRoom);
     }
@@ -213,9 +224,19 @@ public class WorkoutRoomService {
         LocalDate today = LocalDate.now();
         List<WorkoutRoom> roomsWithDueChanges = workoutRoomRepository.findByIsActiveTrueAndPenaltyChangeEffectiveDateLessThanEqual(today);
 
+        int applied = 0;
         for (WorkoutRoom workoutRoom : roomsWithDueChanges) {
-            workoutRoom.applyPendingPenaltyChangeIfDue(today);
+            boolean enabledBefore = workoutRoom.getPenaltyEnabled();
+            Long perMissBefore = workoutRoom.getPenaltyPerMiss();
+            if (workoutRoom.applyPendingPenaltyChangeIfDue(today)) {
+                applied++;
+                // 스케줄러가 조용히 벌금 규칙을 바꾸면 "왜 이번 주는 벌금이 없지"를 추적할 길이 없다.
+                log.info("Penalty change applied (roomId={}, enabled={}->{}, perMiss={}->{})",
+                        workoutRoom.getId(), enabledBefore, workoutRoom.getPenaltyEnabled(),
+                        perMissBefore, workoutRoom.getPenaltyPerMiss());
+            }
         }
+        log.info("Pending penalty changes processed (due={}, applied={})", roomsWithDueChanges.size(), applied);
     }
 
     private String generateUniqueEntryCode(String currentEntryCode) {
@@ -228,6 +249,7 @@ public class WorkoutRoomService {
                 return candidate;
             }
         }
+        // 36^8 공간에서 30번 연속 충돌은 난수나 DB 상태가 이상하다는 뜻이다. 핸들러가 500/ERROR 로 남긴다.
         throw new CustomException(ErrorCode.INTERNAL_SERVER_ERROR, "입장 코드 생성에 실패했습니다.");
     }
 

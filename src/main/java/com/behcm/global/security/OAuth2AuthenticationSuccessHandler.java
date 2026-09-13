@@ -25,6 +25,7 @@ import org.springframework.web.util.UriComponentsBuilder;
 
 import java.io.IOException;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 
 @Component
@@ -109,15 +110,35 @@ public class OAuth2AuthenticationSuccessHandler extends SimpleUrlAuthenticationS
     }
 
     private Member findOrCreateMember(OAuth2UserInfo userInfo, String provider) {
-        return memberRepository.findByOauthProviderAndOauthProviderId(provider, userInfo.providerId())
-                .or(() -> memberRepository.findByEmail(userInfo.email()))
-                .map(member -> updateOAuthMember(member, userInfo, provider))
-                .orElseGet(() -> createOAuthMember(userInfo, provider));
+        Optional<Member> linked = memberRepository.findByOauthProviderAndOauthProviderId(provider, userInfo.providerId());
+        if (linked.isPresent()) {
+            log.debug("OAuth2 login (provider={}, memberId={})", provider, linked.get().getId());
+            return linked.get();
+        }
+
+        Optional<Member> sameEmail = memberRepository.findByEmail(userInfo.email());
+        if (sameEmail.isPresent()) {
+            return linkOAuthToExistingMember(sameEmail.get(), userInfo, provider);
+        }
+
+        Member created = createOAuthMember(userInfo, provider);
+        log.info("OAuth2 member created (provider={}, memberId={})", provider, created.getId());
+        return created;
     }
 
-    private Member updateOAuthMember(Member member, OAuth2UserInfo userInfo, String provider) {
+    /**
+     * 이메일이 같다는 이유로 기존 계정에 소셜 계정을 붙인다. provider 가 이메일 소유를 검증하지 않으면
+     * 남의 계정을 가져갈 수 있는 경로이므로, 드물어야 하는 이벤트로 보고 WARN 으로 남긴다.
+     */
+    private Member linkOAuthToExistingMember(Member member, OAuth2UserInfo userInfo, String provider) {
         if (member.getOauthProvider() == null) {
             member.updateOAuthInfo(provider, userInfo.providerId());
+            log.warn("OAuth2 account linked to an existing member by email match (provider={}, memberId={})",
+                    provider, member.getId());
+        } else {
+            // 이미 다른 provider 로 연결된 회원이 새 provider 로 들어온 경우. 연결을 덮어쓰지는 않는다.
+            log.warn("OAuth2 login by email match without linking (provider={}, linkedProvider={}, memberId={})",
+                    provider, member.getOauthProvider(), member.getId());
         }
         return member;
     }

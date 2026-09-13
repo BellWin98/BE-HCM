@@ -11,12 +11,14 @@ import com.behcm.domain.workout.entity.WorkoutRecord;
 import com.behcm.global.exception.CustomException;
 import com.behcm.global.exception.ErrorCode;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 
 @Service
+@Slf4j
 @RequiredArgsConstructor
 @Transactional
 public class WorkoutReactionService {
@@ -44,6 +46,7 @@ public class WorkoutReactionService {
                                 .emoji(emoji)
                                 .build())
                 );
+        log.debug("Reaction saved (recordId={}, memberId={}, emoji={})", recordId, member.getId(), emoji);
 
         return summarize(recordId, member);
     }
@@ -54,6 +57,7 @@ public class WorkoutReactionService {
         WorkoutReaction reaction = workoutReactionRepository.findByWorkoutRecordAndMember(workoutRecord, member)
                 .orElseThrow(() -> new CustomException(ErrorCode.REACTION_NOT_FOUND));
         workoutReactionRepository.delete(reaction);
+        log.debug("Reaction canceled (recordId={}, memberId={})", recordId, member.getId());
 
         return summarize(recordId, member);
     }

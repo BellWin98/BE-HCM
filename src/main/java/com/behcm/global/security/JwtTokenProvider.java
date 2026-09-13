@@ -79,16 +79,15 @@ public class JwtTokenProvider {
                     .parseSignedClaims(token);
 
             return true;
-        } catch (SignatureException ex) {
-            log.error("Invalid JWT signature: {}", ex.getMessage());
-        } catch (MalformedJwtException ex) {
-            log.error("Invalid JWT token: {}", ex.getMessage());
         } catch (ExpiredJwtException ex) {
-            log.error("Expired JWT token: {}", ex.getMessage());
-        } catch (UnsupportedJwtException ex) {
-            log.error("Unsupported JWT token: {}", ex.getMessage());
+            // 만료는 정상 흐름이다 — FE 가 401 을 받고 refresh 한다. 모든 사용자의 access token 이
+            // 만료될 때마다 찍히므로 WARN 이상으로 올리면 그것만으로 로그가 가득 찬다.
+            log.debug("Expired JWT token (subject={})", ex.getClaims().getSubject());
+        } catch (SignatureException | MalformedJwtException | UnsupportedJwtException ex) {
+            // 우리가 발급하지 않은 토큰이다. 변조 시도이거나 잘못된 클라이언트 — 빈도가 늘면 봐야 한다.
+            log.warn("Rejected JWT token: {} - {}", ex.getClass().getSimpleName(), ex.getMessage());
         } catch (IllegalArgumentException ex) {
-            log.error("JWT claims string is empty: {}", ex.getMessage());
+            log.debug("JWT claims string is empty: {}", ex.getMessage());
         }
         return false;
     }

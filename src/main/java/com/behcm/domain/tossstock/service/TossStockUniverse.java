@@ -47,7 +47,7 @@ public class TossStockUniverse {
             bySymbol.putIfAbsent(entry.normalizedSymbol(), entry);
         }
         this.index = new Index(List.copyOf(entries), Map.copyOf(bySymbol));
-        log.info("Toss stock universe replaced: {} entries", entries.size());
+        log.debug("Toss stock universe replaced: {} entries", entries.size());
     }
 
     public List<TossListedStock> entries() {

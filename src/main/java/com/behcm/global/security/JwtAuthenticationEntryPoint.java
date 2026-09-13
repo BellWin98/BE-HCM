@@ -18,7 +18,10 @@ import java.util.Map;
 public class JwtAuthenticationEntryPoint implements AuthenticationEntryPoint {
     @Override
     public void commence(final HttpServletRequest request, final HttpServletResponse response, final AuthenticationException authException) throws IOException, ServletException {
-        log.error("Responding with unauthorized error. Message - {}", authException.getMessage());
+        // 인증 없이 보호 경로를 친 것은 예외 상황이 아니다(토큰 만료 후 재시도, 로그아웃 상태의 탭 등).
+        // 토큰 자체의 거부 사유는 JwtTokenProvider/JwtAuthenticationFilter 가 이미 남긴다.
+        log.debug("Unauthenticated request rejected: {} {} - {}",
+                request.getMethod(), request.getRequestURI(), authException.getMessage());
 
         response.setContentType("application/json");
         response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);

@@ -39,8 +39,16 @@ cloud:
 app:
   frontend-url: https://www.bellwin.co.kr
 
-# 로깅 설정
+# 로깅 설정. 출력 방식(콘솔/롤링 파일/gz)은 logback-spring.xml 이, 레벨은 여기가 정한다.
 logging:
+  # logback-spring.xml 의 LOG_PATH. 컨테이너 안 경로이며 docker-compose 에서 호스트 디렉터리를 마운트해야
+  # 배포(컨테이너 재생성) 후에도 남는다. 예) volumes: - /home/ubuntu/hcm/logs:/app/logs
+  file:
+    path: /app/logs
   level:
-    root: WARN
+    # root 는 INFO — WARN 으로 두면 부팅 시 Flyway 마이그레이션 적용, Hikari 풀 기동, "Started BeHcmApplication",
+    # Tomcat 포트 같은 배포 직후 문제를 가르는 기록이 통째로 사라진다. Spring/Hibernate/Lettuce 는 INFO 에서
+    # 부팅 이후 요청당 로그를 남기지 않으므로 비용이 없다(stdout 은 logback 이 WARN 이상만 내보낸다).
+    root: INFO
+    # 비즈니스 이벤트(인증·가입·벌금·관리자 행위)는 INFO, 흐름 추적(채팅·리액션·파라미터)은 DEBUG 로 감춘다.
     com.behcm: INFO

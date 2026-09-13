@@ -39,8 +39,12 @@ cloud:
 app:
   frontend-url: http://localhost:3000
 
-# 로깅 설정
+# 로깅 설정. 출력 방식(콘솔/롤링 파일/gz)은 logback-spring.xml 이, 레벨은 여기가 정한다.
 logging:
+  # logback-spring.xml 의 LOG_PATH. 프로젝트 루트 기준 상대 경로라 bootRun/테스트 모두 BE-HCM/logs/ 에 남는다.
+  # (.gitignore 에 logs/ 등록). 운영과 같은 파일 구성(app.log, error.log, archive/*.gz)을 로컬에서 그대로 확인한다.
+  file:
+    path: ./logs
   level:
     root: INFO
     com.behcm: DEBUG

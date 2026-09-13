@@ -25,6 +25,7 @@ import com.behcm.domain.workout.service.WorkoutRoomService;
 import com.behcm.global.exception.CustomException;
 import com.behcm.global.exception.ErrorCode;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -35,6 +36,7 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 @Service
+@Slf4j
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
 public class AdminWorkoutRoomService {
@@ -101,6 +103,10 @@ public class AdminWorkoutRoomService {
         WorkoutRoom workoutRoom = workoutRoomRepository.findById(roomId)
                 .orElseThrow(() -> new CustomException(ErrorCode.WORKOUT_ROOM_NOT_FOUND));
 
+        Integer minWeeklyBefore = workoutRoom.getMinWeeklyWorkouts();
+        Long penaltyPerMissBefore = workoutRoom.getPenaltyPerMiss();
+        Integer maxMembersBefore = workoutRoom.getMaxMembers();
+
         workoutRoom.updateRoomSettings(
                 workoutRoom.getName(),
                 request.getMinWeeklyWorkouts(),
@@ -110,6 +116,10 @@ public class AdminWorkoutRoomService {
         );
 
         WorkoutRoom saved = workoutRoomRepository.save(workoutRoom);
+        // 벌금·목표 횟수는 멤버의 돈에 닿는 값이다. 관리자가 언제 무엇을 바꿨는지 남긴다.
+        log.info("Admin updated room settings (roomId={}, minWeeklyWorkouts={}->{}, penaltyPerMiss={}->{}, maxMembers={}->{})",
+                saved.getId(), minWeeklyBefore, saved.getMinWeeklyWorkouts(),
+                penaltyPerMissBefore, saved.getPenaltyPerMiss(), maxMembersBefore, saved.getMaxMembers());
         return WorkoutRoomResponse.from(saved);
     }
 
@@ -143,6 +153,9 @@ public class AdminWorkoutRoomService {
         workoutRoomMemberRepository.deleteAll(members);
 
         workoutRoomRepository.delete(workoutRoom);
+
+        log.info("Admin deleted room (roomId={}, name={}, members={}, penalties={})",
+                roomId, workoutRoom.getName(), members.size(), penalties.size());
     }
 }
 

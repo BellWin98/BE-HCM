@@ -1,0 +1,124 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  로깅 출력 설정. 어떤 로거를 어느 레벨로 켤지는 여기가 아니라 application-{profile}.yml 의
+  logging.level.* 가 정한다 — 레벨은 프로필별로 자주 만지는 값이고, 출력 방식은 거의 안 바뀌기 때문이다.
+
+  파일명이 logback.xml 이 아니라 logback-spring.xml 인 이유: Spring Boot 가 로드해야 <springProfile> 과
+  <springProperty> 가 동작한다. logback.xml 은 Spring 컨텍스트보다 먼저 logback 이 직접 읽어 버려
+  프로필 분기가 되지 않는다.
+
+  appender 구성은 모든 프로필이 같다(콘솔 + app.log + error.log, 롤링 시 gz 압축). 프로필은 값만 바꾼다:
+    local : 콘솔에 전부(색상), 파일은 ./logs 에 7일 — 로컬에서도 파일 로그 동작을 그대로 확인할 수 있게 한다.
+    prod  : 콘솔에는 WARN 이상만(색상 없음), 파일은 /app/logs 에 30일/90일 — 서버는 Docker 위에서 돌고
+            배포마다 컨테이너가 지워지므로 호스트에 마운트된 경로에 쓴다.
+
+  LOG_PATH 는 application-{profile}.yml 의 logging.file.path 에서 온다(Boot 가 시스템 프로퍼티로 넘겨준다).
+-->
+<configuration>
+
+    <!-- %clr(색상), %wEx(스택트레이스 정리) 컨버터. Boot 가 제공한다. -->
+    <include resource="org/springframework/boot/logging/logback/defaults.xml"/>
+
+    <property name="LOG_PATH" value="${LOG_PATH:-./logs}"/>
+
+    <!--
+      requestId / memberId 는 RequestLoggingFilter 와 JwtAuthenticationFilter 가 MDC 에 넣는다.
+      두 값이 있어야 "어느 요청에서, 누가"를 로그 한 줄만 보고 알 수 있다. 요청 밖(스케줄러·부팅)에서는 비어 있다.
+    -->
+    <property name="MDC_PATTERN" value="[%X{requestId:-}] [%X{memberId:-}]"/>
+    <property name="COLOR_PATTERN"
+              value="%clr(%d{yyyy-MM-dd HH:mm:ss.SSS}){faint} %clr(%5p) %clr(${MDC_PATTERN}){magenta} %clr([%15.15t]){faint} %clr(%-40.40logger{39}){cyan} %clr(:){faint} %m%n%wEx"/>
+    <property name="PLAIN_PATTERN"
+              value="%d{yyyy-MM-dd HH:mm:ss.SSS} %5p ${MDC_PATTERN} [%t] %logger{39} : %m%n%wEx"/>
+
+    <!-- ===================== 프로필별 값 ===================== -->
+    <springProfile name="local">
+        <!-- 개발자의 터미널이 주 싱크다. 파일은 동작 확인용이라 짧게 보관한다. -->
+        <property name="CONSOLE_THRESHOLD" value="TRACE"/>
+        <property name="CONSOLE_PATTERN" value="${COLOR_PATTERN}"/>
+        <property name="APP_MAX_HISTORY" value="7"/>
+        <property name="APP_TOTAL_SIZE_CAP" value="200MB"/>
+        <property name="ERROR_MAX_HISTORY" value="7"/>
+        <property name="ERROR_TOTAL_SIZE_CAP" value="50MB"/>
+    </springProfile>
+
+    <springProfile name="!local">
+        <!--
+          docker logs 는 "지금 무슨 일이 나고 있나"를 보는 창이지 보관소가 아니다. WARN 이상만 보내
+          `docker logs -f hcm` 을 열면 문제만 보이게 하고, 전체 기록은 파일이 맡는다.
+          (docker 의 json-file 드라이버도 stdout 을 디스크에 쌓으므로, compose 에서 max-size/max-file 로 잘라야 한다.)
+          컨테이너 stdout 에는 ANSI 색상 코드가 그대로 남아 grep 을 방해하므로 색을 뺀다.
+        -->
+        <property name="CONSOLE_THRESHOLD" value="WARN"/>
+        <property name="CONSOLE_PATTERN" value="${PLAIN_PATTERN}"/>
+        <!--
+          app.log 30일 — 벌금 주기(주 단위)의 문의가 한 달 뒤에 와도 추적 가능해야 한다.
+          총량 상한은 EC2 기본 디스크(8~20GB)를 로그가 잠식하지 않게 하기 위함이다. gz 로 텍스트 로그는
+          보통 1/10 이하로 줄어 30일치가 2GB 안에 넉넉히 든다. error.log 는 양이 적으므로 더 오래 둔다.
+        -->
+        <property name="APP_MAX_HISTORY" value="30"/>
+        <property name="APP_TOTAL_SIZE_CAP" value="2GB"/>
+        <property name="ERROR_MAX_HISTORY" value="90"/>
+        <property name="ERROR_TOTAL_SIZE_CAP" value="500MB"/>
+    </springProfile>
+
+    <!-- ===================== appender (공통) ===================== -->
+    <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+        <filter class="ch.qos.logback.classic.filter.ThresholdFilter">
+            <level>${CONSOLE_THRESHOLD}</level>
+        </filter>
+        <encoder>
+            <pattern>${CONSOLE_PATTERN}</pattern>
+            <charset>UTF-8</charset>
+        </encoder>
+    </appender>
+
+    <!--
+      전체 로그. 하루에 한 번, 또는 50MB 를 넘으면 롤링하고 이전 파일은 gz 로 압축한다(.gz 확장자가 곧 압축 지시).
+      압축은 별도 스레드에서 비동기로 돌아 요청 처리를 막지 않는다.
+      cleanHistoryOnStart : 앱이 오래 꺼져 있다 올라와도 기한 지난 파일을 정리한다.
+      날짜는 Asia/Seoul 로 고정 — JVM 타임존 설정과 무관하게 KST 자정에 롤링한다.
+    -->
+    <appender name="FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <file>${LOG_PATH}/app.log</file>
+        <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
+            <fileNamePattern>${LOG_PATH}/archive/app.%d{yyyy-MM-dd, Asia/Seoul}.%i.log.gz</fileNamePattern>
+            <maxFileSize>50MB</maxFileSize>
+            <maxHistory>${APP_MAX_HISTORY}</maxHistory>
+            <totalSizeCap>${APP_TOTAL_SIZE_CAP}</totalSizeCap>
+            <cleanHistoryOnStart>true</cleanHistoryOnStart>
+        </rollingPolicy>
+        <encoder>
+            <pattern>${PLAIN_PATTERN}</pattern>
+            <charset>UTF-8</charset>
+        </encoder>
+    </appender>
+
+    <!--
+      WARN 이상만 따로. "오늘 뭐가 잘못됐나"를 볼 때 수십 MB 의 app.log 를 grep 하는 대신 이 파일을 연다.
+    -->
+    <appender name="ERROR_FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <file>${LOG_PATH}/error.log</file>
+        <filter class="ch.qos.logback.classic.filter.ThresholdFilter">
+            <level>WARN</level>
+        </filter>
+        <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
+            <fileNamePattern>${LOG_PATH}/archive/error.%d{yyyy-MM-dd, Asia/Seoul}.%i.log.gz</fileNamePattern>
+            <maxFileSize>20MB</maxFileSize>
+            <maxHistory>${ERROR_MAX_HISTORY}</maxHistory>
+            <totalSizeCap>${ERROR_TOTAL_SIZE_CAP}</totalSizeCap>
+            <cleanHistoryOnStart>true</cleanHistoryOnStart>
+        </rollingPolicy>
+        <encoder>
+            <pattern>${PLAIN_PATTERN}</pattern>
+            <charset>UTF-8</charset>
+        </encoder>
+    </appender>
+
+    <root>
+        <appender-ref ref="CONSOLE"/>
+        <appender-ref ref="FILE"/>
+        <appender-ref ref="ERROR_FILE"/>
+    </root>
+
+</configuration>

@@ -29,7 +29,7 @@ public interface WorkoutRoomMemberRepository extends JpaRepository<WorkoutRoomMe
 
     @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query("update WorkoutRoomMember wrm set wrm.weeklyWorkouts = 0 where wrm.weeklyWorkouts <> 0")
-    void resetWeeklyWorkouts();
+    int resetWeeklyWorkouts();
 
     @Query("""
             select wrm from WorkoutRoomMember wrm

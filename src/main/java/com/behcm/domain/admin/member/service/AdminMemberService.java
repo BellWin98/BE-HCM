@@ -20,6 +20,7 @@ import com.behcm.domain.workout.repository.WorkoutRoomRepository;
 import com.behcm.global.exception.CustomException;
 import com.behcm.global.exception.ErrorCode;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -29,6 +30,7 @@ import java.util.List;
 import java.util.Set;
 
 @Service
+@Slf4j
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
 public class AdminMemberService {
@@ -64,8 +66,11 @@ public class AdminMemberService {
         Member member = memberRepository.findById(memberId)
                 .orElseThrow(() -> new CustomException(ErrorCode.MEMBER_NOT_FOUND));
 
+        MemberRole previousRole = member.getRole();
         member.changeRole(newRole);
         Member saved = memberRepository.save(member);
+        // 관리자 행위는 되돌릴 수 없으므로 감사 로그를 남긴다. 행위자는 MDC memberId 에 있다.
+        log.info("Admin changed member role (memberId={}, role={}->{})", saved.getId(), previousRole, newRole);
 
         return AdminMemberResponse.from(saved, tossAccessRepository.existsByMemberId(saved.getId()));
     }
@@ -91,6 +96,7 @@ public class AdminMemberService {
 
         // 회원이 소유한 운동방 처리 (운동방 삭제)
         List<WorkoutRoom> ownedRooms = workoutRoomRepository.findByOwner(memberToDelete);
+        List<Long> ownedRoomIds = ownedRooms.stream().map(WorkoutRoom::getId).toList();
         for (WorkoutRoom room : ownedRooms) {
             // 운동방의 모든 관련 데이터 bulk delete 후 방 삭제
             deleteWorkoutRoomData(room);
@@ -128,6 +134,9 @@ public class AdminMemberService {
 
         // 회원 삭제
         memberRepository.delete(memberToDelete);
+
+        log.info("Admin deleted member (memberId={}, role={}, ownedRooms={}, ownedRoomIds={}, memberships={})",
+                memberId, memberToDelete.getRole(), ownedRooms.size(), ownedRoomIds, workoutRoomMembers.size());
     }
 
     private void deleteWorkoutRoomData(WorkoutRoom workoutRoom) {

@@ -14,6 +14,7 @@ import com.behcm.global.config.aws.S3Service;
 import com.behcm.global.exception.CustomException;
 import com.behcm.global.exception.ErrorCode;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.cache.CacheManager;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.stereotype.Service;
@@ -23,9 +24,11 @@ import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.time.temporal.TemporalAdjusters;
+import java.util.ArrayList;
 import java.util.List;
 
 @Service
+@Slf4j
 @RequiredArgsConstructor
 @Transactional
 public class WorkoutService {
@@ -63,31 +66,44 @@ public class WorkoutService {
 
         // 여러 이미지 S3에 업로드
         List<String> imageUrls = s3Service.uploadWorkoutImages(request.getImages());
-        for (WorkoutRoomMember wrm : wrms) {
-            WorkoutRoom workoutRoom = wrm.getWorkoutRoom();
-            // 운동 기록 저장
-            WorkoutRecord workoutRecord = WorkoutRecord.builder()
-                    .member(member)
-                    .workoutRoom(workoutRoom)
-                    .workoutDate(workoutDate)
-                    .workoutTypes(request.getWorkoutTypes())
-                    .duration(request.getDuration())
-                    .imageUrls(imageUrls)
-                    .build();
-            WorkoutRecord savedWorkoutRecord = workoutRecordRepository.save(workoutRecord);
-            wrm.updateTotalWorkouts(wrm.getTotalWorkouts() + 1);
-            // 이번주가 아닌 날짜는 이번주 운동 횟수에 반영 안함
-            if (isThisWeek(savedWorkoutRecord.getWorkoutDate())) {
-                int weeklyWorkoutsBeforeUpdate = wrm.getWeeklyWorkouts();
-                wrm.updateWeeklyWorkouts(weeklyWorkoutsBeforeUpdate + 1);
-                if (hasJustReachedWeeklyGoal(weeklyWorkoutsBeforeUpdate, wrm.getWeeklyWorkouts(), workoutRoom.getMinWeeklyWorkouts())) {
-                    notifyWeeklyGoalAchieved(member, workoutRoom);
+        List<Long> goalReachedRoomIds = new ArrayList<>();
+        try {
+            for (WorkoutRoomMember wrm : wrms) {
+                WorkoutRoom workoutRoom = wrm.getWorkoutRoom();
+                // 운동 기록 저장
+                WorkoutRecord workoutRecord = WorkoutRecord.builder()
+                        .member(member)
+                        .workoutRoom(workoutRoom)
+                        .workoutDate(workoutDate)
+                        .workoutTypes(request.getWorkoutTypes())
+                        .duration(request.getDuration())
+                        .imageUrls(imageUrls)
+                        .build();
+                WorkoutRecord savedWorkoutRecord = workoutRecordRepository.save(workoutRecord);
+                wrm.updateTotalWorkouts(wrm.getTotalWorkouts() + 1);
+                // 이번주가 아닌 날짜는 이번주 운동 횟수에 반영 안함
+                if (isThisWeek(savedWorkoutRecord.getWorkoutDate())) {
+                    int weeklyWorkoutsBeforeUpdate = wrm.getWeeklyWorkouts();
+                    wrm.updateWeeklyWorkouts(weeklyWorkoutsBeforeUpdate + 1);
+                    if (hasJustReachedWeeklyGoal(weeklyWorkoutsBeforeUpdate, wrm.getWeeklyWorkouts(), workoutRoom.getMinWeeklyWorkouts())) {
+                        goalReachedRoomIds.add(workoutRoom.getId());
+                        notifyWeeklyGoalAchieved(member, workoutRoom);
+                    }
                 }
+                notifyWorkoutUploaded(member, workoutRoom, workoutDate, request.getDuration());
             }
-            notifyWorkoutUploaded(member, workoutRoom, workoutDate, request.getDuration());
+            member.updateTotalWorkoutDays(member.getTotalWorkoutDays() + 1);
+        } catch (RuntimeException e) {
+            // 이미지는 S3 에 올라갔는데 트랜잭션은 롤백된다. 고아 객체를 나중에 지우려면 키가 남아 있어야 한다.
+            log.error("Workout authentication failed after images were uploaded; orphaned S3 objects: {} (memberId={}, workoutDate={})",
+                    imageUrls, member.getId(), workoutDate, e);
+            throw e;
         }
-        member.updateTotalWorkoutDays(member.getTotalWorkoutDays() + 1);
         Member savedMember = memberRepository.save(member);
+
+        log.info("Workout authenticated (memberId={}, workoutDate={}, roomIds={}, images={}, duration={}, goalReachedRoomIds={})",
+                member.getId(), workoutDate, workoutRooms.stream().map(WorkoutRoom::getId).toList(),
+                imageUrls.size(), request.getDuration(), goalReachedRoomIds);
 
         return new WorkoutResponse(workoutDate, request.getWorkoutTypes(), request.getDuration(), imageUrls, savedMember.getTotalWorkoutDays());
     }

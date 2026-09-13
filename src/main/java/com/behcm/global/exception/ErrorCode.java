@@ -65,6 +65,10 @@ public enum ErrorCode {
     // Rest
     REST_PERIOD_OVERLAP(HttpStatus.BAD_REQUEST, "이미 등록된 휴식일이 있습니다. 제외 후 재등록해주세요."),
 
+    // Korea Investment (한국투자증권)
+    KIS_TOKEN_ISSUE_FAILED(HttpStatus.INTERNAL_SERVER_ERROR, "한국투자증권 인증에 실패했습니다."),
+    KIS_API_FAILED(HttpStatus.BAD_GATEWAY, "한국투자증권 API 호출에 실패했습니다."),
+
     // Toss Stock
     TOSS_ACCOUNT_NOT_CONFIGURED(HttpStatus.NOT_FOUND, "연동되지 않은 토스증권 계좌입니다."),
     TOSS_ACCOUNT_NOT_FOUND(HttpStatus.NOT_FOUND, "토스증권 계좌를 찾을 수 없습니다."),
@@ -102,7 +106,10 @@ public enum ErrorCode {
     INTERNAL_SERVER_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "서버 내부 오류가 발생했습니다."),
     INVALID_INPUT(HttpStatus.BAD_REQUEST, "잘못된 입력값입니다."),
     ACCESS_DENIED(HttpStatus.FORBIDDEN, "접근이 거부되었습니다."),
-    COUNT_LIMIT_EXCEEDED(HttpStatus.BAD_REQUEST, "허용된 개수 제한을 초과했습니다.");
+    COUNT_LIMIT_EXCEEDED(HttpStatus.BAD_REQUEST, "허용된 개수 제한을 초과했습니다."),
+    METHOD_NOT_ALLOWED(HttpStatus.METHOD_NOT_ALLOWED, "허용되지 않은 HTTP 메서드입니다."),
+    UPLOAD_SIZE_EXCEEDED(HttpStatus.CONTENT_TOO_LARGE, "업로드 용량 제한을 초과했습니다."),
+    DATA_CONFLICT(HttpStatus.CONFLICT, "요청이 현재 데이터 상태와 충돌했습니다. 다시 시도해주세요.");
 
     private final HttpStatus httpStatus;
     private final String message;

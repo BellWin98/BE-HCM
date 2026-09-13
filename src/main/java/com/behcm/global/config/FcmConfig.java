@@ -40,7 +40,8 @@ public class FcmConfig {
                 log.info("FCM FirebaseApp initialized successfully.");
             }
         } catch (IOException e) {
-            e.printStackTrace();
+            // 여기서 실패하면 앱은 정상 기동하지만 이후 모든 푸시가 실패한다. 그 원인이 이 한 줄이어야 한다.
+            log.error("FCM initialization failed; push notifications will not work (keyPath={})", path, e);
         }
     }
 }

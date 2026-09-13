@@ -25,15 +25,26 @@ public class JwtChannelInterceptor implements ChannelInterceptor {
         StompHeaderAccessor accessor = MessageHeaderAccessor.getAccessor(message, StompHeaderAccessor.class);
 
         // CONNECT, SEND, SUBSCRIBE 명령어 처리시 jwt 토큰 검증
-        if (StompCommand.CONNECT.equals(accessor.getCommand()) ||
-            StompCommand.SEND.equals(accessor.getCommand()) ||
-            StompCommand.SUBSCRIBE.equals(accessor.getCommand())
+        StompCommand command = accessor.getCommand();
+        if (StompCommand.CONNECT.equals(command) ||
+            StompCommand.SEND.equals(command) ||
+            StompCommand.SUBSCRIBE.equals(command)
         ) {
-            String token = accessor.getFirstNativeHeader("Authorization");
-            if (token != null && jwtTokenProvider.validateToken(token.replace("Bearer ", ""))) {
-                Authentication authentication = jwtTokenProvider.getAuthentication(token.replace("Bearer ", ""));
+            String header = accessor.getFirstNativeHeader("Authorization");
+            String token = header != null ? header.replace("Bearer ", "") : null;
+            if (token != null && jwtTokenProvider.validateToken(token)) {
+                Authentication authentication = jwtTokenProvider.getAuthentication(token);
                 SecurityContextHolder.getContext().setAuthentication(authentication);
                 accessor.setUser(authentication); // WebSocket 세션에 사용자 정보 저장
+                if (StompCommand.CONNECT.equals(command)) {
+                    log.debug("STOMP CONNECT authenticated (session={}, user={})",
+                            accessor.getSessionId(), authentication.getName());
+                }
+            } else {
+                // 인증 없이 통과시키면 ChatController 에서 principal 이 null 이라 NPE 로 터진다.
+                // 그 NPE 의 원인이 여기라는 것을 알 수 있도록 세션 단위로 남긴다.
+                log.warn("STOMP {} without a valid token (session={}, tokenPresent={})",
+                        command, accessor.getSessionId(), token != null);
             }
         }
 

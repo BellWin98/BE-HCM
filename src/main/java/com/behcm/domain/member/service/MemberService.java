@@ -17,6 +17,7 @@ import com.behcm.global.config.aws.S3Service;
 import com.behcm.global.exception.CustomException;
 import com.behcm.global.exception.ErrorCode;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -34,6 +35,7 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 @Service
+@Slf4j
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
 public class MemberService {
@@ -67,8 +69,11 @@ public class MemberService {
                 && memberRepository.existsByNickname(request.getNickname())) {
             throw new CustomException(ErrorCode.NICKNAME_ALREADY_EXISTS);
         }
+        String nicknameBefore = member.getNickname();
         member.updateProfile(request.getNickname(), request.getBio(), request.getProfileUrl());
         Member savedMember = memberRepository.save(member);
+        log.debug("Profile updated (memberId={}, nickname={}->{}, profileUrlChanged={})",
+                savedMember.getId(), nicknameBefore, savedMember.getNickname(), request.getProfileUrl() != null);
 
         List<WorkoutRecord> workoutRecords = workoutRecordRepository.findAllByMemberPerWorkoutDate(savedMember);
         int currentStreak = calculateCurrentStreak(workoutRecords);
@@ -184,6 +189,8 @@ public class MemberService {
                     request.getPrivacy().getShowStats()
             );
         }
+        log.debug("Settings updated (memberId={}, notifications={}, privacy={})",
+                member.getId(), request.getNotifications() != null, request.getPrivacy() != null);
 
         return MemberSettingsResponse.from(settings);
     }

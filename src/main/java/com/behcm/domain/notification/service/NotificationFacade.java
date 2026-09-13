@@ -28,7 +28,7 @@ public class NotificationFacade {
 
     public void registerFcmToken(Member member, String token) {
         fcmService.saveFcmToken(member, token);
-        log.debug("토큰 등록 완료 - member: {}, token: {}", member.getEmail(), token);
+        log.debug("FCM token registered (memberId={})", member.getId());
     }
 
     public void notifyMember(Member targetMember, String title, String body, String type, String path) {

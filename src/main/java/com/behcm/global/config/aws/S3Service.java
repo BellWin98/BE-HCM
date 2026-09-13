@@ -7,6 +7,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
+import software.amazon.awssdk.awscore.exception.AwsServiceException;
+import software.amazon.awssdk.core.exception.SdkException;
 import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.GetUrlRequest;
@@ -78,19 +80,19 @@ public class S3Service {
 
         String originalFilename = file.getOriginalFilename();
         if (originalFilename == null || !originalFilename.contains(".")) {
-            throw new CustomException(ErrorCode.INVALID_FILE_TYPE);
+            throw rejected(file, ErrorCode.INVALID_FILE_TYPE);
         }
 
         if (file.getSize() > IMAGE_MAX_SIZE_BYTES) {
-            throw new CustomException(ErrorCode.FILE_TOO_LARGE);
+            throw rejected(file, ErrorCode.FILE_TOO_LARGE);
         }
 
         if (!isAllowedContentType(file.getContentType())) {
-            throw new CustomException(ErrorCode.INVALID_FILE_TYPE);
+            throw rejected(file, ErrorCode.INVALID_FILE_TYPE);
         }
 
         if (!isValidImageFile(originalFilename)) {
-            throw new CustomException(ErrorCode.INVALID_FILE_TYPE);
+            throw rejected(file, ErrorCode.INVALID_FILE_TYPE);
         }
 
         String fileName = generateFileName(originalFilename);
@@ -107,11 +109,26 @@ public class S3Service {
                     .build();
 
             s3Client.putObject(putObjectRequest, RequestBody.fromInputStream(inputStream, file.getSize()));
+            log.debug("S3 upload done (key={}, size={}, contentType={})", key, file.getSize(), file.getContentType());
             return getFileUrl(key);
         } catch (IOException e) {
-            log.error("S3 파일 업로드 실패: {}", e.getMessage(), e);
+            log.error("S3 upload failed reading the multipart stream (bucket={}, key={})", bucket, key, e);
+            throw new CustomException(ErrorCode.FILE_UPLOAD_FAILED);
+        } catch (SdkException e) {
+            // 권한(AccessDenied)·버킷 없음·스로틀 등 AWS 쪽 거부. catch-all 로 흘리면 bucket/key 가 남지 않는다.
+            String awsErrorCode = e instanceof AwsServiceException aws && aws.awsErrorDetails() != null
+                    ? aws.awsErrorDetails().errorCode()
+                    : e.getClass().getSimpleName();
+            log.error("S3 upload rejected (bucket={}, key={}, awsErrorCode={})", bucket, key, awsErrorCode, e);
             throw new CustomException(ErrorCode.FILE_UPLOAD_FAILED);
         }
+    }
+
+    /** 검증 거절은 사용자 잘못이지만, FE 가 무엇을 보냈는지 모르면 FE 버그를 못 잡는다. DEBUG 로 남긴다. */
+    private static CustomException rejected(MultipartFile file, ErrorCode errorCode) {
+        log.debug("Image rejected ({}): filename={}, contentType={}, size={}",
+                errorCode, file.getOriginalFilename(), file.getContentType(), file.getSize());
+        return new CustomException(errorCode);
     }
 
     private boolean isAllowedContentType(String contentType) {

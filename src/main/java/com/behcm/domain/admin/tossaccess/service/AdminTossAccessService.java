@@ -8,16 +8,19 @@ import com.behcm.domain.tossstock.repository.TossAccessRepository;
 import com.behcm.global.exception.CustomException;
 import com.behcm.global.exception.ErrorCode;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Optional;
 
 /**
  * 토스증권 접근 권한 부여/회수. ADMIN 은 이 테이블과 무관하게 항상 접근하므로
  * 여기서 다루는 것은 "ADMIN 이 지정한 유저" 목록이다.
  */
 @Service
+@Slf4j
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
 public class AdminTossAccessService {
@@ -40,11 +43,18 @@ public class AdminTossAccessService {
         Member target = memberRepository.findById(memberId)
                 .orElseThrow(() -> new CustomException(ErrorCode.MEMBER_NOT_FOUND));
 
-        TossAccess tossAccess = tossAccessRepository.findByMemberId(memberId)
-                .orElseGet(() -> tossAccessRepository.save(TossAccess.builder()
-                        .member(target)
-                        .grantedBy(admin != null ? admin.getId() : null)
-                        .build()));
+        Optional<TossAccess> existing = tossAccessRepository.findByMemberId(memberId);
+        if (existing.isPresent()) {
+            log.debug("Toss access already granted (memberId={})", memberId);
+            return AdminTossAccessResponse.from(existing.get());
+        }
+
+        TossAccess tossAccess = tossAccessRepository.save(TossAccess.builder()
+                .member(target)
+                .grantedBy(admin != null ? admin.getId() : null)
+                .build());
+        // 가족 자산(보유주식·평가금액)을 볼 수 있게 되는 순간이다. 감사 로그를 남긴다.
+        log.info("Admin granted Toss access (memberId={}, grantedBy={})", memberId, tossAccess.getGrantedBy());
 
         return AdminTossAccessResponse.from(tossAccess);
     }
@@ -56,5 +66,6 @@ public class AdminTossAccessService {
             throw new CustomException(ErrorCode.MEMBER_NOT_FOUND);
         }
         tossAccessRepository.deleteByMemberId(memberId);
+        log.info("Admin revoked Toss access (memberId={})", memberId);
     }
 }

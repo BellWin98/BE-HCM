@@ -46,6 +46,9 @@ public class AuthController {
 
     @PostMapping("/send-verification")
     public ResponseEntity<ApiResponse<Void>> sendVerificationEmail(@Valid @RequestBody EmailRequest request) {
+        // sendVerificationEmail 은 @Async 라 안에서 던진 EMAIL_ALREADY_EXISTS 가 응답에 실리지 않는다
+        // (200 이 먼저 나가고 예외는 비동기 스레드에 남는다). 중복 검사는 여기서 동기로 먼저 한다.
+        emailVerificationService.checkEmailDuplicate(request.getEmail());
         emailVerificationService.sendVerificationEmail(request.getEmail());
         return ResponseEntity.ok(ApiResponse.success(null));
     }

@@ -18,6 +18,7 @@ import com.behcm.global.config.aws.S3Service;
 import com.behcm.global.exception.CustomException;
 import com.behcm.global.exception.ErrorCode;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Slice;
@@ -33,6 +34,7 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 @Service
+@Slf4j
 @RequiredArgsConstructor
 @Transactional
 public class ChatService {
@@ -53,6 +55,7 @@ public class ChatService {
             throw new CustomException(ErrorCode.NOT_WORKOUT_ROOM_MEMBER);
         }
         String imageUrl = s3Service.uploadChatImage(file, workoutRoom.getId());
+        log.debug("Chat image uploaded (roomId={}, memberId={})", roomId, member.getId());
         return ChatImageUploadResponse.of(imageUrl);
     }
 
@@ -85,6 +88,9 @@ public class ChatService {
         ChatMessageResponse response = responses.isEmpty() ? ChatMessageResponse.from(savedChatMessage) : responses.getFirst();
 
         messagingTemplate.convertAndSend("/topic/chat/room/" + roomId, response);
+        // 고빈도 이벤트라 DEBUG. 내용은 남기지 않는다.
+        log.debug("Chat message sent (roomId={}, senderId={}, messageId={}, type={})",
+                roomId, sender.getId(), savedChatMessage.getId(), request.getType());
 
         notifyChatMessageSent(workoutRoom, sender, request.getType(), savedChatMessage.getContent());
     }
@@ -143,6 +149,8 @@ public class ChatService {
         if (currentLastRead == null || currentLastRead.getId() < latestMessage.getId()) {
             wrm.setLastReadMessage(latestMessage);
             workoutRoomMemberRepository.save(wrm);
+            log.debug("Last read message advanced (roomId={}, memberId={}, lastReadId={})",
+                    roomId, member.getId(), latestMessage.getId());
         }
 
         // 최신 읽음 상태를 기반으로 최근 메시지들의 unreadCount를 재계산하여 브로드캐스트

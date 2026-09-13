@@ -92,8 +92,10 @@ public class TossOrderClient {
                     owner, command.clientOrderId());
             throw new CustomException(ErrorCode.TOSS_API_FAILED);
         }
-        log.info("Placed Toss order (owner={}, symbol={}, side={}, orderId={})",
-                owner, command.symbol(), command.side(), orderId);
+        // 돈이 움직인 기록이다. 행위자는 MDC memberId, 주문 내용은 여기에 전부 남긴다.
+        log.info("Placed Toss order (owner={}, symbol={}, side={}, orderType={}, timeInForce={}, quantity={}, price={}, clientOrderId={}, orderId={})",
+                owner, command.symbol(), command.side(), command.orderType(), command.timeInForce(),
+                command.quantity(), command.price(), command.clientOrderId(), orderId);
         return new PlacedOrder(orderId, result.path("clientOrderId").asString(command.clientOrderId()));
     }
 

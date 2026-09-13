@@ -84,12 +84,15 @@ public class TossStockUniverseLoader {
 
         List<TossListedStock> collected = new ArrayList<>();
         int failedMarkets = 0;
+        long startNanos = System.nanoTime();
 
         for (String market : TossMarkets.TRADABLE) {
             try {
                 JsonNode listed = tossInvestClient.get(
                         owner, STOCKS_ALL_PATH, Map.of("market", market, "status", "ACTIVE"));
-                collected.addAll(toEntries(listed, market));
+                List<TossListedStock> entries = toEntries(listed, market);
+                collected.addAll(entries);
+                log.debug("Toss stock universe loaded (market={}, entries={})", market, entries.size());
             } catch (Exception e) {
                 failedMarkets++;
                 log.warn("Failed to load the Toss stock universe for market={}", market, e);
@@ -103,6 +106,8 @@ public class TossStockUniverseLoader {
         }
 
         universe.replace(collected);
+        log.info("Toss stock universe refreshed (entries={}, failedMarkets={}, took={}ms)",
+                collected.size(), failedMarkets, (System.nanoTime() - startNanos) / 1_000_000L);
     }
 
     private List<TossListedStock> toEntries(JsonNode listed, String market) {

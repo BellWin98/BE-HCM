@@ -92,9 +92,10 @@ public class WorkoutRoom extends BaseTimeEntity {
         this.penaltyChangeEffectiveDate = effectiveDate;
     }
 
-    public void applyPendingPenaltyChangeIfDue(LocalDate today) {
+    /** @return 예약된 전환을 실제로 적용했으면 true (서비스가 감사 로그를 남길 때 쓴다) */
+    public boolean applyPendingPenaltyChangeIfDue(LocalDate today) {
         if (pendingPenaltyEnabled == null || penaltyChangeEffectiveDate.isAfter(today)) {
-            return;
+            return false;
         }
 
         this.penaltyEnabled = pendingPenaltyEnabled;
@@ -105,6 +106,7 @@ public class WorkoutRoom extends BaseTimeEntity {
         this.pendingPenaltyEnabled = null;
         this.pendingPenaltyPerMiss = null;
         this.penaltyChangeEffectiveDate = null;
+        return true;
     }
 
     public boolean canJoin() {

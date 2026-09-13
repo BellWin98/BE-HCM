@@ -57,6 +57,9 @@ public class RestService {
             restRepository.save(rest);
             notifyRestDayRegistered(member, wrm.getWorkoutRoom(), startDate, endDate);
         }
+        // 휴식일은 벌금 면제 근거다. "왜 이 사람은 벌금이 없나"에 답하려면 등록 기록이 필요하다.
+        log.info("Rest period registered (memberId={}, roomIds={}, period={}~{})",
+                member.getId(), wrms.stream().map(wrm -> wrm.getWorkoutRoom().getId()).toList(), startDate, endDate);
     }
 
     private void notifyRestDayRegistered(Member member, WorkoutRoom workoutRoom, LocalDate startDate, LocalDate endDate) {

@@ -1,5 +1,7 @@
 package com.behcm.global.config.stock;
 
+import com.behcm.global.exception.CustomException;
+import com.behcm.global.exception.ErrorCode;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.RedisTemplate;
@@ -72,9 +74,11 @@ public class KoreaInvestmentClient {
             log.info("New access token cached successfully. Expires at: {}", expiryTimeStr);
             return accessToken;
         } catch (Exception e) {
-            log.error("Failed to get access token", e);
+            // 앱키·시크릿 문제이거나 KIS 인증 서버 장애다. 여기서 한 번만 스택을 남기고,
+            // 핸들러는 CustomException(500) 한 줄만 찍는다.
+            log.error("Failed to issue a Korea Investment access token", e);
             clearTokenCache();
-            throw new RuntimeException("Failed to get access token", e);
+            throw new CustomException(ErrorCode.KIS_TOKEN_ISSUE_FAILED);
         }
     }
 
@@ -135,16 +139,20 @@ public class KoreaInvestmentClient {
             }
 
             return responseJson;
+        } catch (CustomException e) {
+            throw e;
         } catch (HttpClientErrorException e) {
             if (e.getStatusCode() == HttpStatus.UNAUTHORIZED && !isRetry) {
-                log.warn("Received 401 Unauthorized, attempting token refresh");
+                log.info("Korea Investment API returned 401, refreshing token (endpoint={})", endpoint);
                 return handleTokenExpiry(endpoint, transactionId, params, customHeaders, isRetry);
             }
-            log.error("Failed to call Korea Investment API: {}", endpoint, e);
-            throw new RuntimeException("Failed to call Korea Investment API", e);
+            // KIS 의 4xx 는 우리 요청(파라미터·tr_id)이 틀렸다는 뜻이다. 응답 본문에 사유가 있다.
+            log.error("Korea Investment API rejected the request (endpoint={}, trId={}, status={}, body={})",
+                    endpoint, transactionId, e.getStatusCode(), e.getResponseBodyAsString());
+            throw new CustomException(ErrorCode.KIS_API_FAILED);
         } catch (Exception e) {
-            log.error("Failed to call Korea Investment API: {}", endpoint, e);
-            throw new RuntimeException("Failed to call Korea Investment API", e);
+            log.error("Korea Investment API call failed (endpoint={}, trId={})", endpoint, transactionId, e);
+            throw new CustomException(ErrorCode.KIS_API_FAILED);
         }
     }
 
@@ -158,11 +166,13 @@ public class KoreaInvestmentClient {
 
     private JsonNode handleTokenExpiry(String endpoint, String transactionId, Map<String, String> params, Map<String, String> customHeaders, boolean isRetry) {
         if (isRetry) {
-            log.error("Token refresh failed, cannot retry again");
-            throw new RuntimeException("Token refresh failed after retry");
+            // 새 토큰으로도 만료 응답이면 토큰이 아니라 앱키/계정 상태가 문제다.
+            log.error("Korea Investment API still reports an expired token after refresh (endpoint={}, trId={})",
+                    endpoint, transactionId);
+            throw new CustomException(ErrorCode.KIS_API_FAILED);
         }
 
-        log.info("Token expired, clearing cache and fetching new token");
+        log.info("Korea Investment token expired, clearing cache and fetching a new one");
         clearTokenCache();
 
         return callApiWithRetry(endpoint, transactionId, params, customHeaders, true);

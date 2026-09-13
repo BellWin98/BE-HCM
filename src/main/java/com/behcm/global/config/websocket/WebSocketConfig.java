@@ -28,7 +28,9 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
     @Override
     public void configureMessageBroker(MessageBrokerRegistry registry) {
         // 메시지 브로커가 /topic으로 시작하는 경로를 구독하는 클라이언트에게 메시지를 전달하도록 설정합니다.
-        registry.enableSimpleBroker("/topic");
+        // /queue 는 ChatController 의 @MessageExceptionHandler 가 오류를 보낸 사람에게만 돌려주는 데 쓴다
+        // (/user/queue/errors). 브로커가 이 접두사를 모르면 메시지가 조용히 버려진다.
+        registry.enableSimpleBroker("/topic", "/queue");
         // 클라이언트에서 서버로 메시지를 보낼 때 사용하는 경로의 접두사를 /app으로 설정합니다.
         // 예를 들어, /app/chat/send 와 같은 경로로 메시지를 보내면 컨트롤러의 @MessageMapping이 이를 처리합니다.
         registry.setApplicationDestinationPrefixes("/app");

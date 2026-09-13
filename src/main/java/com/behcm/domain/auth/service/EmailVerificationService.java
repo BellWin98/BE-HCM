@@ -5,6 +5,7 @@ import com.behcm.domain.auth.repository.EmailVerificationRepository;
 import com.behcm.domain.member.repository.MemberRepository;
 import com.behcm.global.exception.CustomException;
 import com.behcm.global.exception.ErrorCode;
+import com.behcm.global.logging.LogMask;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.mail.SimpleMailMessage;
@@ -57,7 +58,7 @@ public class EmailVerificationService {
 
         // 이메일 발송
         sendEmail(email, verificationCode);
-        log.info("Verification email sent to: {}", email);
+        log.info("Verification email sent (email={})", LogMask.email(email));
     }
 
     public void verifyEmailCode(String email, String code) {
@@ -71,13 +72,15 @@ public class EmailVerificationService {
 
         // 인증코드 확인
         if (!emailVerification.getVerificationCode().equals(code)) {
+            // 6자리 코드는 5분 안에 무차별 대입이 가능하다. 같은 이메일로 반복되면 봐야 하므로 대상을 남긴다.
+            log.warn("Verification code mismatch (email={})", LogMask.email(email));
             throw new CustomException(ErrorCode.INVALID_VERIFICATION_CODE);
         }
 
         // 인증완료 처리
         emailVerification.verify();
 
-        log.info("Email verification completed for: {}", email);
+        log.info("Email verified (email={})", LogMask.email(email));
     }
 
     public void sendEmail(String to, String verificationCode) {
@@ -95,7 +98,8 @@ public class EmailVerificationService {
                     """, verificationCode));
             mailSender.send(message);
         } catch (Exception e) {
-            log.error("Failed to send verification email to: {}", to, e);
+            // 메일 서버(SMTP 자격증명·네트워크) 문제다. 가입 자체가 막히므로 개입이 필요하다.
+            log.error("Failed to send verification email (email={})", LogMask.email(to), e);
             throw new CustomException(ErrorCode.EMAIL_SEND_FAILED);
         }
     }

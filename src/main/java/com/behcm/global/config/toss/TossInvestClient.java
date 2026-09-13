@@ -4,6 +4,7 @@ import com.behcm.global.exception.CustomException;
 import com.behcm.global.exception.ErrorCode;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.slf4j.event.Level;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -147,7 +148,12 @@ public class TossInvestClient {
                     .toEntity(String.class);
         } catch (Exception e) {
             // 여기서 재시도하지 않는다 — 쓰기 요청이라면 이미 접수됐을 수 있다(소켓 타임아웃 5초).
-            log.error("Toss API call failed: {} {} (owner={})", method, path, owner, e);
+            if (writePath) {
+                // 주문이 접수됐는지 알 수 없는 상태다. 사람이 미체결 내역을 확인해야 한다.
+                log.error("Toss order call failed with unknown outcome: {} {} (owner={})", method, path, owner, e);
+            } else {
+                log.warn("Toss API call failed: {} {} (owner={}) - {}", method, path, owner, e.toString());
+            }
             throw new CustomException(ErrorCode.TOSS_API_FAILED);
         }
 
@@ -250,8 +256,9 @@ public class TossInvestClient {
                 log.debug("Failed to parse Toss error body for {}", path);
             }
         }
-        log.error("Toss API error: path={}, owner={}, status={}, code={}, requestId={}, message={}, data={}",
-                path, owner, status, code, requestId, message, data);
+        log.atLevel(errorLevel(status, code, writePath))
+                .log("Toss API error: path={}, owner={}, status={}, code={}, requestId={}, message={}, data={}",
+                        path, owner, status, code, requestId, message, data);
 
         if (writePath) {
             return new CustomException(TossOrderErrorMapper.toErrorCode(status, code));
@@ -264,6 +271,28 @@ public class TossInvestClient {
             return new CustomException(ErrorCode.TOSS_UNAUTHORIZED);
         }
         return new CustomException(ErrorCode.TOSS_API_FAILED);
+    }
+
+    /**
+     * 토스 에러의 로그 레벨. 전부 ERROR 로 찍으면 "잔고 부족"이 알림을 울린다.
+     * <ul>
+     *   <li>401/403 — 자격증명·권한 문제. 우리가 고쳐야 한다 → ERROR</li>
+     *   <li>429, 점검(maintenance) — 토스 사정 → WARN</li>
+     *   <li>주문 경로의 400/409/422 — 사용자가 고칠 것(잔고·장 마감·가격) → INFO</li>
+     *   <li>조회 경로의 4xx, 그 외 5xx — 우리 요청이 틀렸거나 토스 장애 → ERROR</li>
+     * </ul>
+     */
+    private static Level errorLevel(HttpStatus status, String code, boolean writePath) {
+        if (status == HttpStatus.TOO_MANY_REQUESTS || "maintenance".equals(code)) {
+            return Level.WARN;
+        }
+        if (status == HttpStatus.UNAUTHORIZED || status == HttpStatus.FORBIDDEN) {
+            return Level.ERROR;
+        }
+        if (writePath && status != null && status.is4xxClientError()) {
+            return Level.INFO;
+        }
+        return Level.ERROR;
     }
 
     /**

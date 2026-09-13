@@ -22,6 +22,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.temporal.TemporalAdjusters;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -43,21 +44,25 @@ public class PenaltyService {
 
     @Transactional
     public void calculateAndAssignPenalties() {
-        log.info("Starting weekly penalty calculation");
-
         LocalDate today = LocalDate.now();
         LocalDate lastWeekStart = today.minusWeeks(1).with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY));
         LocalDate lastWeekEnd = lastWeekStart.plusDays(6);
 
-        log.info("Calculating penalties for week: {} to {}", lastWeekStart, lastWeekEnd);
+        log.info("Weekly penalty calculation started (week={}~{})", lastWeekStart, lastWeekEnd);
 
         List<WorkoutRoom> activeWorkoutRooms = workoutRoomRepository.findByIsActiveTrueAndPenaltyEnabledTrueFetchMembers();
 
+        int assigned = 0;
+        long totalAmount = 0L;
         for (WorkoutRoom workoutRoom : activeWorkoutRooms) {
-            processWorkoutRoomPenalties(workoutRoom, lastWeekStart, lastWeekEnd);
+            List<Penalty> penalties = processWorkoutRoomPenalties(workoutRoom, lastWeekStart, lastWeekEnd);
+            assigned += penalties.size();
+            totalAmount += penalties.stream().mapToLong(Penalty::getPenaltyAmount).sum();
         }
 
-        log.info("Weekly penalty calculation completed");
+        // 다음 주 월요일에 "벌금이 안 나갔다"는 문의가 오면 이 한 줄이 출발점이다.
+        log.info("Weekly penalty calculation completed (rooms={}, penalties={}, totalAmount={})",
+                activeWorkoutRooms.size(), assigned, totalAmount);
     }
 
     public PenaltyAccountInfo getPenaltyAccount(Long roomId) {
@@ -73,6 +78,9 @@ public class PenaltyService {
     public PenaltyAccountInfo upsertPenaltyAccount(Long roomId, PenaltyAccountRequest request) {
         WorkoutRoom workoutRoom = workoutRoomRepository.findById(roomId)
                 .orElseThrow(() -> new CustomException(ErrorCode.NOT_FOUND));
+
+        // 계좌번호·예금주는 남기지 않는다. 행위자는 MDC memberId.
+        log.info("Penalty account upserted (roomId={}, bank={})", roomId, request.getBankName());
 
         PenaltyAccount penaltyAccount = penaltyAccountRepository.findByWorkoutRoom(workoutRoom)
                 .map(existingAccount -> {
@@ -101,6 +109,7 @@ public class PenaltyService {
 
         penaltyAccountRepository.findByWorkoutRoom(workoutRoom)
                 .ifPresent(penaltyAccountRepository::delete);
+        log.info("Penalty account deleted (roomId={})", roomId);
     }
 
     public List<PenaltyRecord> getPenaltyRecords(Long roomId, LocalDate startDate, LocalDate endDate) {
@@ -112,18 +121,21 @@ public class PenaltyService {
                 .toList();
     }
 
-    private void processWorkoutRoomPenalties(WorkoutRoom workoutRoom, LocalDate weekStart, LocalDate weekEnd) {
-        log.info("Processing penalties for workout room: {} (ID: {})", workoutRoom.getName(), workoutRoom.getId());
+    /** @return 이 방에서 새로 부과한 벌금 (요약 로그용) */
+    private List<Penalty> processWorkoutRoomPenalties(WorkoutRoom workoutRoom, LocalDate weekStart, LocalDate weekEnd) {
+        List<Penalty> assigned = new ArrayList<>();
+        log.debug("Processing penalties (roomId={}, name={})", workoutRoom.getId(), workoutRoom.getName());
 
+        // 조회 쿼리가 penaltyEnabled=true 로 걸러 오지만, 다른 경로에서 호출될 때를 대비해 남긴다.
         if (!workoutRoom.getPenaltyEnabled()) {
-            log.info("Penalty system disabled for workout room {} (ID: {}), skipping penalty calculation", workoutRoom.getName(), workoutRoom.getId());
-            return;
+            log.debug("Penalty disabled, skipping (roomId={})", workoutRoom.getId());
+            return assigned;
         }
 
         List<WorkoutRoomMember> members = workoutRoom.getWorkoutRoomMembers();
         if (members.isEmpty()) {
-            log.info("No members in workout room {} (ID: {}), skipping penalty calculation", workoutRoom.getName(), workoutRoom.getId());
-            return;
+            log.debug("No members, skipping (roomId={})", workoutRoom.getId());
+            return assigned;
         }
 
         Map<Long, Integer> actualWorkoutsByMemberId = workoutRecordRepository
@@ -140,7 +152,8 @@ public class PenaltyService {
 
         for (WorkoutRoomMember member : members) {
             if (isMemberOnBreak(member, weekStart, weekEnd, restByWorkoutRoomMemberId)) {
-                log.debug("Skipping penalty calculation for member {} - on break", member.getNickname());
+                log.debug("Member on break, skipping (roomId={}, memberId={})",
+                        workoutRoom.getId(), member.getMember().getId());
                 continue;
             }
 
@@ -162,18 +175,22 @@ public class PenaltyService {
                         .build();
 
                 penaltyRepository.save(penalty);
+                assigned.add(penalty);
 
                 member.updateTotalPenalty(member.getTotalPenalty() + penaltyAmount);
 
                 notifyPenaltyAssigned(member, workoutRoom, penalty);
 
-                log.info("Penalty assigned to {} in room {}: {}원 (Required: {}, Actual: {})",
-                        member.getNickname(), workoutRoom.getName(), penaltyAmount, requiredWorkouts, actualWorkouts);
+                // 닉네임은 바뀔 수 있으므로 id 로 남긴다. 금액 분쟁 시 이 줄로 부과 근거를 재구성한다.
+                log.info("Penalty assigned (roomId={}, memberId={}, amount={}, required={}, actual={}, week={}~{})",
+                        workoutRoom.getId(), member.getMember().getId(), penaltyAmount,
+                        requiredWorkouts, actualWorkouts, weekStart, weekEnd);
             } else {
-                log.debug("No penalty for {} in room {} - met requirements (Required: {}, Actual: {})",
-                        member.getNickname(), workoutRoom.getName(), requiredWorkouts, actualWorkouts);
+                log.debug("Goal met, no penalty (roomId={}, memberId={}, required={}, actual={})",
+                        workoutRoom.getId(), member.getMember().getId(), requiredWorkouts, actualWorkouts);
             }
         }
+        return assigned;
     }
 
     private void notifyPenaltyAssigned(WorkoutRoomMember member, WorkoutRoom workoutRoom, Penalty penalty) {

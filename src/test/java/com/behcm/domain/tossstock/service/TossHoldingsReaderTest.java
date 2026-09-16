@@ -1,16 +1,13 @@
 package com.behcm.domain.tossstock.service;
 
 import com.behcm.global.config.toss.TossAccountOwner;
-import com.behcm.global.config.toss.TossInvestClient;
+import com.behcm.support.IntegrationTestSupport;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.cache.CacheManager;
-import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import tools.jackson.databind.JsonNode;
-import tools.jackson.databind.ObjectMapper;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -30,13 +27,7 @@ import static org.mockito.Mockito.verify;
  * <p>{@code @SpringBootTest} 로 확인하는 이유는 캐시 여부가 <b>프록시가 걸리느냐</b>의 문제라
  * 순수 단위 테스트로는 {@code @Cacheable} 이 다시 붙어도 잡히지 않기 때문이다.
  */
-@SpringBootTest
-class TossHoldingsReaderTest {
-
-    private final ObjectMapper objectMapper = new ObjectMapper();
-
-    @MockitoBean
-    private TossInvestClient tossInvestClient;
+class TossHoldingsReaderTest extends IntegrationTestSupport {
 
     @Autowired
     private TossHoldingsReader holdingsReader;

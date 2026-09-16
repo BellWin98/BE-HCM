@@ -7,17 +7,11 @@ import com.behcm.domain.tossstock.dto.TossPortfolioResponse;
 import com.behcm.domain.tossstock.dto.TossRealizedProfitRequest;
 import com.behcm.domain.tossstock.dto.TossRealizedProfitResponse;
 import com.behcm.domain.tossstock.service.TossAccessChecker;
-import com.behcm.domain.tossstock.service.TossStockService;
 import com.behcm.global.config.toss.TossAccountOwner;
+import com.behcm.support.IntegrationTestSupport;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
-import org.springframework.test.context.bean.override.mockito.MockitoBean;
-import org.springframework.test.web.servlet.MockMvc;
-import tools.jackson.databind.ObjectMapper;
 
 import java.math.BigDecimal;
 import java.util.List;
@@ -36,21 +30,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * 허용/차단이 컨트롤러에 반영되는지만 본다. ADMIN 우대나 toss_access 조회 같은 판정 규칙 자체는
  * TossAccessCheckerTest 가 담당한다.
  */
-@SpringBootTest
-@AutoConfigureMockMvc
-class TossStockControllerTest {
-
-    @Autowired
-    private MockMvc mockMvc;
-
-    @Autowired
-    private ObjectMapper objectMapper;
-
-    @MockitoBean
-    private TossStockService tossStockService;
-
-    @MockitoBean
-    private TossAccessChecker tossAccessChecker;
+class TossStockControllerTest extends IntegrationTestSupport {
 
     private Member member(MemberRole role) {
         return Member.builder()

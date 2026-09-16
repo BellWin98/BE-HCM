@@ -52,22 +52,22 @@ jobs:
           java-version: '25'
           distribution: 'temurin'
 
-      # Gradle 캐싱
-      - name: Gradle Caching
-        uses: actions/cache@v4
+      # Gradle 캐싱. actions/cache 는 build.gradle 해시가 같으면 캐시를 새로 저장하지 않아
+      # 빌드 캐시(build-cache-1)·구성 캐시가 매번 비어 있었다. setup-gradle 은 의존성·wrapper·
+      # 빌드 캐시·구성 캐시를 모두 다루고, 내용이 바뀌면 매 실행마다 저장한다.
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
         with:
-          path: |
-            ~/.gradle/caches
-            ~/.gradle/wrapper
-          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
-          restore-keys: |
-            ${{ runner.os }}-gradle-
+          # PR 에서는 캐시를 읽기만 한다(main/dev 가 쓴 캐시를 base 브랜치로 공유받는다).
+          # 브랜치마다 캐시를 쓰면 저장소 캐시 한도(10GB)를 금방 채워 main 캐시가 밀려난다.
+          cache-read-only: ${{ github.event_name == 'pull_request' }}
 
       - name: Grant execute permission for gradlew
         run: chmod +x ./gradlew
 
+      # 새 러너에는 build/ 가 없으므로 clean 은 불필요하다.
       - name: Build with Gradle (테스트 포함)
-        run: ./gradlew clean build --no-daemon
+        run: ./gradlew build
 
       - name: Upload test report on failure
         if: failure()
@@ -76,17 +76,21 @@ jobs:
           name: test-report
           path: build/reports/tests/test
 
-      # Docker 로그인
+      # 아래 Docker 단계는 push 이벤트에서만 실행한다. PR 에서는 이미지를 푸시하지 않고,
+      # Dockerfile 이 jar 복사뿐이라 빌드해 봐야 검증되는 것이 없는데 30 초 가까이 걸렸다.
       - name: Login to Docker Hub
+        if: github.event_name != 'pull_request'
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
 
       - name: Set up Docker Buildx
+        if: github.event_name != 'pull_request'
         uses: docker/setup-buildx-action@v3
 
       - name: Calculate Docker Tags
+        if: github.event_name != 'pull_request'
         id: meta
         run: |
           if [ "${{ github.ref }}" == "refs/heads/main" ]; then
@@ -98,10 +102,11 @@ jobs:
 
       # 도커 빌드 및 푸시
       - name: Build and Push Docker Image
+        if: github.event_name != 'pull_request'
         uses: docker/build-push-action@v5
         with:
           context: .
-          push: ${{ github.event_name != 'pull_request' }}
+          push: true
           tags: |
             ${{ env.DOCKER_IMAGE }}:${{ steps.meta.outputs.TAG }}
             ${{ env.DOCKER_IMAGE }}:${{ steps.meta.outputs.SHA }}

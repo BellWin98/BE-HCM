@@ -7,6 +7,12 @@ spring:
   profiles:
     active: local
     include: secret
+    # logstash 프로필이 켜져야 logback-spring.xml 이 LOGSTASH appender 를 root 에 붙인다.
+    # 지금은 local 에만 묶는다 — 운영 ELK 는 인스턴스 사양(현 2GB 로는 불가)이 정해진 뒤 prod 를 추가한다.
+    # 테스트는 src/test/resources/application.yml 이 이 파일을 가리므로 그룹이 없고, 따라서 Logstash 없이
+    # 돌아도 접속 실패 경고가 콘솔에 반복해서 찍히지 않는다.
+    group:
+      local: logstash
   servlet:
     multipart:
       max-file-size: 20MB

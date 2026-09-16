@@ -1,0 +1,65 @@
+# 로컬 로그 검색 스택(Elasticsearch + Logstash + Kibana). 앱은 bootRun 으로 호스트에서 띄우고,
+# logback-spring.xml 의 LOGSTASH appender 가 localhost:5044 로 JSON 로그를 보낸다.
+#
+#   docker compose up -d          # 기동 (첫 실행은 이미지 다운로드로 수 분)
+#   docker compose ps             # elasticsearch 가 healthy 가 된 뒤 logstash/kibana 가 뜬다
+#   docker compose down           # 종료 (-v 를 붙이면 ES 데이터까지 삭제)
+#
+# MySQL/Redis 는 여기 없다 — 이미 `docker run` 으로 떠 있는 mysql/redis 컨테이너를 그대로 쓴다.
+#
+# 보안(xpack.security)을 끈 것은 로컬 한정이다. 운영은 인증·TLS 를 켜고 5044/9200/5601 을 보안그룹으로 막는다.
+# 운영 메모리 참고: ES ~1GB + Logstash ~0.6GB + Kibana ~0.5GB 가 상주하므로 2GB 인스턴스에는 올릴 수 없다.
+#
+# Docker Desktop(WSL2)에서 ES 가 "max virtual memory areas vm.max_map_count [65530] is too low" 로 죽으면:
+#   wsl -d docker-desktop sysctl -w vm.max_map_count=262144
+
+services:
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:9.5.4
+    container_name: hcm-elasticsearch
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      # 힙은 컨테이너 메모리의 절반 이하로. 로컬은 1GB 면 넉넉하다.
+      - ES_JAVA_OPTS=-Xms1g -Xmx1g
+    ports:
+      - "9200:9200"
+    volumes:
+      - es-data:/usr/share/elasticsearch/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fs http://localhost:9200/_cluster/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+
+  logstash:
+    image: docker.elastic.co/logstash/logstash:9.5.4
+    container_name: hcm-logstash
+    environment:
+      - LS_JAVA_OPTS=-Xms512m -Xmx512m
+      # 파이프라인의 data_stream_namespace → logs-hcm-local. 운영은 prod.
+      - LOG_ENV=local
+    ports:
+      - "5044:5044"   # 앱(LogstashTcpSocketAppender) → tcp input
+      - "9600:9600"   # Logstash 모니터링 API (curl localhost:9600 으로 기동 확인)
+    volumes:
+      - ./docker/logstash/pipeline:/usr/share/logstash/pipeline:ro
+      - ./docker/logstash/config/logstash.yml:/usr/share/logstash/config/logstash.yml:ro
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+
+  kibana:
+    image: docker.elastic.co/kibana/kibana:9.5.4
+    container_name: hcm-kibana
+    environment:
+      - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
+    ports:
+      - "5601:5601"   # http://localhost:5601 → Discover, data view: logs-hcm-*
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+
+volumes:
+  es-data:

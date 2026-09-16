@@ -1,0 +1,7 @@
+# 컨테이너 기본 logstash.yml 을 대체한다(docker-compose.yml 에서 마운트).
+# 모니터링 API(9600)를 컨테이너 밖에서도 볼 수 있게 한다. (http.host 는 Logstash 9 에서 api.http.host 로 바뀜)
+api.http.host: 0.0.0.0
+# 모니터링(ES 로 자체 메트릭 전송)은 로컬에서 불필요하고, 꺼 두지 않으면 기동 시 경고를 낸다.
+xpack.monitoring.enabled: false
+# 파이프라인 파일을 고치면 재시작 없이 다시 읽는다(로컬 편의).
+config.reload.automatic: true

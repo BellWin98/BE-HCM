@@ -12,6 +12,10 @@
     prod  : 콘솔에는 WARN 이상만(색상 없음), 파일은 /app/logs 에 30일/90일 — 서버는 Docker 위에서 돌고
             배포마다 컨테이너가 지워지므로 호스트에 마운트된 경로에 쓴다.
 
+  여기에 logstash 프로필(application.yml 의 profile group — 지금은 local 에만 묶임)일 때만 LOGSTASH appender 를
+  더 붙인다 — JSON 으로 Logstash(TCP)에 보내 Elasticsearch 에서 requestId/memberId 로 검색하기 위함이다.
+  파일이 보관소, ES 는 검색 창구다. dev/prod 서버와 테스트에는 아직 ELK 가 없으므로 붙지 않는다.
+
   LOG_PATH 는 application-{profile}.yml 의 logging.file.path 에서 온다(Boot 가 시스템 프로퍼티로 넘겨준다).
 -->
 <configuration>
@@ -20,6 +24,11 @@
     <include resource="org/springframework/boot/logging/logback/defaults.xml"/>
 
     <property name="LOG_PATH" value="${LOG_PATH:-./logs}"/>
+
+    <!-- Logstash TCP 주소(host:port). application-{profile}.yml 의 logging.logstash.destination. -->
+    <springProperty name="LOGSTASH_DESTINATION" source="logging.logstash.destination" defaultValue="localhost:5044"/>
+    <!-- ES 문서의 env 필드. 여러 환경의 로그가 한 클러스터에 모여도 구분할 수 있게 한다. -->
+    <springProperty name="APP_ENV" source="spring.profiles.active" defaultValue="unknown"/>
 
     <!--
       requestId / memberId 는 RequestLoggingFilter 와 JwtAuthenticationFilter 가 MDC 에 넣는다.
@@ -115,10 +124,52 @@
         </encoder>
     </appender>
 
-    <root>
-        <appender-ref ref="CONSOLE"/>
-        <appender-ref ref="FILE"/>
-        <appender-ref ref="ERROR_FILE"/>
-    </root>
+
+    <!-- ===================== Logstash 전송 (logstash 프로필) ===================== -->
+    <!--
+      logstash 프로필은 application.yml 의 spring.profiles.group 이 local 에 묶어 준다(운영 ELK 가 생기면 prod 도
+      추가). 테스트는 그 파일을 src/test/resources/application.yml 로 가리므로 그룹이 없고 이 블록 전체가
+      빠진다(CI 에는 Logstash 가 없다).
+      appender 정의까지 이 안에 둔 이유: logback 은 참조 여부와 무관하게 정의된 appender 를 모두 start 하므로,
+      밖에 두면 root 에 안 붙어도 접속 시도와 경고가 난다.
+      <springProfile> 은 <root> 안에 둘 수 없어(Boot 가 미지원 경고) root 블록을 두 벌 둔다. LOGSTASH 유무만 다르다.
+    -->
+    <springProfile name="logstash">
+        <!--
+          Logstash 로 JSON 전송. 자체 비동기(링버퍼 + 전송 스레드)라 요청 스레드를 막지 않고, Logstash 가 없으면
+          reconnectionDelay 마다 재접속만 시도하며 링버퍼를 넘친 이벤트는 버린다 — ELK 장애가 앱 장애로 번지지
+          않게 하는 것이 우선이고, 유실분은 파일 로그에 있다. 단, 접속 실패는 Boot 가 logback status 를 콘솔로
+          내보내 재시도마다 WARN + 스택트레이스가 찍힌다. 그래서 이 appender 는 logstash 프로필에서만 root 에 붙인다.
+          MDC 는 requestId/memberId 두 키만 싣는다. 전체를 실으면 나중에 MDC 에 넣는 값마다 ES 매핑이 불어난다.
+        -->
+        <appender name="LOGSTASH" class="net.logstash.logback.appender.LogstashTcpSocketAppender">
+            <destination>${LOGSTASH_DESTINATION}</destination>
+            <connectionTimeout>5 seconds</connectionTimeout>
+            <reconnectionDelay>10 seconds</reconnectionDelay>
+            <!-- 유휴 연결이 NAT/LB 에서 끊기지 않게 주기적으로 개행을 보낸다. -->
+            <keepAliveDuration>5 minutes</keepAliveDuration>
+            <ringBufferSize>8192</ringBufferSize>
+            <encoder class="net.logstash.logback.encoder.LogstashEncoder">
+                <includeMdcKeyName>requestId</includeMdcKeyName>
+                <includeMdcKeyName>memberId</includeMdcKeyName>
+                <customFields>{"app":"hcm","env":"${APP_ENV}"}</customFields>
+            </encoder>
+        </appender>
+
+        <root>
+            <appender-ref ref="CONSOLE"/>
+            <appender-ref ref="FILE"/>
+            <appender-ref ref="ERROR_FILE"/>
+            <appender-ref ref="LOGSTASH"/>
+        </root>
+    </springProfile>
+
+    <springProfile name="!logstash">
+        <root>
+            <appender-ref ref="CONSOLE"/>
+            <appender-ref ref="FILE"/>
+            <appender-ref ref="ERROR_FILE"/>
+        </root>
+    </springProfile>
 
 </configuration>

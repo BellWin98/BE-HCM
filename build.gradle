@@ -41,6 +41,10 @@ dependencies {
     implementation 'org.apache.httpcomponents.client5:httpclient5'
     implementation 'org.springframework.boot:spring-boot-starter-mail'
 
+    // 로그를 JSON 으로 Logstash TCP 에 보낸다(logback-spring.xml 의 LOGSTASH appender).
+    // 9.x 부터 Jackson 3 기반이라 Boot 4 와 맞는다. 8.x 는 Jackson 2 이므로 내리지 말 것.
+    implementation 'net.logstash.logback:logstash-logback-encoder:9.0'
+
     // S3 (AWS SDK v2). SDK v1(com.amazonaws)은 2025-12 지원 종료되었고,
     // 이를 끌어오던 spring-cloud-starter-aws 는 Boot 2.2 시절 아티팩트라 함께 제거했다.
     implementation platform('software.amazon.awssdk:bom:2.39.6')

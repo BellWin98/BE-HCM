@@ -44,10 +44,13 @@ jobs:
           --health-retries=10
 
     steps:
-      - uses: actions/checkout@v4
+      # 액션 버전은 Node 24 런타임 기준으로 맞춘다. Node 20 기반(v4 이하)은 러너에서 deprecated 경고가 뜨고
+      # 향후 실행이 거부될 수 있다. gradle/actions 는 v6 부터 캐시 컴포넌트가 비공개 라이선스로 바뀌어
+      # (Terms of Use 동의 필요) MIT 로 남아 있는 v5 에 고정한다.
+      - uses: actions/checkout@v7
 
       - name: Set up JDK 25
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v6
         with:
           java-version: '25'
           distribution: 'temurin'
@@ -56,11 +59,15 @@ jobs:
       # 빌드 캐시(build-cache-1)·구성 캐시가 매번 비어 있었다. setup-gradle 은 의존성·wrapper·
       # 빌드 캐시·구성 캐시를 모두 다루고, 내용이 바뀌면 매 실행마다 저장한다.
       - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v4
+        uses: gradle/actions/setup-gradle@v5
         with:
           # PR 에서는 캐시를 읽기만 한다(main/dev 가 쓴 캐시를 base 브랜치로 공유받는다).
           # 브랜치마다 캐시를 쓰면 저장소 캐시 한도(10GB)를 금방 채워 main 캐시가 밀려난다.
           cache-read-only: ${{ github.event_name == 'pull_request' }}
+          # 구성 캐시(.gradle/configuration-cache)는 비밀값을 담을 수 있어 암호화 키가 있을 때만 저장/복원된다.
+          # 비어 있으면 무시되므로 선택 사항이다. 켜려면 `openssl rand -base64 16` 결과를
+          # 저장소 시크릿 GRADLE_ENCRYPTION_KEY 로 등록한다 (구성 단계 약 15초 절감).
+          cache-encryption-key: ${{ secrets.GRADLE_ENCRYPTION_KEY }}
 
       - name: Grant execute permission for gradlew
         run: chmod +x ./gradlew
@@ -71,7 +78,7 @@ jobs:
 
       - name: Upload test report on failure
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: test-report
           path: build/reports/tests/test
@@ -80,14 +87,14 @@ jobs:
       # Dockerfile 이 jar 복사뿐이라 빌드해 봐야 검증되는 것이 없는데 30 초 가까이 걸렸다.
       - name: Login to Docker Hub
         if: github.event_name != 'pull_request'
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
 
       - name: Set up Docker Buildx
         if: github.event_name != 'pull_request'
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
 
       - name: Calculate Docker Tags
         if: github.event_name != 'pull_request'
@@ -103,7 +110,7 @@ jobs:
       # 도커 빌드 및 푸시
       - name: Build and Push Docker Image
         if: github.event_name != 'pull_request'
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v7
         with:
           context: .
           push: true

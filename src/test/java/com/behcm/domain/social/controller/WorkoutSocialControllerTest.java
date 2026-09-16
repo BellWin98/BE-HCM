@@ -8,19 +8,12 @@ import com.behcm.domain.social.dto.ReactionCountResponse;
 import com.behcm.domain.social.dto.ReactionRequest;
 import com.behcm.domain.social.dto.WorkoutSocialSummary;
 import com.behcm.domain.social.entity.ReactionEmoji;
-import com.behcm.domain.social.service.WorkoutCommentService;
-import com.behcm.domain.social.service.WorkoutReactionService;
 import com.behcm.global.exception.CustomException;
 import com.behcm.global.exception.ErrorCode;
+import com.behcm.support.IntegrationTestSupport;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
-import org.springframework.test.context.bean.override.mockito.MockitoBean;
-import org.springframework.test.web.servlet.MockMvc;
-import tools.jackson.databind.ObjectMapper;
 
 import java.util.List;
 
@@ -38,21 +31,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-@SpringBootTest
-@AutoConfigureMockMvc
-class WorkoutSocialControllerTest {
-
-    @Autowired
-    private MockMvc mockMvc;
-
-    @Autowired
-    private ObjectMapper objectMapper;
-
-    @MockitoBean
-    private WorkoutReactionService workoutReactionService;
-
-    @MockitoBean
-    private WorkoutCommentService workoutCommentService;
+class WorkoutSocialControllerTest extends IntegrationTestSupport {
 
     private Member member() {
         return Member.builder()

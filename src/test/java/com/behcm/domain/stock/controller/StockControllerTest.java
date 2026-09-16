@@ -5,16 +5,10 @@ import com.behcm.domain.member.entity.MemberRole;
 import com.behcm.domain.stock.dto.StockPortfolioResponse;
 import com.behcm.domain.stock.dto.TradingProfitLossRequest;
 import com.behcm.domain.stock.dto.TradingProfitLossResponse;
-import com.behcm.domain.stock.service.StockService;
-import tools.jackson.databind.ObjectMapper;
+import com.behcm.support.IntegrationTestSupport;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
-import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
-import org.springframework.test.context.bean.override.mockito.MockitoBean;
-import org.springframework.test.web.servlet.MockMvc;
 
 import java.math.BigDecimal;
 import java.util.List;
@@ -27,18 +21,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-@SpringBootTest
-@AutoConfigureMockMvc
-class StockControllerTest {
-
-    @Autowired
-    private MockMvc mockMvc;
-
-    @Autowired
-    private ObjectMapper objectMapper;
-
-    @MockitoBean
-    private StockService stockService;
+class StockControllerTest extends IntegrationTestSupport {
 
     private Member member(MemberRole role) {
         return Member.builder()

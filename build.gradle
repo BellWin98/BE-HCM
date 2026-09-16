@@ -74,3 +74,9 @@ dependencies {
 tasks.named('test') {
     useJUnitPlatform()
 }
+
+// Dockerfile 이 build/libs/*.jar 를 통째로 복사하므로 실행 불가능한 plain jar
+// (-plain.jar, 의존성 미포함)가 같이 생기면 어느 쪽이 들어갈지 보장되지 않는다. boot jar 만 남긴다.
+tasks.named('jar') {
+    enabled = false
+}

@@ -6,21 +6,14 @@ import com.behcm.domain.auth.dto.EmailVerificationConfirmRequest;
 import com.behcm.domain.auth.dto.LoginRequest;
 import com.behcm.domain.auth.dto.RefreshTokenRequest;
 import com.behcm.domain.auth.dto.RegisterRequest;
-import com.behcm.domain.auth.service.AuthService;
-import com.behcm.domain.auth.service.EmailVerificationService;
 import com.behcm.domain.member.dto.MemberResponse;
 import com.behcm.domain.member.entity.MemberRole;
 import com.behcm.global.exception.CustomException;
 import com.behcm.global.exception.ErrorCode;
-import tools.jackson.databind.ObjectMapper;
+import com.behcm.support.IntegrationTestSupport;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
-import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
-import org.springframework.test.context.bean.override.mockito.MockitoBean;
-import org.springframework.test.web.servlet.MockMvc;
 
 import static org.hamcrest.Matchers.is;
 import static org.mockito.ArgumentMatchers.any;
@@ -32,21 +25,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-@SpringBootTest
-@AutoConfigureMockMvc
-class AuthControllerTest {
-
-    @Autowired
-    private MockMvc mockMvc;
-
-    @Autowired
-    private ObjectMapper objectMapper;
-
-    @MockitoBean
-    private AuthService authService;
-
-    @MockitoBean
-    private EmailVerificationService emailVerificationService;
+class AuthControllerTest extends IntegrationTestSupport {
 
     private AuthResponse authResponse() {
         MemberResponse member = MemberResponse.builder()

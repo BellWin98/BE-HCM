@@ -2,14 +2,9 @@ package com.behcm.domain.tossstock.controller;
 
 import com.behcm.domain.member.entity.Member;
 import com.behcm.domain.member.entity.MemberRole;
-import com.behcm.domain.tossstock.service.TossAccessChecker;
+import com.behcm.support.IntegrationTestSupport;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
-import org.springframework.test.context.bean.override.mockito.MockitoBean;
-import org.springframework.test.web.servlet.MockMvc;
 
 import static org.hamcrest.Matchers.is;
 import static org.mockito.ArgumentMatchers.any;
@@ -23,15 +18,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * 이 엔드포인트는 권한 없는 회원도 200 으로 답해야 한다 — 403 으로 막으면 프론트가
  * "권한 없음"과 "서버 오류"를 구분할 수 없다.
  */
-@SpringBootTest
-@AutoConfigureMockMvc
-class TossAccessControllerTest {
-
-    @Autowired
-    private MockMvc mockMvc;
-
-    @MockitoBean
-    private TossAccessChecker tossAccessChecker;
+class TossAccessControllerTest extends IntegrationTestSupport {
 
     private Member member() {
         return Member.builder()

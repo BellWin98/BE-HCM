@@ -4,17 +4,10 @@ import com.behcm.domain.member.entity.Member;
 import com.behcm.domain.member.entity.MemberRole;
 import com.behcm.domain.tossstock.dto.TossOrderRequest;
 import com.behcm.domain.tossstock.dto.TossOrderResponse;
-import com.behcm.domain.tossstock.service.TossAccessChecker;
-import com.behcm.domain.tossstock.service.TossOrderService;
+import com.behcm.support.IntegrationTestSupport;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
-import org.springframework.test.context.bean.override.mockito.MockitoBean;
-import org.springframework.test.web.servlet.MockMvc;
-import tools.jackson.databind.ObjectMapper;
 
 import java.util.List;
 
@@ -37,21 +30,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * 누군가 편의로 메서드에 애노테이션을 하나 붙이는 순간 이 컨트롤러의 ADMIN 검사가 통째로 꺼진다.
  * 그 사고를 잡아내라고 있는 테스트다.
  */
-@SpringBootTest
-@AutoConfigureMockMvc
-class TossOrderControllerTest {
-
-    @Autowired
-    private MockMvc mockMvc;
-
-    @Autowired
-    private ObjectMapper objectMapper;
-
-    @MockitoBean
-    private TossOrderService tossOrderService;
-
-    @MockitoBean
-    private TossAccessChecker tossAccessChecker;
+class TossOrderControllerTest extends IntegrationTestSupport {
 
     private Member member(MemberRole role) {
         return Member.builder()

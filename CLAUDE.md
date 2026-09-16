@@ -23,6 +23,12 @@ BE-HCM("헬창모임")은 그룹 운동 습관 관리 앱을 위한 Spring Boot 
 버그 수정도 동일하게 적용합니다 — 버그를 재현하는 실패 테스트를 먼저 작성한 뒤 수정하세요. 커밋 전에는
 관련 테스트(`./gradlew test --tests "..."`)와 전체 빌드(`./gradlew build`)로 검증합니다.
 
+스프링 컨텍스트가 필요한 테스트(컨트롤러 MockMvc 테스트 등)는 `@SpringBootTest`를 직접 붙이지 말고
+`com.behcm.support.IntegrationTestSupport`를 상속합니다. 목 빈(`@MockitoBean`)은 모두 그 클래스에 한 번만
+선언되어 있어 테스트 JVM 전체에서 컨텍스트가 한 번만 뜹니다. 하위 클래스에 `@MockitoBean`이나
+`@TestPropertySource`를 따로 붙이면 컨텍스트가 하나 더 떠서(약 1~10초) CI가 느려지므로, 필요한 목은
+`IntegrationTestSupport`에 추가하세요. 순수 로직은 컨텍스트 없이 Mockito 단위 테스트로 작성합니다.
+
 ## 설정 및 프로필
 
 - Spring 프로필은 `spring.profiles.active`로 선택합니다(`application.yml`의 기본값은 `local`). 사용 가능한

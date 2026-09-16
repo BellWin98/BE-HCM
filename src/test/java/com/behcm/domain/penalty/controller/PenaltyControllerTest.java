@@ -3,16 +3,10 @@ package com.behcm.domain.penalty.controller;
 import com.behcm.domain.penalty.dto.PenaltyAccountInfo;
 import com.behcm.domain.penalty.dto.PenaltyAccountRequest;
 import com.behcm.domain.penalty.dto.PenaltyRecord;
-import com.behcm.domain.penalty.service.PenaltyService;
-import tools.jackson.databind.ObjectMapper;
+import com.behcm.support.IntegrationTestSupport;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
-import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
-import org.springframework.test.context.bean.override.mockito.MockitoBean;
-import org.springframework.test.web.servlet.MockMvc;
 
 import java.time.LocalDate;
 import java.util.List;
@@ -30,18 +24,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-@SpringBootTest
-@AutoConfigureMockMvc
-class PenaltyControllerTest {
-
-    @Autowired
-    private MockMvc mockMvc;
-
-    @Autowired
-    private ObjectMapper objectMapper;
-
-    @MockitoBean
-    private PenaltyService penaltyService;
+class PenaltyControllerTest extends IntegrationTestSupport {
 
     private com.behcm.domain.member.entity.Member member() {
         return com.behcm.domain.member.entity.Member.builder()

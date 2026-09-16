@@ -33,6 +33,7 @@
 | API 문서화 | springdoc-openapi-starter-webmvc-ui 3.0.3 (Swagger UI: `/swagger-ui.html`, OpenAPI: `/v3/api-docs`) |
 | 비밀값 암호화 | Jasypt(`jasypt-spring-boot-starter` 4.0.4) — YAML에 `ENC(...)` 형식으로 암호화 저장 |
 | 컨테이너 | ![Docker](https://img.shields.io/badge/Docker-amazoncorretto:25--alpine--jdk-2496ED?logo=docker&logoColor=white) |
+| 로그 수집 | Logback → `logstash-logback-encoder` 9.0(JSON/TCP) → Logstash → Elasticsearch 9.5 (조회: Kibana). 로컬 스택은 `docker-compose.yml` |
 | CI/CD | GitHub Actions → Docker Hub → EC2 SSH 배포(`docker-compose`) |
 
 ## 핵심 기능
@@ -90,6 +91,8 @@ BE-HCM/
 ├── src/test/resources/                  # 테스트 전용 설정 (application-local.yml: localhost:3306 root/1234, localhost:6379)
 ├── .github/workflows/deploy.yml         # CI(빌드/테스트) + CD(Docker 빌드/푸시 + EC2 배포)
 ├── Dockerfile                           # amazoncorretto:25-alpine-jdk 런타임 이미지
+├── docker-compose.yml                   # 로컬 로그 검색 스택(Elasticsearch/Logstash/Kibana) — MySQL/Redis 는 포함하지 않음
+├── docker/logstash/                     # Logstash 파이프라인(tcp:5044 → data stream logs-hcm-<env>) 및 logstash.yml
 ├── build.gradle
 ├── settings.gradle
 └── gradlew / gradlew.bat
@@ -100,7 +103,7 @@ BE-HCM/
 | 도구 | 버전 | 비고 |
 | --- | --- | --- |
 | Java (JDK) | 25 | Gradle Toolchain으로 자동 지정 (`build.gradle`) |
-| Docker / Docker Compose | 최신 버전 | 로컬 MySQL/Redis 실행 또는 컨테이너 빌드 시 필요 |
+| Docker / Docker Compose | 최신 버전 | 로컬 MySQL/Redis·로그 검색 스택(ELK) 실행 또는 컨테이너 빌드 시 필요 |
 | MySQL 또는 MariaDB | 8.x / 호환 버전 | 로컬 프로필은 `mariadb-java-client`로 `localhost:3306` 접속 |
 | Redis | 7.x | 캐시 용도 |
 
@@ -137,19 +140,32 @@ export FCM_KEY_PATH=[이곳에 정보 입력]                  # 기본값: /app
 | `app.frontend-url` | OAuth2 로그인 성공 후 리다이렉트할 프론트엔드 URL (local: `http://localhost:3000`, prod: `https://www.bellwin.co.kr`) |
 | `springdoc.swagger-ui.path` | Swagger UI 경로 (`/swagger-ui.html`) |
 
-> `local` 프로필은 저장소 루트의 `docker-compose.yml`로 띄운 MySQL(root/1234)·Redis에 바로 접속 가능하도록
+> `local` 프로필은 `localhost:3306` MySQL(root/1234)과 `localhost:6379` Redis에 바로 접속하도록
 > 구성되어 있어, 별도 시크릿 없이도 `JASYPT_ENCRYPTOR_PASSWORD`만 설정하면 로컬 구동이 가능합니다. `dev`/`prod`
 > 프로필의 DB·Redis·AWS·메일·OAuth2 값은 모두 암호화되어 있어 저장소만으로는 실제 값을 알 수 없습니다.
 
 ## 실행 방법
 
-### 1) 로컬 인프라(DB/Redis) 기동
+### 1) 로컬 인프라 기동
 
-저장소 루트(`HCM/`)의 `docker-compose.yml`로 MySQL 8.4 + Redis 7을 먼저 띄웁니다.
+MySQL 8.4 + Redis 7 을 `localhost:3306`(root/1234, DB `hcm`) / `localhost:6379` 로 먼저 띄웁니다
+(compose 에 포함되어 있지 않으므로 `docker run` 등으로 직접 실행).
 
 ```bash
-cd ..    # HCM 루트로 이동
-docker compose up -d
+docker run -d --name mysql -p 3306:3306 -e MYSQL_ROOT_PASSWORD=1234 -e MYSQL_DATABASE=hcm -e TZ=Asia/Seoul mysql:8.4
+docker run -d --name redis -p 6379:6379 redis:7-alpine
+```
+
+로그 검색 스택(Elasticsearch + Logstash + Kibana)은 선택 사항입니다. `BE-HCM/docker-compose.yml` 로 띄우면
+`local` 프로필의 앱이 `localhost:5044` 로 JSON 로그를 보내고, Kibana(`http://localhost:5601`)에서
+data view `logs-hcm-*` 를 만들어 `requestId`·`memberId`·`level`·`logger_name` 으로 검색할 수 있습니다.
+띄우지 않아도 앱은 접속 실패를 무시하고 정상 동작합니다.
+
+```bash
+docker compose up -d        # ES(9200) / Logstash(5044, 9600) / Kibana(5601)
+docker compose ps           # elasticsearch 가 healthy 가 된 뒤 logstash/kibana 가 올라온다
+curl "localhost:9200/logs-hcm-local/_search?q=requestId:<X-Request-Id 응답 헤더 값>&pretty"
+docker compose down         # 종료 (-v: 적재된 로그 데이터까지 삭제)
 ```
 
 ### 2) 로컬 빌드 및 실행

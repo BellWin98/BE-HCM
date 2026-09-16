@@ -35,6 +35,10 @@ BE-HCM("헬창모임")은 그룹 운동 습관 관리 앱을 위한 Spring Boot 
   프로필: `application-local.yml`, `application-dev.yml`, `application-prod.yml`. `application-secret.yml`은
   `spring.profiles.include: secret`로 자동 포함되며 암호화된 값들을 담고 있습니다 — 실제 비밀값이 커밋되어
   있지는 않습니다.
+- `logstash` 프로필은 직접 켜지 않고 `application.yml`의 `spring.profiles.group`이 `local`에만 묶어 줍니다
+  (운영 ELK 인스턴스가 생기면 `prod`를 추가). 이 프로필일 때만 `logback-spring.xml`이 LOGSTASH appender
+  (JSON → Logstash TCP → Elasticsearch)를 root에 붙이므로 dev/prod 서버에는 영향이 없습니다. 테스트는 `src/test/resources/application.yml`이 main의 것을 가리므로 그룹이 없고, 따라서 Logstash
+  없이 돌아도 접속 실패 경고가 나지 않습니다. 로컬 ELK는 `docker-compose.yml`(ES/Logstash/Kibana)로 띄웁니다.
 - YAML 내 비밀값은 Jasypt로 암호화되어 있으며(`ENC(...)`), 부팅 시 `JASYPT_ENCRYPTOR_PASSWORD` 환경변수로
   복호화됩니다(`global/config/JasyptConfig.java`).
 

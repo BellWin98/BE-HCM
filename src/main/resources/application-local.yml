@@ -41,6 +41,11 @@ logging:
   # (.gitignore 에 logs/ 등록). 운영과 같은 파일 구성(app.log, error.log, archive/*.gz)을 로컬에서 그대로 확인한다.
   file:
     path: ./logs
+  # logback-spring.xml 의 LOGSTASH appender 목적지. BE-HCM/docker-compose.yml 의 logstash 가 호스트로 매핑한 포트.
+  # compose 를 안 띄우면 앱은 그대로 돌되 10초마다 접속 실패 WARN 이 콘솔에 찍힌다(테스트는 logstash 프로필이
+  # 없어 해당 없음).
+  logstash:
+    destination: localhost:5044
   level:
     root: INFO
     com.behcm: DEBUG

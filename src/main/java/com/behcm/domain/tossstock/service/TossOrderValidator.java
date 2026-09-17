@@ -44,6 +44,9 @@ public class TossOrderValidator {
     private static final int US_SCALE_ABOVE_ONE_DOLLAR = 2;
     private static final int US_SCALE_BELOW_ONE_DOLLAR = 4;
 
+    /** 소수점 수량 자릿수. 화면의 보유 수량 표시와 맞춘다(FE `formatQuantity`). */
+    private static final int US_QUANTITY_SCALE = 6;
+
     /** 검증을 통과한 주문과, 그 과정에서 이미 알아낸 종목 정보(화면 응답에 다시 쓴다). */
     public record ValidatedOrder(TossOrderCommand command, TossListedStock stock) { }
 
@@ -52,7 +55,7 @@ public class TossOrderValidator {
 
         String orderType = request.getOrderType();
         String timeInForce = normalizeTimeInForce(request.getTimeInForce());
-        BigDecimal quantity = parseQuantity(request.getQuantity());
+        BigDecimal quantity = parseQuantity(stock, request.getQuantity());
         BigDecimal price = parsePrice(request.getPrice());
 
         validateLoc(stock, orderType, timeInForce);
@@ -120,10 +123,19 @@ public class TossOrderValidator {
         }
     }
 
-    private BigDecimal parseQuantity(String raw) {
+    /**
+     * 소수점 수량은 <b>미국 종목에만</b> 허용한다. 국내 종목은 정수여야 한다.
+     * 종목의 시장은 변하지 않으므로 여기서 끝낸다 — 정규장 여부 같은 시각 조건은 토스에 맡긴다
+     * ({@code fractional-quantity-outside-regular-hours}).
+     */
+    private BigDecimal parseQuantity(TossListedStock stock, String raw) {
         BigDecimal quantity = parseDecimal(raw);
-        // 소수점 수량은 미국 시장가 매도에만 허용되는데 그건 이번 범위가 아니다.
-        if (quantity == null || quantity.signum() <= 0 || quantity.stripTrailingZeros().scale() > 0) {
+        if (quantity == null || quantity.signum() <= 0) {
+            throw new CustomException(ErrorCode.TOSS_ORDER_INVALID);
+        }
+        int scale = Math.max(0, quantity.stripTrailingZeros().scale());
+        int allowed = "KR".equals(stock.marketCountry()) ? 0 : US_QUANTITY_SCALE;
+        if (scale > allowed) {
             throw new CustomException(ErrorCode.TOSS_ORDER_INVALID);
         }
         return quantity;

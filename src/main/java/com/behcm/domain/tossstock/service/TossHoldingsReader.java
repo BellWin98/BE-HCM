@@ -31,4 +31,13 @@ public class TossHoldingsReader {
     public JsonNode read(TossAccountOwner owner, Long accountSeq) {
         return tossInvestClient.get(owner, HOLDINGS_PATH, Map.of(), accountSeq);
     }
+
+    /**
+     * 한 종목만. 토스가 {@code symbol} 필터를 지원하므로 전체 목록을 받아 걸러내지 않는다 —
+     * 주문 시트가 종목 하나의 평균단가를 보려고 계좌 전체를 끌어오면 보유 종목 수만큼 응답이 커진다.
+     * 보유하지 않은 종목이면 {@code items} 가 빈 배열로 온다.
+     */
+    public JsonNode read(TossAccountOwner owner, Long accountSeq, String symbol) {
+        return tossInvestClient.get(owner, HOLDINGS_PATH, Map.of("symbol", symbol), accountSeq);
+    }
 }

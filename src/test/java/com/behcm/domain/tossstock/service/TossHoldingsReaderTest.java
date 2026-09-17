@@ -12,6 +12,7 @@ import tools.jackson.databind.JsonNode;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -65,5 +66,17 @@ class TossHoldingsReaderTest extends IntegrationTestSupport {
         assertThat(cacheManager.getCacheNames()).doesNotContain("tossHoldings");
         // 주문내역 스냅샷은 성격이 다르다 — 페이징 비용이 크고 워터마크로 증분 갱신되므로 유지한다.
         assertThat(cacheManager.getCacheNames()).contains("tossOrderHistory");
+    }
+
+    @Test
+    @DisplayName("종목을 지정하면 토스에 symbol 필터로 물어본다 — 전체 보유 목록을 받아 걸러내지 않는다")
+    void filtersBySymbolOnToss() {
+        given(tossInvestClient.get(eq(TossAccountOwner.ME), any(), any(), any())).willReturn(holdings("one"));
+
+        holdingsReader.read(TossAccountOwner.ME, 1L, "005930");
+
+        verify(tossInvestClient).get(
+                eq(TossAccountOwner.ME), eq("/api/v1/holdings"),
+                argThat(params -> "005930".equals(params.get("symbol"))), eq(1L));
     }
 }

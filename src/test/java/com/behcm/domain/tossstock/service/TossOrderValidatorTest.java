@@ -142,6 +142,35 @@ class TossOrderValidatorTest {
     }
 
     @Test
+    @DisplayName("국내 종목의 수량에 소수점이 있으면 거절한다")
+    void rejectsFractionalQuantityForKoreanStock() {
+        // 토스는 소수점 매매를 미국 종목에만 연다. 종목의 시장은 변하지 않으므로 여기서 끝낸다.
+        assertRejectedWith(ErrorCode.TOSS_ORDER_INVALID,
+                () -> validator.validate(OWNER, request("005930", "LIMIT", "1.5", "70000")));
+    }
+
+    @Test
+    @DisplayName("미국 종목은 소수점 수량을 허용한다")
+    void allowsFractionalQuantityForUsStock() {
+        assertThat(validator.validate(OWNER, request("AAPL", "LIMIT", "1.5", "185.5")).command().quantity())
+                .isEqualByComparingTo("1.5");
+    }
+
+    @Test
+    @DisplayName("미국 종목의 소수점 수량은 여섯째 자리까지만 허용한다")
+    void rejectsTooManyQuantityDecimalsForUsStock() {
+        assertRejectedWith(ErrorCode.TOSS_ORDER_INVALID,
+                () -> validator.validate(OWNER, request("AAPL", "LIMIT", "1.2345678", "185.5")));
+    }
+
+    @Test
+    @DisplayName("소수점 뒤가 0 뿐인 국내 수량은 정수로 본다")
+    void treatsTrailingZerosAsInteger() {
+        assertThat(validator.validate(OWNER, request("005930", "LIMIT", "10.0", "70000")).command().quantity())
+                .isEqualByComparingTo("10");
+    }
+
+    @Test
     @DisplayName("국내 종목의 가격에 소수점이 있으면 거절한다")
     void rejectsFractionalPriceForKoreanStock() {
         assertRejectedWith(ErrorCode.TOSS_ORDER_INVALID,

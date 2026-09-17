@@ -124,6 +124,46 @@ class TossOrderControllerTest extends IntegrationTestSupport {
     }
 
     @Test
+    @DisplayName("주문은 소수점 수량을 형식 검증에서 통과시킨다")
+    void placeOrder_withFractionalQuantity_passesFormatValidation() throws Exception {
+        // 소수점 허용 여부는 종목의 시장에 달려 있어 DTO 가 아니라 TossOrderValidator 가 판단한다.
+        given(tossOrderService.placeOrder(any())).willReturn(new TossOrderResponse("order-1", "key-1"));
+        TossOrderRequest request = new TossOrderRequest();
+        request.setOwner("ME");
+        request.setSymbol("AAPL");
+        request.setSide("BUY");
+        request.setOrderType("LIMIT");
+        request.setQuantity("1.5");
+        request.setPrice("185.5");
+
+        mockMvc.perform(post("/api/toss-stock/orders")
+                        .with(user(trader()))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    @DisplayName("주문은 수량 소수점이 여섯 자리를 넘으면 400을 반환한다")
+    void placeOrder_withTooManyQuantityDecimals_returnsBadRequest() throws Exception {
+        TossOrderRequest request = new TossOrderRequest();
+        request.setOwner("ME");
+        request.setSymbol("AAPL");
+        request.setSide("BUY");
+        request.setOrderType("LIMIT");
+        request.setQuantity("1.2345678");
+        request.setPrice("185.5");
+
+        mockMvc.perform(post("/api/toss-stock/orders")
+                        .with(user(trader()))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest());
+
+        verify(tossOrderService, never()).placeOrder(any());
+    }
+
+    @Test
     @DisplayName("주문은 멱등키 형식이 잘못되면 400을 반환한다")
     void placeOrder_withMalformedClientOrderId_returnsBadRequest() throws Exception {
         TossOrderRequest request = new TossOrderRequest();

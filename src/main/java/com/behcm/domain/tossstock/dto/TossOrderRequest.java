@@ -42,8 +42,12 @@ public class TossOrderRequest {
     @Pattern(regexp = "^(DAY|CLS)$", message = "주문 유효 조건이 올바르지 않습니다.")
     private String timeInForce;
 
+    /**
+     * 소수점 수량은 미국 종목에만 허용된다. 그 판단은 종목을 알아야 하므로 여기서는 형식만 보고
+     * {@link com.behcm.domain.tossstock.service.TossOrderValidator} 가 시장별로 다시 거른다.
+     */
     @NotBlank(message = "주문 수량은 필수입니다.")
-    @Pattern(regexp = "^[0-9]+$", message = "주문 수량은 1주 이상의 정수여야 합니다.")
+    @Pattern(regexp = "^[0-9]+(\\.[0-9]{1,6})?$", message = "주문 수량 형식이 올바르지 않습니다.")
     private String quantity;
 
     /** 지정가에서만 쓴다. 시장가에 실어 보내면 토스가 거부한다. */

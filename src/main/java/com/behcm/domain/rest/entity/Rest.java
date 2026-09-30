@@ -24,7 +24,7 @@ public class Rest {
     @JoinColumn(name = "workout_room_member_id", nullable = false)
     private WorkoutRoomMember workoutRoomMember;
 
-    @Column(nullable = false, length = 20)
+    @Column(nullable = false)
     private String reason;
 
     @Column(nullable = false)

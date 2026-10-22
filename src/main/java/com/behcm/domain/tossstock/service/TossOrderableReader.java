@@ -10,6 +10,8 @@ import tools.jackson.databind.JsonNode;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.Clock;
+import java.time.LocalDate;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
@@ -33,6 +35,8 @@ public class TossOrderableReader {
     private final TossInvestClient tossInvestClient;
     private final TossHoldingsReader holdingsReader;
     private final TossApiExecutor apiExecutor;
+    private final TossCommissionReader commissionReader;
+    private final Clock clock;
 
     private static final String PRICES_PATH = "/api/v1/prices";
     private static final String PRICE_LIMITS_PATH = "/api/v1/price-limits";
@@ -68,6 +72,9 @@ public class TossOrderableReader {
                 ? apiExecutor.supply(() -> fetchSellableQuantity(owner, accountSeq, stock.symbol()))
                 : CompletableFuture.completedFuture(null);
 
+        CompletableFuture<BigDecimal> commissionRate =
+                apiExecutor.supply(() -> fetchCommissionRate(owner, accountSeq, stock.marketCountry()));
+
         JsonNode limits = TossApiExecutor.join(priceLimits);
         JsonNode holding = TossApiExecutor.join(holdingFuture);
 
@@ -86,6 +93,7 @@ public class TossOrderableReader {
                 .holdingQuantity(TossJsonSupport.nullableDecimal(holding, "quantity"))
                 .averagePurchasePrice(TossJsonSupport.nullableDecimal(holding, "averagePurchasePrice"))
                 .sellCostRate(sellCostRate(holding))
+                .commissionRate(TossApiExecutor.join(commissionRate))
                 .build();
     }
 
@@ -147,6 +155,20 @@ public class TossOrderableReader {
         BigDecimal tax = TossJsonSupport.nullableDecimal(holding.path("cost"), "tax");
         BigDecimal cost = tax == null ? commission : commission.add(tax);
         return cost.divide(marketValue, COST_RATE_SCALE, RoundingMode.HALF_UP);
+    }
+
+    /**
+     * 종목 시장에 오늘 적용되는 수수료율. 요율 목록은 {@link TossCommissionReader} 가 소유자별로 캐시하므로
+     * 대개 외부 호출이 없다. 실패하면 null — 예상 수수료만 빠질 뿐 주문 화면은 그대로다.
+     */
+    private BigDecimal fetchCommissionRate(TossAccountOwner owner, Long accountSeq, String marketCountry) {
+        try {
+            return TossCommissionReader.rateFor(
+                    commissionReader.read(owner, accountSeq), marketCountry, LocalDate.now(clock));
+        } catch (Exception e) {
+            log.warn("Failed to fetch Toss commission rates (owner={})", owner, e);
+            return null;
+        }
     }
 
     private BigDecimal fetchBuyingPower(TossAccountOwner owner, Long accountSeq, String currency) {

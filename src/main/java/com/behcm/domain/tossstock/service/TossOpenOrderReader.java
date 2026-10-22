@@ -36,7 +36,7 @@ public class TossOpenOrderReader {
 
     private static final String ORDERS_PATH = "/api/v1/orders";
 
-    /** 취소 버튼을 그릴 수 있는 상태. 이미 취소·정정 요청이 나간 주문은 다시 손대지 않는다. */
+    /** 취소·정정 버튼을 그릴 수 있는 상태. 이미 취소·정정 요청이 나간 주문은 다시 손대지 않는다. */
     private static final Set<String> CANCELABLE = Set.of("PENDING", "PARTIAL_FILLED");
 
     /**
@@ -119,6 +119,7 @@ public class TossOpenOrderReader {
                 .remainingQuantity(quantity.subtract(filledQuantity).max(BigDecimal.ZERO))
                 .orderedAt(order.path("orderedAt").asString(""))
                 .cancelable(CANCELABLE.contains(status))
+                .modifiable(CANCELABLE.contains(status))
                 .build();
     }
 }

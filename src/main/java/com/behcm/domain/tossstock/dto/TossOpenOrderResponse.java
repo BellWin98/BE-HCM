@@ -12,6 +12,7 @@ import java.math.BigDecimal;
  *
  * @param loc        {@code LIMIT} + {@code CLS} 조합인지. 화면에 배지로 그린다.
  * @param cancelable 취소 버튼을 그릴지. 이미 취소 요청이 나간 주문(PENDING_CANCEL)에는 그리지 않는다.
+ * @param modifiable 정정 버튼을 그릴지. 취소와 같은 기준이다 — 정정·취소 요청이 이미 나간 주문은 다시 손대지 않는다.
  */
 @Builder
 public record TossOpenOrderResponse(
@@ -30,5 +31,6 @@ public record TossOpenOrderResponse(
         BigDecimal filledQuantity,
         BigDecimal remainingQuantity,
         String orderedAt,
-        boolean cancelable
+        boolean cancelable,
+        boolean modifiable
 ) { }

@@ -2,6 +2,7 @@ package com.behcm.domain.tossstock.controller;
 
 import com.behcm.domain.member.entity.Member;
 import com.behcm.domain.member.entity.MemberRole;
+import com.behcm.domain.tossstock.dto.TossOrderModifyResponse;
 import com.behcm.domain.tossstock.dto.TossOrderRequest;
 import com.behcm.domain.tossstock.dto.TossOrderResponse;
 import com.behcm.support.IntegrationTestSupport;
@@ -235,5 +236,48 @@ class TossOrderControllerTest extends IntegrationTestSupport {
                         .content("{\"owner\":\"ME\"}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.orderId", is("order-1")));
+    }
+
+    private String modifyJson(String orderType) {
+        return """
+                {"owner":"ME","symbol":"005930","orderType":"%s","quantity":"15","price":"71000"}
+                """.formatted(orderType);
+    }
+
+    @Test
+    @DisplayName("주문 정정은 조회 권한만 있는 회원에게 403을 반환한다")
+    void modifyOrder_withViewOnlyMember_returnsForbidden() throws Exception {
+        mockMvc.perform(post("/api/toss-stock/orders/order-1/modify")
+                        .with(user(viewerOnly()))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(modifyJson("LIMIT")))
+                .andExpect(status().isForbidden());
+
+        verify(tossOrderService, never()).modifyOrder(any(), any());
+    }
+
+    @Test
+    @DisplayName("주문 정정은 ADMIN이면 새로 발급된 주문번호를 반환한다")
+    void modifyOrder_withAdmin_returnsNewOrderId() throws Exception {
+        given(tossOrderService.modifyOrder(any(), any())).willReturn(new TossOrderModifyResponse("order-2"));
+
+        mockMvc.perform(post("/api/toss-stock/orders/order-1/modify")
+                        .with(user(trader()))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(modifyJson("LIMIT")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.orderId", is("order-2")));
+    }
+
+    @Test
+    @DisplayName("주문 정정은 호가 유형이 잘못되면 400을 반환한다")
+    void modifyOrder_withUnknownOrderType_returnsBadRequest() throws Exception {
+        mockMvc.perform(post("/api/toss-stock/orders/order-1/modify")
+                        .with(user(trader()))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(modifyJson("STOP")))
+                .andExpect(status().isBadRequest());
+
+        verify(tossOrderService, never()).modifyOrder(any(), any());
     }
 }

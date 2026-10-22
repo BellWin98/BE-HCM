@@ -1,7 +1,9 @@
 package com.behcm.domain.tossstock.service;
 
+import com.behcm.domain.tossstock.dto.TossOrderModifyRequest;
 import com.behcm.domain.tossstock.dto.TossOrderRequest;
 import com.behcm.global.config.toss.TossAccountOwner;
+import com.behcm.global.config.toss.TossOrderClient.TossModifyCommand;
 import com.behcm.global.config.toss.TossOrderClient.TossOrderCommand;
 import com.behcm.global.exception.CustomException;
 import com.behcm.global.exception.ErrorCode;
@@ -79,6 +81,39 @@ public class TossOrderValidator {
                 ),
                 stock
         );
+    }
+
+    /**
+     * 정정 요청을 검증한다. 주문과 같은 기준으로 가른다 — 시장·호가 유형·가격 자릿수처럼 변하지 않는 것은
+     * 여기서 막고, 주문이 아직 살아 있는지(이미 체결·취소됐는지)처럼 변하는 것은 토스에 맡긴다.
+     *
+     * <p>수량 규칙이 시장마다 반대다(토스 스펙): 국내는 <b>필수</b>(양의 정수), 미국은 <b>불가</b>(가격만 정정).
+     */
+    public TossModifyCommand validateModify(TossAccountOwner owner, TossOrderModifyRequest request) {
+        TossListedStock stock = stockLookup.resolve(owner, request.getSymbol());
+        String orderType = request.getOrderType();
+        BigDecimal price = parsePrice(request.getPrice());
+        BigDecimal quantity = parseModifyQuantity(stock, request.getQuantity());
+
+        validatePricePresence(orderType, price);
+        if (price != null) {
+            validatePriceScale(stock, price);
+        }
+        return new TossModifyCommand(orderType, quantity, price, request.isConfirmHighValueOrder());
+    }
+
+    private BigDecimal parseModifyQuantity(TossListedStock stock, String raw) {
+        BigDecimal quantity = parseDecimal(raw);
+        if (!"KR".equals(stock.marketCountry())) {
+            if (quantity != null) {
+                throw new CustomException(ErrorCode.TOSS_ORDER_US_MODIFY_PRICE_ONLY);
+            }
+            return null;
+        }
+        if (quantity == null || quantity.signum() <= 0 || Math.max(0, quantity.stripTrailingZeros().scale()) > 0) {
+            throw new CustomException(ErrorCode.TOSS_ORDER_INVALID);
+        }
+        return quantity;
     }
 
     private String normalizeTimeInForce(String timeInForce) {

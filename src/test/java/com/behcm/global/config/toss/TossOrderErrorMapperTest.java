@@ -124,4 +124,33 @@ class TossOrderErrorMapperTest {
         assertThat(map(HttpStatus.UNPROCESSABLE_ENTITY, "insufficient-buying-power").getMessage())
                 .isEqualTo("주문 가능 금액이 부족합니다.");
     }
+
+    @Test
+    @DisplayName("409 이미 체결·취소·정정·거부된 주문은 정정·취소할 수 없는 주문으로 매핑한다")
+    void maps409AlreadyClosedOrders() {
+        // 사용자가 할 일은 하나다 — 미체결 목록을 새로고침해 지금 상태를 본다.
+        for (String code : new String[]{"already-filled", "already-canceled", "already-modified", "already-rejected"}) {
+            assertThat(map(HttpStatus.CONFLICT, code)).as(code).isEqualTo(ErrorCode.TOSS_ORDER_NOT_MODIFIABLE);
+        }
+    }
+
+    @Test
+    @DisplayName("409 already-processing 은 처리 중 주문으로 매핑한다")
+    void maps409AlreadyProcessing() {
+        assertThat(map(HttpStatus.CONFLICT, "already-processing")).isEqualTo(ErrorCode.TOSS_ORDER_IN_PROGRESS);
+    }
+
+    @Test
+    @DisplayName("422 modify-restricted 는 정정 불가 주문으로 매핑한다")
+    void maps422ModifyRestricted() {
+        assertThat(map(HttpStatus.UNPROCESSABLE_ENTITY, "modify-restricted"))
+                .isEqualTo(ErrorCode.TOSS_ORDER_MODIFY_RESTRICTED);
+    }
+
+    @Test
+    @DisplayName("400 us-modify-quantity-not-supported 는 미국 주식 가격만 정정 가능으로 매핑한다")
+    void maps400UsModifyQuantityNotSupported() {
+        assertThat(map(HttpStatus.BAD_REQUEST, "us-modify-quantity-not-supported"))
+                .isEqualTo(ErrorCode.TOSS_ORDER_US_MODIFY_PRICE_ONLY);
+    }
 }

@@ -48,12 +48,16 @@ class TossOrderableReaderTest {
     @Mock
     private TossHoldingsReader holdingsReader;
 
+    @Mock
+    private TossCommissionReader commissionReader;
+
     private TossOrderableReader reader;
     private final TossApiExecutor apiExecutor = new TossApiExecutor();
 
     @BeforeEach
     void setUp() {
-        reader = new TossOrderableReader(tossInvestClient, holdingsReader, apiExecutor);
+        reader = new TossOrderableReader(tossInvestClient, holdingsReader, apiExecutor,
+                commissionReader, java.time.Clock.systemDefaultZone());
         given(tossInvestClient.get(eq(OWNER), eq(PRICES_PATH), any()))
                 .willReturn(objectMapper.readTree("[{\"symbol\":\"005930\",\"lastPrice\":\"72000\"}]"));
     }
@@ -206,5 +210,30 @@ class TossOrderableReaderTest {
         assertThat(response.upperLimitPrice()).isEqualByComparingTo("93600");
         assertThat(response.cashBuyingPower()).isEqualByComparingTo("1000000");
         assertThat(response.holdingQuantity()).isNull();
+    }
+
+    @Test
+    @DisplayName("종목 시장에 적용되는 계좌 수수료율을 채운다")
+    void fillsCommissionRateForStockMarket() {
+        // 보유 비용 추정치는 보유 종목 매도에만 있다. 수수료율이 있어야 매수·미보유 종목에도 예상 수수료를 낸다.
+        given(holdingsReader.read(OWNER, ACCOUNT_SEQ, "005930")).willReturn(holdings("[]"));
+        given(commissionReader.read(OWNER, ACCOUNT_SEQ)).willReturn(objectMapper.readTree("""
+                [{"marketCountry":"KR","commissionRate":"0.00015","startDate":null,"endDate":null},
+                 {"marketCountry":"US","commissionRate":"0.001","startDate":null,"endDate":null}]
+                """));
+
+        assertThat(reader.read(OWNER, ACCOUNT_SEQ, SAMSUNG, "BUY").commissionRate()).isEqualByComparingTo("0.00015");
+    }
+
+    @Test
+    @DisplayName("수수료율 조회가 실패해도 나머지 값은 그대로 두고 수수료율만 비운다")
+    void leavesCommissionRateNullWhenLookupFails() {
+        given(holdingsReader.read(OWNER, ACCOUNT_SEQ, "005930")).willReturn(holdings("[]"));
+        given(commissionReader.read(OWNER, ACCOUNT_SEQ)).willThrow(new RuntimeException("boom"));
+
+        TossOrderableResponse response = reader.read(OWNER, ACCOUNT_SEQ, SAMSUNG, "BUY");
+
+        assertThat(response.commissionRate()).isNull();
+        assertThat(response.lastPrice()).isEqualByComparingTo("72000");
     }
 }

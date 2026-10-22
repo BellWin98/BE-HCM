@@ -25,9 +25,17 @@ final class TossOrderErrorMapper {
             Map.entry("invalid-request", ErrorCode.TOSS_ORDER_INVALID),
             Map.entry("account-header-required", ErrorCode.TOSS_ORDER_INVALID),
             Map.entry("confirm-high-value-required", ErrorCode.TOSS_ORDER_HIGH_VALUE_CONFIRM_REQUIRED),
+            Map.entry("us-modify-quantity-not-supported", ErrorCode.TOSS_ORDER_US_MODIFY_PRICE_ONLY),
 
-            // 409 — 같은 멱등키로 먼저 나간 요청이 아직 처리 중이다.
+            // 409 — 같은 멱등키로 먼저 나간 요청(또는 같은 주문의 앞선 정정·취소)이 아직 처리 중이다.
             Map.entry("request-in-progress", ErrorCode.TOSS_ORDER_IN_PROGRESS),
+            Map.entry("already-processing", ErrorCode.TOSS_ORDER_IN_PROGRESS),
+
+            // 409 — 정정·취소하려는 주문이 이미 끝났다. 사용자가 할 일은 미체결 목록을 새로 보는 것뿐이다.
+            Map.entry("already-filled", ErrorCode.TOSS_ORDER_NOT_MODIFIABLE),
+            Map.entry("already-canceled", ErrorCode.TOSS_ORDER_NOT_MODIFIABLE),
+            Map.entry("already-modified", ErrorCode.TOSS_ORDER_NOT_MODIFIABLE),
+            Map.entry("already-rejected", ErrorCode.TOSS_ORDER_NOT_MODIFIABLE),
 
             // 422 — 규격은 맞지만 지금 이 계좌·종목·시각에 허용되지 않는다.
             Map.entry("insufficient-buying-power", ErrorCode.TOSS_ORDER_INSUFFICIENT_BUYING_POWER),
@@ -44,6 +52,7 @@ final class TossOrderErrorMapper {
             Map.entry("account-restricted", ErrorCode.TOSS_ORDER_ACCOUNT_RESTRICTED),
             Map.entry("max-order-amount-exceeded", ErrorCode.TOSS_ORDER_MAX_AMOUNT_EXCEEDED),
             Map.entry("idempotency-key-conflict", ErrorCode.TOSS_ORDER_IDEMPOTENCY_CONFLICT),
+            Map.entry("modify-restricted", ErrorCode.TOSS_ORDER_MODIFY_RESTRICTED),
 
             // 500 — 토스 쪽 사정.
             Map.entry("maintenance", ErrorCode.TOSS_MAINTENANCE)

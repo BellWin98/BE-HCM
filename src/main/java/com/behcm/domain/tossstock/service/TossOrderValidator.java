@@ -38,6 +38,8 @@ public class TossOrderValidator {
     private static final String LIMIT = "LIMIT";
     private static final String CLS = "CLS";
     private static final String DAY = "DAY";
+    private static final String MARKET = "MARKET";
+    private static final String SELL = "SELL";
 
     /** $1 을 경계로 허용 소수 자릿수가 갈린다(토스 스펙). */
     private static final BigDecimal ONE_DOLLAR = BigDecimal.ONE;
@@ -55,7 +57,7 @@ public class TossOrderValidator {
 
         String orderType = request.getOrderType();
         String timeInForce = normalizeTimeInForce(request.getTimeInForce());
-        BigDecimal quantity = parseQuantity(stock, request.getQuantity());
+        BigDecimal quantity = parseQuantity(stock, orderType, request.getSide(), request.getQuantity());
         BigDecimal price = parsePrice(request.getPrice());
 
         validateLoc(stock, orderType, timeInForce);
@@ -124,17 +126,21 @@ public class TossOrderValidator {
     }
 
     /**
-     * 소수점 수량은 <b>미국 종목에만</b> 허용한다. 국내 종목은 정수여야 한다.
-     * 종목의 시장은 변하지 않으므로 여기서 끝낸다 — 정규장 여부 같은 시각 조건은 토스에 맡긴다
-     * ({@code fractional-quantity-outside-regular-hours}).
+     * 소수점 수량은 <b>미국 종목 시장가 매도</b>({@code MARKET} + {@code SELL})에만 허용한다(토스 스펙).
+     * 그 외 조합은 토스가 {@code 400 invalid-request} 로 거부하고, 소수점 매수는 수량이 아니라
+     * 금액({@code orderAmount}) 주문의 몫이다. 시장·호가 유형·방향은 확인 이후 변하지 않으므로 여기서 끝낸다 —
+     * 정규장 여부 같은 시각 조건은 토스에 맡긴다({@code fractional-quantity-outside-regular-hours}).
      */
-    private BigDecimal parseQuantity(TossListedStock stock, String raw) {
+    private BigDecimal parseQuantity(TossListedStock stock, String orderType, String side, String raw) {
         BigDecimal quantity = parseDecimal(raw);
         if (quantity == null || quantity.signum() <= 0) {
             throw new CustomException(ErrorCode.TOSS_ORDER_INVALID);
         }
         int scale = Math.max(0, quantity.stripTrailingZeros().scale());
-        int allowed = "KR".equals(stock.marketCountry()) ? 0 : US_QUANTITY_SCALE;
+        boolean fractionalAllowed = !"KR".equals(stock.marketCountry())
+                && MARKET.equals(orderType)
+                && SELL.equals(side);
+        int allowed = fractionalAllowed ? US_QUANTITY_SCALE : 0;
         if (scale > allowed) {
             throw new CustomException(ErrorCode.TOSS_ORDER_INVALID);
         }

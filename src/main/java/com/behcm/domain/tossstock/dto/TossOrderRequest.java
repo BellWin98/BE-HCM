@@ -43,8 +43,8 @@ public class TossOrderRequest {
     private String timeInForce;
 
     /**
-     * 소수점 수량은 미국 종목에만 허용된다. 그 판단은 종목을 알아야 하므로 여기서는 형식만 보고
-     * {@link com.behcm.domain.tossstock.service.TossOrderValidator} 가 시장별로 다시 거른다.
+     * 소수점 수량은 미국 종목 시장가 매도에만 허용된다. 그 판단은 종목을 알아야 하므로 여기서는 형식만 보고
+     * {@link com.behcm.domain.tossstock.service.TossOrderValidator} 가 시장·호가 유형·방향으로 다시 거른다.
      */
     @NotBlank(message = "주문 수량은 필수입니다.")
     @Pattern(regexp = "^[0-9]+(\\.[0-9]{1,6})?$", message = "주문 수량 형식이 올바르지 않습니다.")

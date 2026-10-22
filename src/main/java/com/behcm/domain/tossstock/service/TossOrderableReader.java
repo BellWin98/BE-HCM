@@ -11,6 +11,7 @@ import tools.jackson.databind.JsonNode;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 
 /**
  * 주문 화면에 필요한 값을 한 번에 모아 준다.
@@ -31,6 +32,7 @@ public class TossOrderableReader {
 
     private final TossInvestClient tossInvestClient;
     private final TossHoldingsReader holdingsReader;
+    private final TossApiExecutor apiExecutor;
 
     private static final String PRICES_PATH = "/api/v1/prices";
     private static final String PRICE_LIMITS_PATH = "/api/v1/price-limits";
@@ -47,11 +49,27 @@ public class TossOrderableReader {
 
         boolean selling = SIDE_SELL.equalsIgnoreCase(side);
         boolean korean = "KR".equals(stock.marketCountry());
-        // 상·하한가는 한 응답에 둘 다 들어 있다. 필드별로 부르면 호출이 두 배가 된다.
-        // 미국 종목에는 가격 제한이 없어(토스도 null 을 준다) 호출 자체를 건너뛴다.
-        JsonNode priceLimits = korean ? fetchPriceLimits(owner, stock.symbol()) : null;
+
+        // 넷은 서로를 기다릴 이유가 없어 동시에 보낸다 — 차례로 부르면 시트가 왕복 횟수만큼 늦게 뜬다.
+        // 각 fetch 는 실패를 null 로 삼키므로 하나가 실패해도 나머지 결과는 그대로 쓴다.
+        // 상·하한가는 한 응답에 둘 다 들어 있다. 미국 종목에는 가격 제한이 없어(토스도 null 을 준다) 호출 자체를 건너뛴다.
+        CompletableFuture<JsonNode> priceLimits = korean
+                ? apiExecutor.supply(() -> fetchPriceLimits(owner, stock.symbol()))
+                : CompletableFuture.completedFuture(null);
         // 보유 종목이면 평균단가·보유수량을 함께 준다. 매수는 "매수 후 예상 평단", 매도는 "예상 손익"에 쓰므로 양쪽 다 받는다.
-        JsonNode holding = fetchHolding(owner, accountSeq, stock.symbol());
+        CompletableFuture<JsonNode> holdingFuture = apiExecutor.supply(() -> fetchHolding(owner, accountSeq, stock.symbol()));
+        CompletableFuture<BigDecimal> lastPrice = apiExecutor.supply(() -> fetchLastPrice(owner, stock.symbol()));
+        // 매수 화면에 매도가능수량을, 매도 화면에 매수가능금액을 띄울 이유가 없다.
+        // 안 쓸 값을 받으려고 외부 호출을 늘리지 않는다.
+        CompletableFuture<BigDecimal> buyingPower = selling
+                ? CompletableFuture.completedFuture(null)
+                : apiExecutor.supply(() -> fetchBuyingPower(owner, accountSeq, stock.currency()));
+        CompletableFuture<BigDecimal> sellableQuantity = selling
+                ? apiExecutor.supply(() -> fetchSellableQuantity(owner, accountSeq, stock.symbol()))
+                : CompletableFuture.completedFuture(null);
+
+        JsonNode limits = TossApiExecutor.join(priceLimits);
+        JsonNode holding = TossApiExecutor.join(holdingFuture);
 
         return TossOrderableResponse.builder()
                 .symbol(stock.symbol())
@@ -60,13 +78,11 @@ public class TossOrderableReader {
                 .currency(stock.currency())
                 .securityType(stock.securityType())
                 .locSupported(stock.locSupported())
-                .lastPrice(fetchLastPrice(owner, stock.symbol()))
-                .upperLimitPrice(TossJsonSupport.nullableDecimal(priceLimits, "upperLimitPrice"))
-                .lowerLimitPrice(TossJsonSupport.nullableDecimal(priceLimits, "lowerLimitPrice"))
-                // 매수 화면에 매도가능수량을, 매도 화면에 매수가능금액을 띄울 이유가 없다.
-                // 안 쓸 값을 받으려고 외부 호출을 늘리지 않는다.
-                .cashBuyingPower(selling ? null : fetchBuyingPower(owner, accountSeq, stock.currency()))
-                .sellableQuantity(selling ? fetchSellableQuantity(owner, accountSeq, stock.symbol()) : null)
+                .lastPrice(TossApiExecutor.join(lastPrice))
+                .upperLimitPrice(TossJsonSupport.nullableDecimal(limits, "upperLimitPrice"))
+                .lowerLimitPrice(TossJsonSupport.nullableDecimal(limits, "lowerLimitPrice"))
+                .cashBuyingPower(TossApiExecutor.join(buyingPower))
+                .sellableQuantity(TossApiExecutor.join(sellableQuantity))
                 .holdingQuantity(TossJsonSupport.nullableDecimal(holding, "quantity"))
                 .averagePurchasePrice(TossJsonSupport.nullableDecimal(holding, "averagePurchasePrice"))
                 .sellCostRate(sellCostRate(holding))

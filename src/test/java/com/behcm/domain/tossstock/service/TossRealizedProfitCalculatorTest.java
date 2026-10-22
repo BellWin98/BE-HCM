@@ -2,6 +2,7 @@ package com.behcm.domain.tossstock.service;
 
 import com.behcm.domain.tossstock.service.TossRealizedProfitCalculator.Fill;
 import com.behcm.domain.tossstock.service.TossRealizedProfitCalculator.RealizedFill;
+import com.behcm.domain.tossstock.service.TossRealizedProfitCalculator.Replay;
 import com.behcm.domain.tossstock.service.TossRealizedProfitCalculator.TradeSide;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -152,6 +153,38 @@ class TossRealizedProfitCalculatorTest {
         // 추적 원가 5000(5주) + 부족분 5주 @1000 = 5000 -> 총 원가 10000, 매도 20000 -> 10000
         assertThat(results.get(1).profitLoss()).isEqualByComparingTo("10000");
         assertThat(results.get(1).estimated()).isTrue();
+    }
+
+    @Test
+    @DisplayName("재생이 끝난 뒤 종목별 잔여 수량을 함께 돌려준다")
+    void replay_reportsRemainingQuantityPerSymbol() {
+        // 이 값을 실제 보유 수량과 대조해야 주문내역에 안 잡힌 거래(시간외 종가, 권리 변동)를 알아챌 수 있다.
+        Replay replay = calculator.replay(
+                List.of(
+                        buy("005930", "2026-01-02", "10", "10000", "0"),
+                        sell("005930", "2026-01-10", "4", "5000", "0", "0"),
+                        buy("000660", "2026-01-03", "3", "3000", "0")
+                ),
+                Map.of()
+        );
+
+        assertThat(replay.fills()).hasSize(3);
+        assertThat(replay.remainingQuantities().get("005930")).isEqualByComparingTo("6");
+        assertThat(replay.remainingQuantities().get("000660")).isEqualByComparingTo("3");
+    }
+
+    @Test
+    @DisplayName("매수 이력보다 많이 팔았으면 잔여 수량은 0이다")
+    void replay_afterOversell_reportsZeroRemaining() {
+        Replay replay = calculator.replay(
+                List.of(
+                        buy("005930", "2026-01-02", "5", "5000", "0"),
+                        sell("005930", "2026-01-10", "10", "20000", "0", "0")
+                ),
+                Map.of("005930", new BigDecimal("1000"))
+        );
+
+        assertThat(replay.remainingQuantities().get("005930")).isEqualByComparingTo("0");
     }
 
     @Test

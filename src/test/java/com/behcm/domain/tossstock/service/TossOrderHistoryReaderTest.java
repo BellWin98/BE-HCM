@@ -53,7 +53,9 @@ class TossOrderHistoryReaderTest {
 
     @BeforeEach
     void setUp() {
-        reader = new TossOrderHistoryReader(tossInvestClient, openOrderReader, cacheManager);
+        reader = new TossOrderHistoryReader(tossInvestClient, openOrderReader, cacheManager,
+                // 유니버스가 비어 있으면 이름은 전부 /stocks 로 간다 — 이 테스트는 그 호출을 직접 스텁한다.
+                new TossStockNameResolver(tossInvestClient, new TossStockUniverse()));
     }
 
     private JsonNode json(String text) {

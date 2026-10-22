@@ -126,7 +126,7 @@ class TossOrderControllerTest extends IntegrationTestSupport {
     @Test
     @DisplayName("주문은 소수점 수량을 형식 검증에서 통과시킨다")
     void placeOrder_withFractionalQuantity_passesFormatValidation() throws Exception {
-        // 소수점 허용 여부는 종목의 시장에 달려 있어 DTO 가 아니라 TossOrderValidator 가 판단한다.
+        // 소수점 허용 여부는 종목의 시장·호가 유형·방향에 달려 있어 DTO 가 아니라 TossOrderValidator 가 판단한다.
         given(tossOrderService.placeOrder(any())).willReturn(new TossOrderResponse("order-1", "key-1"));
         TossOrderRequest request = new TossOrderRequest();
         request.setOwner("ME");

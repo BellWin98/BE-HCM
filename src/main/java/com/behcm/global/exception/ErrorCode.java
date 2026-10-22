@@ -88,6 +88,7 @@ public enum ErrorCode {
     TOSS_ORDER_LOC_NOT_SUPPORTED(HttpStatus.BAD_REQUEST, "LOC 주문은 미국 주식만 가능합니다."),
     TOSS_ORDER_HIGH_VALUE_CONFIRM_REQUIRED(HttpStatus.BAD_REQUEST, "1억원 이상 주문은 금액 확인이 필요합니다."),
     TOSS_ORDER_IN_PROGRESS(HttpStatus.CONFLICT, "이미 처리 중인 주문입니다. 미체결 주문을 확인해주세요."),
+    TOSS_ORDER_OUTCOME_UNKNOWN(HttpStatus.GATEWAY_TIMEOUT, "주문 접수 여부를 확인하지 못했습니다. 미체결 주문을 확인한 뒤 다시 시도해주세요."),
     TOSS_ORDER_IDEMPOTENCY_CONFLICT(HttpStatus.UNPROCESSABLE_ENTITY, "주문 내용이 변경되었습니다. 다시 시도해주세요."),
     TOSS_ORDER_INSUFFICIENT_BUYING_POWER(HttpStatus.UNPROCESSABLE_ENTITY, "주문 가능 금액이 부족합니다."),
     TOSS_ORDER_HOURS_CLOSED(HttpStatus.UNPROCESSABLE_ENTITY, "지금은 주문할 수 있는 시간이 아닙니다."),

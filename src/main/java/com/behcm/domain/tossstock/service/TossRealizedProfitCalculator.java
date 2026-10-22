@@ -68,6 +68,15 @@ public class TossRealizedProfitCalculator {
             boolean estimated
     ) { }
 
+    /**
+     * 재생 결과. 체결별 손익과 함께 <b>재생이 끝난 뒤 종목별 잔여 수량</b>을 돌려준다.
+     *
+     * <p>잔여 수량은 실제 보유 수량과 대조하는 데 쓴다. 주문내역에 잡히지 않는 거래(시간외 종가 주문,
+     * 액면분할·무상증자, 타사 대체입고)가 있으면 이 값이 보유 수량과 어긋나는데, 그때 이동평균 원가는
+     * 조용히 틀린다 — 부족분 메우기({@code estimated})는 수량이 모자랄 때만 켜지므로 그 경우를 못 잡는다.
+     */
+    public record Replay(List<RealizedFill> fills, Map<String, BigDecimal> remainingQuantities) { }
+
     /** 나눗셈 중간 정밀도. 평균단가가 반올림으로 뭉개지지 않도록 넉넉히 둔다. */
     private static final int INTERNAL_SCALE = 12;
     private static final int MONEY_SCALE = 2;
@@ -85,6 +94,13 @@ public class TossRealizedProfitCalculator {
      * @return 입력과 같은 순서의 계산 결과
      */
     public List<RealizedFill> calculate(List<Fill> fills, Map<String, BigDecimal> seedAveragePrices) {
+        return replay(fills, seedAveragePrices).fills();
+    }
+
+    /**
+     * {@link #calculate} 와 같지만 종목별 잔여 수량까지 돌려준다({@link Replay} 참조).
+     */
+    public Replay replay(List<Fill> fills, Map<String, BigDecimal> seedAveragePrices) {
         Map<String, Position> positions = new HashMap<>();
         List<RealizedFill> results = new ArrayList<>(fills.size());
 
@@ -106,7 +122,9 @@ public class TossRealizedProfitCalculator {
             }
         }
 
-        return results;
+        Map<String, BigDecimal> remaining = new HashMap<>();
+        positions.forEach((symbol, position) -> remaining.put(symbol, position.quantity));
+        return new Replay(results, remaining);
     }
 
     private RealizedFill applyBuy(Position position, Fill fill, BigDecimal quantity) {

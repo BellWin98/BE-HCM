@@ -3,11 +3,11 @@ package com.behcm.domain.tossstock.service;
 import com.behcm.domain.tossstock.dto.TossOpenOrderResponse;
 import com.behcm.global.config.toss.TossAccountOwner;
 import com.behcm.global.config.toss.TossInvestClient;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
@@ -47,8 +47,14 @@ class TossOpenOrderReaderTest {
     @Mock
     private TossInvestClient tossInvestClient;
 
-    @InjectMocks
     private TossOpenOrderReader reader;
+
+    @BeforeEach
+    void setUp() {
+        // 유니버스가 비어 있으면 이름은 전부 /stocks 로 간다 — 이 테스트는 그 호출을 직접 스텁한다.
+        reader = new TossOpenOrderReader(tossInvestClient,
+                new TossStockNameResolver(tossInvestClient, new TossStockUniverse()));
+    }
 
     private JsonNode json(String text) {
         return objectMapper.readTree(text);

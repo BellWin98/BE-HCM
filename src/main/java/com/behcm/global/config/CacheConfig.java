@@ -45,11 +45,9 @@ public class CacheConfig {
                         .build()
         );
 
-        // 실현손익은 계좌 개설 이후 전체 주문을 재생해야 계산되므로 페이징 비용이 크다.
-        // TossOrderHistoryReader 가 이 스냅샷을 들고, 살아 있는 주문을 기준으로 변할 수 있는 구간만
-        // 다시 읽는다. 그래서 여기 TTL 은 정합성 장치가 아니라 알 수 없는 이유로 스냅샷이 어긋났을 때의
-        // 자가 치유 안전망일 뿐이라 길게 잡는다. 무제한으로 두지 않는 이유도 그것이다 —
-        // 워터마크 이전에 잘못 들어간 값은 다시 읽히지 않아 영구히 고착된다.
+        // 주문내역 스냅샷의 메모리 사본(L1). 원본 사본은 Redis(L2)에 있다(TossOrderHistoryStore) —
+        // 여기서 만료돼도 전체 페이징이 아니라 Redis 에서 되살릴 뿐이라, TTL 은 메모리를 오래 붙잡지
+        // 않으려는 값이다. 어긋난 스냅샷의 자가 치유는 매일 밤 재적재(TossOrderHistoryRefresher)가 맡는다.
         CaffeineCache tossOrderHistoryCache = new CaffeineCache(
                 "tossOrderHistory",
                 Caffeine.newBuilder()

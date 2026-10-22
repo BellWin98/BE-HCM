@@ -5,6 +5,7 @@ import com.behcm.domain.tossstock.service.TossRealizedProfitCalculator.Fill;
 import com.behcm.domain.tossstock.service.TossRealizedProfitCalculator.TradeSide;
 import com.behcm.global.config.toss.TossAccountOwner;
 import com.behcm.global.config.toss.TossInvestClient;
+import com.behcm.support.MutableClock;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -14,9 +15,12 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.cache.CacheManager;
 import org.springframework.cache.concurrent.ConcurrentMapCacheManager;
+import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.core.ValueOperations;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
+import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -27,6 +31,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
@@ -46,16 +51,30 @@ class TossOrderHistoryReaderTest {
     @Mock
     private TossOpenOrderReader openOrderReader;
 
+    // Redis 는 비어 있는 것으로 둔다(get → null). 재시작 복구는 TossOrderHistoryStoreTest 가 맡는다.
+    @Mock
+    private StringRedisTemplate redisTemplate;
+    @Mock
+    private ValueOperations<String, String> redisValues;
+
     // 캐시 동작이 결과를 바꾸므로 목이 아니라 진짜 캐시를 쓴다. 테스트마다 새로 만들어 격리한다.
     private final CacheManager cacheManager = new ConcurrentMapCacheManager("tossOrderHistory");
 
+    private TossOrderHistoryStore store;
     private TossOrderHistoryReader reader;
 
     @BeforeEach
     void setUp() {
-        reader = new TossOrderHistoryReader(tossInvestClient, openOrderReader, cacheManager,
+        org.mockito.Mockito.lenient().when(redisTemplate.opsForValue()).thenReturn(redisValues);
+        store = new TossOrderHistoryStore(cacheManager, redisTemplate);
+        // 증분 동기화 테스트는 "호출 사이에 시간이 지났다"가 전제다. 읽을 때마다 신선도 창보다 조금 더 흐르게 둔다.
+        reader = readerWith(MutableClock.tickingFromNow(TossOrderHistoryReader.FRESHNESS_WINDOW.plusSeconds(1)));
+    }
+
+    private TossOrderHistoryReader readerWith(java.time.Clock clock) {
+        return new TossOrderHistoryReader(tossInvestClient, openOrderReader, store,
                 // 유니버스가 비어 있으면 이름은 전부 /stocks 로 간다 — 이 테스트는 그 호출을 직접 스텁한다.
-                new TossStockNameResolver(tossInvestClient, new TossStockUniverse()));
+                new TossStockNameResolver(tossInvestClient, new TossStockUniverse()), clock);
     }
 
     private JsonNode json(String text) {
@@ -430,5 +449,66 @@ class TossOrderHistoryReaderTest {
         reader.readAll(OWNER, ACCOUNT_SEQ);
 
         assertThat(capturedOrderParams().get(1)).doesNotContainKey("from");
+    }
+
+    // ---------------------------------------------------------------------
+    // 신선도 창 · 재적재
+    // ---------------------------------------------------------------------
+
+    @Test
+    @DisplayName("직전 동기화가 신선도 창 안이면 토스를 다시 부르지 않는다")
+    void readAll_withinFreshnessWindow_skipsSync() {
+        // 수익분석 탭에서 월을 넘길 때마다 미체결 조회 + 최근 주문 페이지가 직렬로 나가던 것을 막는다.
+        MutableClock clock = MutableClock.fixedAtNow();
+        TossOrderHistoryReader freshReader = readerWith(clock);
+        stubOrders(json(page(order("005930", "BUY", "10", "10000", "\"2026-01-02T09:05:00+09:00\""))));
+        stubNames("[]");
+        freshReader.readAll(OWNER, ACCOUNT_SEQ);
+
+        clock.advance(TossOrderHistoryReader.FRESHNESS_WINDOW.minusSeconds(1));
+        OrderHistory second = freshReader.readAll(OWNER, ACCOUNT_SEQ);
+
+        assertThat(second.fills()).hasSize(1);
+        assertThat(capturedOrderParams()).hasSize(1);
+        verify(openOrderReader, never()).earliestOrderedAt(any(), any());
+    }
+
+    @Test
+    @DisplayName("신선도 창이 지나면 다시 증분 동기화한다")
+    void readAll_afterFreshnessWindow_syncsIncrementally() {
+        MutableClock clock = MutableClock.fixedAtNow();
+        TossOrderHistoryReader freshReader = readerWith(clock);
+        stubOrders(json(page()), json(page()));
+        freshReader.readAll(OWNER, ACCOUNT_SEQ);
+        given(openOrderReader.earliestOrderedAt(OWNER, ACCOUNT_SEQ)).willReturn(Optional.empty());
+
+        clock.advance(TossOrderHistoryReader.FRESHNESS_WINDOW.plusSeconds(1));
+        freshReader.readAll(OWNER, ACCOUNT_SEQ);
+
+        assertThat(capturedOrderParams()).hasSize(2);
+        assertThat(capturedOrderParams().get(1)).containsKey("from");
+    }
+
+    @Test
+    @DisplayName("재적재는 저장된 스냅샷을 무시하고 전체 기간을 다시 읽어 저장한다")
+    void rebuild_ignoresStoredSnapshotAndReadsWholeHistory() {
+        // 증분 동기화는 워터마크 이전을 다시 읽지 않으므로, 거기에 잘못 들어간 값은 스스로 고쳐지지 않는다.
+        // 매일 밤 전체를 다시 읽어 그런 어긋남을 사용자 요청과 무관하게 걷어낸다.
+        stubOrders(
+                json(page(order("o1", "005930", "BUY", "FILLED", "10", "10000",
+                        "2026-01-01T09:00:00+09:00", "\"2026-01-02T09:05:00+09:00\""))),
+                json(page(order("o1", "005930", "BUY", "FILLED", "12", "12000",
+                        "2026-01-01T09:00:00+09:00", "\"2026-01-02T09:05:00+09:00\"")))
+        );
+        stubNames("[]");
+        reader.readAll(OWNER, ACCOUNT_SEQ);
+
+        reader.rebuild(OWNER, ACCOUNT_SEQ);
+
+        assertThat(capturedOrderParams()).hasSize(2);
+        assertThat(capturedOrderParams().get(1)).doesNotContainKey("from");
+        verify(openOrderReader, never()).earliestOrderedAt(any(), any());
+        assertThat(store.load(OWNER).orElseThrow().byOrderId().get("o1").fill().quantity())
+                .isEqualByComparingTo("12");
     }
 }

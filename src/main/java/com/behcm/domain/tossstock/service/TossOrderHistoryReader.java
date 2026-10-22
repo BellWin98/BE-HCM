@@ -1,17 +1,18 @@
 package com.behcm.domain.tossstock.service;
 
 import com.behcm.domain.tossstock.service.TossRealizedProfitCalculator.Fill;
+import com.behcm.domain.tossstock.service.TossOrderHistorySnapshot.OrderFill;
 import com.behcm.domain.tossstock.service.TossRealizedProfitCalculator.TradeSide;
 import com.behcm.global.config.toss.TossAccountOwner;
 import com.behcm.global.config.toss.TossInvestClient;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.cache.Cache;
-import org.springframework.cache.CacheManager;
 import org.springframework.stereotype.Component;
 import tools.jackson.databind.JsonNode;
 
 import java.math.BigDecimal;
+import java.time.Clock;
+import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.Comparator;
@@ -41,7 +42,11 @@ import java.util.concurrent.ConcurrentMap;
  * 성립하지 않는다 — 새 체결이 목록 맨 앞이 아니라 <b>중간에 삽입</b>된다. 대신 <b>살아 있지 않으면
  * 확정</b>이라는 상태 기준을 쓴다. 이 방식은 응답 정렬 순서를 신뢰하지 않아도 된다.
  *
- * <p>캐시 TTL 은 정합성 장치가 아니라 자가 치유 안전망일 뿐이다. 정합성은 이 워터마크가 지킨다 —
+ * <p>스냅샷은 {@link TossOrderHistoryStore} 가 메모리와 Redis 에 함께 둔다 — 배포·재시작 뒤에도 전체 페이징 없이
+ * 증분 동기화로 이어 가기 위해서다. 워터마크 이전에 잘못 들어간 값은 증분으로 고쳐지지 않으므로, 매일 밤
+ * {@link #rebuild} 가 전체를 다시 읽는다. 저장소의 만료 시간은 그 재적재마저 빠졌을 때의 안전망일 뿐이다.
+ *
+ * <p>정합성은 이 워터마크가 지킨다 —
  * 애초에 주문 직후 캐시를 비우는 방식으로는 부족하다. 우리 서버는 우리를 거친 주문만 알 수 있는데,
  * 토스 주문내역에는 <b>앱에서 낸 주문까지</b> 들어오기 때문이다. 반대로 비울 이유도 없다 —
  * 우리 서버로 낸 주문도 접수일이 오늘이라 재조회 구간에 이미 포함되므로,
@@ -54,13 +59,20 @@ public class TossOrderHistoryReader {
 
     private final TossInvestClient tossInvestClient;
     private final TossOpenOrderReader openOrderReader;
-    private final CacheManager cacheManager;
+    private final TossOrderHistoryStore store;
     private final TossStockNameResolver nameResolver;
+    private final Clock clock;
 
     private static final String ORDERS_PATH = "/api/v1/orders";
 
-    /** {@code CacheConfig} 에 등록된 이름. 스냅샷을 직접 넣고 빼므로 {@code @Cacheable} 은 쓰지 않는다. */
-    static final String CACHE_NAME = "tossOrderHistory";
+    /**
+     * 직전 동기화로부터 이 시간 안에는 토스를 다시 부르지 않는다.
+     *
+     * <p>수익분석 탭은 월·연을 넘길 때마다 실현손익을 다시 요청하는데, 그때마다 미체결 조회 + 최근 주문 페이지가
+     * 직렬로 나갔다. 30초 안에 바뀐 체결을 못 보는 대가는 작다 — 방금 낸 주문이 체결돼도 30초 뒤면 보이고,
+     * 이 화면은 실시간 시세 화면이 아니다.
+     */
+    static final Duration FRESHNESS_WINDOW = Duration.ofSeconds(30);
 
     /** 토스 주문 목록의 페이지 크기 상한. */
     private static final int PAGE_SIZE = 100;
@@ -82,22 +94,6 @@ public class TossOrderHistoryReader {
      */
     public record OrderHistory(List<Fill> fills, Map<String, String> names) { }
 
-    /**
-     * 캐시에 담는 체결 1건. {@code orderId} 를 함께 들고 있는 이유는 <b>병합이 덧붙이기가 아니라
-     * 교체</b>여야 하기 때문이다 — {@code PARTIAL_FILLED} 는 미체결·종료 두 그룹에 모두 속해서 같은
-     * 주문의 체결 수량이 나중에 늘어난다. 덧붙이면 같은 체결이 두 번 계산되어 손익이 두 배가 된다.
-     *
-     * <p>{@code orderedAt} 은 재조회 창의 경계 판정에 쓴다(체결 시각이 아니다 — API 의 필터 축이
-     * 접수 시각이다).
-     */
-    private record OrderFill(String orderId, LocalDateTime orderedAt, Fill fill) { }
-
-    /**
-     * 캐시 엔트리. 체결·종목명·동기화 시각을 <b>한 객체</b>로 묶는 것이 중요하다 — 따로 캐시하면
-     * 한쪽만 남아 영구히 어긋난 상태가 생길 수 있다. 하나면 evict 가 구조적으로 원자적이다.
-     */
-    private record Snapshot(Map<String, OrderFill> byOrderId, Map<String, String> names, LocalDateTime syncedAt) { }
-
     private record PageStats(int pages, int fills) { }
 
     /**
@@ -108,26 +104,50 @@ public class TossOrderHistoryReader {
 
     public OrderHistory readAll(TossAccountOwner owner, Long accountSeq) {
         synchronized (syncLocks.computeIfAbsent(owner, key -> new Object())) {
-            Cache cache = cacheManager.getCache(CACHE_NAME);
-            Snapshot cached = cache == null ? null : cache.get(owner, Snapshot.class);
+            TossOrderHistorySnapshot cached = store.load(owner).orElse(null);
 
             // 조회를 시작하기 <b>전에</b> 찍는다. 읽는 도중 들어온 체결은 다음 회차의 창에 반드시
             // 포함되어야 한다 — 순서를 뒤집으면 그 사이 체결을 영영 놓친다.
-            LocalDateTime syncStartedAt = LocalDateTime.now();
+            LocalDateTime syncStartedAt = LocalDateTime.now(clock);
 
-            Snapshot synced = cached == null
+            if (cached != null && isFresh(cached, syncStartedAt)) {
+                log.debug("Toss order history sync skipped: owner={}, syncedAt={}", owner, cached.syncedAt());
+                return toHistory(cached);
+            }
+
+            TossOrderHistorySnapshot synced = cached == null
                     ? fullSync(owner, accountSeq, syncStartedAt)
                     : incrementalSync(owner, accountSeq, cached, syncStartedAt);
 
-            if (cache != null) {
-                cache.put(owner, synced);
-            }
+            store.save(owner, synced);
             return toHistory(synced);
         }
     }
 
+    /**
+     * 저장된 스냅샷을 무시하고 전체 기간을 다시 읽어 교체한다. 매일 밤 {@code TossOrderHistoryRefresher} 가 부른다.
+     *
+     * <p>증분 동기화는 워터마크 이전을 다시 읽지 않으므로, 거기에 잘못 들어간 값은 스스로 고쳐지지 않는다.
+     * 예전에는 캐시 TTL 만료가 그 자가 치유를 맡았는데, 그러면 만료 직후 처음 요청한 사용자가 전체 페이징을
+     * 떠안는다. 사용자가 없는 시간에 미리 다시 읽어 그 비용을 요청 경로에서 뺀다.
+     */
+    public void rebuild(TossAccountOwner owner, Long accountSeq) {
+        synchronized (syncLocks.computeIfAbsent(owner, key -> new Object())) {
+            store.save(owner, fullSync(owner, accountSeq, LocalDateTime.now(clock)));
+        }
+    }
+
+    /**
+     * 직전 동기화가 신선도 창 안인지. 수익분석 탭에서 기간을 넘길 때마다 같은 내용을 다시 동기화하지 않게 한다.
+     * 동기화 시각이 미래면(시계가 뒤로 갔다) 믿지 않고 다시 동기화한다.
+     */
+    private static boolean isFresh(TossOrderHistorySnapshot snapshot, LocalDateTime now) {
+        LocalDateTime syncedAt = snapshot.syncedAt();
+        return !syncedAt.isAfter(now) && syncedAt.isAfter(now.minus(FRESHNESS_WINDOW));
+    }
+
     /** 스냅샷이 없을 때. 기간 필터 없이 전부 읽는다. */
-    private Snapshot fullSync(TossAccountOwner owner, Long accountSeq, LocalDateTime syncedAt) {
+    private TossOrderHistorySnapshot fullSync(TossAccountOwner owner, Long accountSeq, LocalDateTime syncedAt) {
         long startedAt = System.nanoTime();
 
         Map<String, OrderFill> byOrderId = new LinkedHashMap<>();
@@ -136,12 +156,12 @@ public class TossOrderHistoryReader {
 
         log.info("Toss order history sync: owner={}, mode=full, pages={}, fills={}, took={}ms",
                 owner, stats.pages(), byOrderId.size(), elapsedMs(startedAt));
-        return new Snapshot(byOrderId, names, syncedAt);
+        return new TossOrderHistorySnapshot(byOrderId, names, syncedAt);
     }
 
     /** 스냅샷이 있을 때. 워터마크 이후 접수분만 다시 읽어 교체한다. */
-    private Snapshot incrementalSync(
-            TossAccountOwner owner, Long accountSeq, Snapshot cached, LocalDateTime syncedAt) {
+    private TossOrderHistorySnapshot incrementalSync(
+            TossAccountOwner owner, Long accountSeq, TossOrderHistorySnapshot cached, LocalDateTime syncedAt) {
         long startedAt = System.nanoTime();
         LocalDate from = refetchFrom(owner, accountSeq, cached);
 
@@ -160,7 +180,7 @@ public class TossOrderHistoryReader {
         log.info("Toss order history sync: owner={}, mode=incremental, from={}, pages={}, "
                         + "reused={}, refetched={}, fills={}, took={}ms",
                 owner, from, stats.pages(), reused, stats.fills(), merged.size(), elapsedMs(startedAt));
-        return new Snapshot(merged, names, syncedAt);
+        return new TossOrderHistorySnapshot(merged, names, syncedAt);
     }
 
     /**
@@ -169,7 +189,7 @@ public class TossOrderHistoryReader {
      * <p>둘 중 이른 쪽이다 — 아직 살아 있는 주문의 접수일(지금 체결될 수 있다), 그리고 직전 동기화
      * 시각에서 안전 여유를 뺀 날(그 사이 새로 접수된 주문을 반드시 덮는다).
      */
-    private LocalDate refetchFrom(TossAccountOwner owner, Long accountSeq, Snapshot cached) {
+    private LocalDate refetchFrom(TossAccountOwner owner, Long accountSeq, TossOrderHistorySnapshot cached) {
         LocalDate marginFloor = cached.syncedAt().toLocalDate().minusDays(SAFETY_MARGIN_DAYS);
         try {
             return openOrderReader.earliestOrderedAt(owner, accountSeq)
@@ -323,7 +343,7 @@ public class TossOrderHistoryReader {
      * 이동평균 원가는 순서에 의존한다. 스냅샷은 주문 단위 맵이므로 여기서 체결 시각 오름차순으로 편다
      * — API 정렬은 신뢰하지 않는다.
      */
-    private OrderHistory toHistory(Snapshot snapshot) {
+    private OrderHistory toHistory(TossOrderHistorySnapshot snapshot) {
         List<Fill> fills = snapshot.byOrderId().values().stream()
                 .map(OrderFill::fill)
                 .sorted(Comparator.comparing(Fill::executedAt))

@@ -83,7 +83,7 @@ public class TossOrderClient {
             body.put("confirmHighValueOrder", true);
         }
 
-        JsonNode result = tossInvestClient.post(owner, ORDERS_PATH, body, accountSeq, true);
+        JsonNode result = tossInvestClient.post(owner, ORDERS_PATH, body, accountSeq, WriteRetryPolicy.IDEMPOTENCY_KEY);
 
         String orderId = result.path("orderId").asString("");
         if (orderId.isBlank()) {
@@ -106,7 +106,7 @@ public class TossOrderClient {
      */
     public String cancel(TossAccountOwner owner, Long accountSeq, String orderId) {
         String path = CANCEL_PATH_FORMAT.formatted(orderId);
-        JsonNode result = tossInvestClient.post(owner, path, Map.of(), accountSeq, true);
+        JsonNode result = tossInvestClient.post(owner, path, Map.of(), accountSeq, WriteRetryPolicy.RATE_LIMIT);
 
         String canceledOrderId = result.path("orderId").asString("");
         log.info("Canceled Toss order (owner={}, orderId={})", owner, orderId);

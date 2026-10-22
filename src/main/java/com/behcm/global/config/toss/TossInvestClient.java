@@ -12,6 +12,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Component;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
+import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestClient;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
@@ -59,6 +60,37 @@ public class TossInvestClient {
     private static final long MAX_RETRY_BACKOFF_MS = 2_000L;
 
     /**
+     * 멱등키 요청의 타임아웃 재전송 상한. 한 번이면 대부분의 "결과 불명"이 확정된다 —
+     * 읽기 타임아웃이 5초라 더 늘리면 사용자가 버튼을 누른 채 기다리는 시간이 그만큼 길어진다.
+     */
+    private static final int MAX_TIMEOUT_RESENDS = 1;
+    /** {@code 409 request-in-progress} 재확인 상한과 간격. 앞선 같은 키 요청이 끝나기를 기다린다. */
+    private static final int MAX_IN_PROGRESS_RETRIES = 2;
+    private static final long IN_PROGRESS_WAIT_MS = 300L;
+    private static final String REQUEST_IN_PROGRESS = "request-in-progress";
+
+    /** 한 요청이 지금까지 써 버린 재시도 예산. 재시도 사유마다 상한이 달라 따로 센다. */
+    private record Attempts(boolean authRetried, int rateLimit, int timeout, int inProgress) {
+        static final Attempts FIRST = new Attempts(false, 0, 0, 0);
+
+        Attempts afterAuthRetry() {
+            return new Attempts(true, rateLimit, timeout, inProgress);
+        }
+
+        Attempts afterRateLimit() {
+            return new Attempts(authRetried, rateLimit + 1, timeout, inProgress);
+        }
+
+        Attempts afterTimeout() {
+            return new Attempts(authRetried, rateLimit, timeout + 1, inProgress);
+        }
+
+        Attempts afterInProgress() {
+            return new Attempts(authRetried, rateLimit, timeout, inProgress + 1);
+        }
+    }
+
+    /**
      * 계좌 컨텍스트가 필요 없는 조회(시세·종목정보 등).
      */
     public JsonNode get(TossAccountOwner owner, String path, Map<String, String> queryParams) {
@@ -71,7 +103,9 @@ public class TossInvestClient {
      * @return 응답 envelope 에서 {@code result} 를 벗겨낸 노드
      */
     public JsonNode get(TossAccountOwner owner, String path, Map<String, String> queryParams, Long accountSeq) {
-        return execute(owner, HttpMethod.GET, path, queryParams, null, accountSeq, false, true, false, 0);
+        // 조회는 지금까지처럼 429 만 재시도한다 — 느린 응답을 두 배로 기다리게 하기보다 바로 알린다.
+        return execute(owner, HttpMethod.GET, path, queryParams, null, accountSeq,
+                false, WriteRetryPolicy.RATE_LIMIT, Attempts.FIRST);
     }
 
     /**
@@ -80,20 +114,21 @@ public class TossInvestClient {
      * <p>재시도 정책이 GET 과 다르다:
      * <ul>
      *   <li><b>401</b>: 토큰 만료다. 요청이 원장에 닿기 전에 거부된 것이라 재발급 후 1회 재시도해도 안전하다.</li>
-     *   <li><b>429</b>: {@code idempotent} 일 때만 재시도한다. 멱등키({@code clientOrderId}) 없이 재시도하면
-     *       한도 응답과 실제 접수가 엇갈렸을 때 주문이 두 번 들어간다.</li>
-     *   <li><b>IO 예외(타임아웃)</b>: 재시도하지 않는다. 이미 접수됐을 수 있다.</li>
+     *   <li><b>429</b>: {@link WriteRetryPolicy#NONE} 이 아니면 재시도한다.</li>
+     *   <li><b>IO 예외(타임아웃)</b>와 <b>409 request-in-progress</b>: 멱등키가 실린
+     *       {@link WriteRetryPolicy#IDEMPOTENCY_KEY} 만 같은 본문으로 다시 보낸다. 토스는 같은 키 + 같은 본문을
+     *       새 주문으로 만들지 않고 기존 결과를 돌려주므로, 재전송은 "접수됐는지 다시 묻기"다.
+     *       그래도 확정하지 못하면 {@link ErrorCode#TOSS_ORDER_OUTCOME_UNKNOWN} 으로 알린다.</li>
      * </ul>
-     *
-     * @param idempotent 본문에 멱등키가 실려 있어 같은 요청을 다시 보내도 안전한지
      */
-    JsonNode post(TossAccountOwner owner, String path, Object body, Long accountSeq, boolean idempotent) {
-        return execute(owner, HttpMethod.POST, path, Map.of(), body, accountSeq, true, idempotent, false, 0);
+    JsonNode post(TossAccountOwner owner, String path, Object body, Long accountSeq, WriteRetryPolicy policy) {
+        return execute(owner, HttpMethod.POST, path, Map.of(), body, accountSeq, true, policy, Attempts.FIRST);
     }
 
     /**
-     * @param writePath    주문 경로인지. 에러를 {@link TossOrderErrorMapper} 로 세분화할지 결정한다.
-     * @param retryOnLimit 429 를 재시도해도 되는지
+     * @param writePath 주문 경로인지. 에러를 {@link TossOrderErrorMapper} 로 세분화할지 결정한다.
+     * @param policy    무엇을 다시 보내도 되는지
+     * @param attempts  지금까지 써 버린 재시도 예산
      */
     private JsonNode execute(
             TossAccountOwner owner,
@@ -103,9 +138,8 @@ public class TossInvestClient {
             Object body,
             Long accountSeq,
             boolean writePath,
-            boolean retryOnLimit,
-            boolean isAuthRetry,
-            int rateLimitAttempt
+            WriteRetryPolicy policy,
+            Attempts attempts
     ) {
         String accessToken = tokenStore.getAccessToken(owner, this::issueAccessToken);
 
@@ -147,14 +181,23 @@ public class TossInvestClient {
                     .onStatus(status -> true, (req, clientResponse) -> { })
                     .toEntity(String.class);
         } catch (Exception e) {
-            // 여기서 재시도하지 않는다 — 쓰기 요청이라면 이미 접수됐을 수 있다(소켓 타임아웃 5초).
-            if (writePath) {
-                // 주문이 접수됐는지 알 수 없는 상태다. 사람이 미체결 내역을 확인해야 한다.
-                log.error("Toss order call failed with unknown outcome: {} {} (owner={})", method, path, owner, e);
-            } else {
+            if (!writePath) {
                 log.warn("Toss API call failed: {} {} (owner={}) - {}", method, path, owner, e.toString());
+                throw new CustomException(ErrorCode.TOSS_API_FAILED);
             }
-            throw new CustomException(ErrorCode.TOSS_API_FAILED);
+            // 쓰기 요청은 이미 접수됐을 수 있다(소켓 타임아웃 5초). 멱등키가 있으면 같은 본문으로 다시 물어
+            // 결과를 확정한다 — 토스가 기존 주문 결과를 그대로 돌려준다.
+            if (e instanceof ResourceAccessException
+                    && policy.resendsAfterTimeout()
+                    && attempts.timeout() < MAX_TIMEOUT_RESENDS) {
+                log.warn("Toss write call timed out; resending with the same idempotency key: {} {} (owner={}) - {}",
+                        method, path, owner, e.toString());
+                return execute(owner, method, path, queryParams, body, accountSeq,
+                        writePath, policy, attempts.afterTimeout());
+            }
+            // 접수됐는지 알 수 없는 상태다. 사람이 미체결 내역을 확인해야 한다.
+            log.error("Toss order call failed with unknown outcome: {} {} (owner={})", method, path, owner, e);
+            throw new CustomException(ErrorCode.TOSS_ORDER_OUTCOME_UNKNOWN);
         }
 
         HttpStatus status = HttpStatus.resolve(response.getStatusCode().value());
@@ -166,17 +209,32 @@ public class TossInvestClient {
 
         // 토큰 만료 — 캐시를 비우고 한 번만 재발급 후 재시도한다.
         // 401 은 요청이 처리되기 전에 거부된 것이므로 쓰기 경로에서도 안전하다.
-        if (status == HttpStatus.UNAUTHORIZED && !isAuthRetry) {
+        if (status == HttpStatus.UNAUTHORIZED && !attempts.authRetried()) {
             log.info("Toss API returned 401, refreshing token (owner={})", owner);
             tokenStore.evict(owner);
             return execute(owner, method, path, queryParams, body, accountSeq,
-                    writePath, retryOnLimit, true, rateLimitAttempt);
+                    writePath, policy, attempts.afterAuthRetry());
         }
 
-        if (status == HttpStatus.TOO_MANY_REQUESTS && retryOnLimit && rateLimitAttempt < MAX_RATE_LIMIT_RETRIES) {
+        if (status == HttpStatus.TOO_MANY_REQUESTS
+                && policy.retriesRateLimit()
+                && attempts.rateLimit() < MAX_RATE_LIMIT_RETRIES) {
             backoff(response, owner, path);
             return execute(owner, method, path, queryParams, body, accountSeq,
-                    writePath, true, isAuthRetry, rateLimitAttempt + 1);
+                    writePath, policy, attempts.afterRateLimit());
+        }
+
+        // 같은 멱등키의 앞선 요청(대개 타임아웃으로 재전송하기 전의 첫 요청)이 아직 처리 중이다.
+        // 끝나기를 잠깐 기다렸다 다시 물으면 그 결과를 그대로 받는다.
+        if (status == HttpStatus.CONFLICT
+                && policy.retriesInProgress()
+                && attempts.inProgress() < MAX_IN_PROGRESS_RETRIES
+                && REQUEST_IN_PROGRESS.equals(errorCode(responseBody))) {
+            log.info("Toss write request still in progress, asking again in {}ms: {} (owner={})",
+                    IN_PROGRESS_WAIT_MS, path, owner);
+            sleepOrThrow(IN_PROGRESS_WAIT_MS, ErrorCode.TOSS_ORDER_IN_PROGRESS);
+            return execute(owner, method, path, queryParams, body, accountSeq,
+                    writePath, policy, attempts.afterInProgress());
         }
 
         throw toException(status, responseBody, path, owner, writePath);
@@ -209,11 +267,28 @@ public class TossInvestClient {
     private void backoff(ResponseEntity<String> response, TossAccountOwner owner, String path) {
         long waitMs = Math.min(retryAfterMillis(response), MAX_RETRY_BACKOFF_MS);
         log.warn("Toss API rate limited, retrying in {}ms: {} (owner={})", waitMs, path, owner);
+        sleepOrThrow(waitMs, ErrorCode.TOSS_RATE_LIMITED);
+    }
+
+    /** 기다리다 인터럽트되면 기다리던 사유의 에러로 끝낸다. */
+    private static void sleepOrThrow(long millis, ErrorCode onInterrupt) {
         try {
-            Thread.sleep(waitMs);
+            Thread.sleep(millis);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            throw new CustomException(ErrorCode.TOSS_RATE_LIMITED);
+            throw new CustomException(onInterrupt);
+        }
+    }
+
+    /** 에러 envelope 의 {@code error.code}. 파싱할 수 없으면 빈 문자열. */
+    private String errorCode(String body) {
+        if (body == null || body.isBlank()) {
+            return "";
+        }
+        try {
+            return objectMapper.readTree(body).path("error").path("code").asString("");
+        } catch (Exception e) {
+            return "";
         }
     }
 

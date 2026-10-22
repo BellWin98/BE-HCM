@@ -32,6 +32,7 @@ import java.util.Set;
 public class TossOpenOrderReader {
 
     private final TossInvestClient tossInvestClient;
+    private final TossStockNameResolver nameResolver;
 
     private static final String ORDERS_PATH = "/api/v1/orders";
 
@@ -82,7 +83,7 @@ public class TossOpenOrderReader {
         for (JsonNode order : orders) {
             symbols.add(order.path("symbol").asString(""));
         }
-        Map<String, String> names = TossStockNameResolver.resolve(tossInvestClient, owner, symbols);
+        Map<String, String> names = nameResolver.resolve(owner, symbols);
 
         List<TossOpenOrderResponse> responses = new ArrayList<>();
         for (JsonNode order : orders) {

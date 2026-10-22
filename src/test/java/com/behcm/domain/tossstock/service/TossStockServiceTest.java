@@ -12,6 +12,7 @@ import com.behcm.global.config.toss.TossInvestClient;
 import com.behcm.global.config.toss.TossInvestProperties;
 import com.behcm.global.exception.CustomException;
 import com.behcm.global.exception.ErrorCode;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -28,6 +29,8 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CyclicBarrier;
+import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -61,13 +64,20 @@ class TossStockServiceTest {
     private TossExchangeRateReader exchangeRateReader;
 
     private TossStockService service;
+    private final TossApiExecutor apiExecutor = new TossApiExecutor();
+
+    @AfterEach
+    void tearDown() {
+        apiExecutor.destroy();
+    }
 
     @BeforeEach
     void setUp() {
         // 실현손익 계산기는 실제 구현을 쓴다 — 이 서비스의 핵심 동작이 계산 결과의 조립이기 때문이다.
         service = new TossStockService(
                 tossInvestClient, properties, accountResolver,
-                holdingsReader, orderHistoryReader, exchangeRateReader, new TossRealizedProfitCalculator()
+                holdingsReader, orderHistoryReader, exchangeRateReader, new TossRealizedProfitCalculator(),
+                apiExecutor
         );
         given(accountResolver.resolveAccountSeq(OWNER)).willReturn(ACCOUNT_SEQ);
     }
@@ -200,6 +210,41 @@ class TossStockServiceTest {
         assertThat(portfolio.getTotalMarketValueUsd()).isEqualByComparingTo("2400.60");
         assertThat(portfolio.getTotalPurchaseAmountKrw()).isEqualByComparingTo("2754400");
         assertThat(portfolio.getTotalPurchaseAmountUsd()).isEqualByComparingTo("2290.20");
+    }
+
+    @Test
+    @DisplayName("서로 기다릴 필요 없는 자산 화면 조회는 동시에 보낸다")
+    void getPortfolio_fetchesIndependentCallsConcurrently() {
+        // 보유주식과 원화 매수가능금액은 서로 무관하다. 환율·달러 매수가능금액은 해외 종목이 있을 때만
+        // 필요해 보유주식 결과를 기다리지만, 그 둘끼리는 무관하다. 그래서 왕복 4번이 2번이 된다.
+        // 짝이 동시에 떠 있어야 장벽을 넘는다 — 순차 호출이면 시간 초과로 값이 비거나 실패한다.
+        CyclicBarrier firstPhase = new CyclicBarrier(2);
+        CyclicBarrier secondPhase = new CyclicBarrier(2);
+        given(holdingsReader.read(OWNER, ACCOUNT_SEQ)).willAnswer(invocation -> {
+            firstPhase.await(2, TimeUnit.SECONDS);
+            return json(MIXED_HOLDINGS);
+        });
+        given(tossInvestClient.get(eq(OWNER), eq(BUYING_POWER_PATH), eq(Map.of("currency", "KRW")), eq(ACCOUNT_SEQ)))
+                .willAnswer(invocation -> {
+                    firstPhase.await(2, TimeUnit.SECONDS);
+                    return json("{\"cashBuyingPower\": \"500000\"}");
+                });
+        given(exchangeRateReader.readUsdToKrw(OWNER)).willAnswer(invocation -> {
+            secondPhase.await(2, TimeUnit.SECONDS);
+            return json(USD_KRW_RATE);
+        });
+        given(tossInvestClient.get(eq(OWNER), eq(BUYING_POWER_PATH), eq(Map.of("currency", "USD")), eq(ACCOUNT_SEQ)))
+                .willAnswer(invocation -> {
+                    secondPhase.await(2, TimeUnit.SECONDS);
+                    return json("{\"cashBuyingPower\": \"300\"}");
+                });
+
+        TossPortfolioResponse portfolio = service.getPortfolio(OWNER);
+
+        // 부가 조회는 실패하면 null 로 삼켜지므로, 값이 다 있어야 짝이 모두 장벽을 넘은 것이다.
+        assertThat(portfolio.getCashBuyingPowerKrw()).isEqualByComparingTo("500000");
+        assertThat(portfolio.getUsdKrwRate()).isEqualByComparingTo("1382.4");
+        assertThat(portfolio.getCashBuyingPowerUsd()).isEqualByComparingTo("300");
     }
 
     @Test
@@ -466,6 +511,81 @@ class TossStockServiceTest {
         assertThat(response.isEstimated()).isTrue();
         assertThat(response.getTrades().get(0).isEstimated()).isTrue();
         assertThat(response.getTrades().get(0).getProfitLoss()).isEqualByComparingTo("5000");
+    }
+
+    @Test
+    @DisplayName("재생한 잔고가 실제 보유 수량과 다르면 그 종목의 매도를 추정치로 표시한다")
+    void getRealizedProfit_whenReplayDisagreesWithHoldings_marksSellsEstimated() {
+        // 주문내역에 안 잡히는 거래(시간외 종가 매수 3주 등)가 있으면 재생 잔고 5주 ≠ 보유 8주.
+        // 수량은 모자라지 않아 부족분 메우기로는 드러나지 않지만, 이동평균 원가는 이미 틀렸다.
+        given(orderHistoryReader.readAll(OWNER, ACCOUNT_SEQ)).willReturn(new OrderHistory(List.of(
+                fill("005930", "KRW", TradeSide.BUY, "2025-06-01", "10", "10000", "0", "0"),
+                fill("005930", "KRW", TradeSide.SELL, "2026-01-10", "5", "7500", "0", "0")
+        ), Map.of()));
+        given(holdingsReader.read(OWNER, ACCOUNT_SEQ)).willReturn(json("""
+                {"items": [{"symbol": "005930", "quantity": "8", "averagePurchasePrice": "1000"}]}
+                """));
+
+        TossRealizedProfitResponse response = service.getRealizedProfit(request("2026-01-01", "2026-01-31"));
+
+        assertThat(response.isEstimated()).isTrue();
+        assertThat(response.getTrades().get(0).isEstimated()).isTrue();
+    }
+
+    @Test
+    @DisplayName("재생한 잔고가 보유 수량과 같으면 추정치로 표시하지 않는다")
+    void getRealizedProfit_whenReplayMatchesHoldings_isNotEstimated() {
+        given(orderHistoryReader.readAll(OWNER, ACCOUNT_SEQ)).willReturn(new OrderHistory(List.of(
+                fill("005930", "KRW", TradeSide.BUY, "2025-06-01", "10", "10000", "0", "0"),
+                fill("005930", "KRW", TradeSide.SELL, "2026-01-10", "5", "7500", "0", "0")
+        ), Map.of()));
+        given(holdingsReader.read(OWNER, ACCOUNT_SEQ)).willReturn(json("""
+                {"items": [{"symbol": "005930", "quantity": "5.0", "averagePurchasePrice": "1000"}]}
+                """));
+
+        TossRealizedProfitResponse response = service.getRealizedProfit(request("2026-01-01", "2026-01-31"));
+
+        assertThat(response.isEstimated()).isFalse();
+    }
+
+    @Test
+    @DisplayName("한 종목의 잔고 불일치는 다른 종목의 손익에 번지지 않는다")
+    void getRealizedProfit_mismatchIsScopedToItsSymbol() {
+        // 000660 은 전량 매도해 보유가 없고(일치), 005930 은 보유 수량이 어긋난다.
+        given(orderHistoryReader.readAll(OWNER, ACCOUNT_SEQ)).willReturn(new OrderHistory(List.of(
+                fill("005930", "KRW", TradeSide.BUY, "2025-06-01", "10", "10000", "0", "0"),
+                fill("005930", "KRW", TradeSide.SELL, "2026-01-10", "5", "7500", "0", "0"),
+                fill("000660", "KRW", TradeSide.BUY, "2025-06-01", "2", "2000", "0", "0"),
+                fill("000660", "KRW", TradeSide.SELL, "2026-01-11", "2", "3000", "0", "0")
+        ), Map.of()));
+        given(holdingsReader.read(OWNER, ACCOUNT_SEQ)).willReturn(json("""
+                {"items": [{"symbol": "005930", "quantity": "8", "averagePurchasePrice": "1000"}]}
+                """));
+
+        TossRealizedProfitResponse response = service.getRealizedProfit(request("2026-01-01", "2026-01-31"));
+
+        assertThat(response.getTrades())
+                .filteredOn(trade -> "000660".equals(trade.getSymbol()))
+                .allSatisfy(trade -> assertThat(trade.isEstimated()).isFalse());
+        assertThat(response.getTrades())
+                .filteredOn(trade -> "005930".equals(trade.getSymbol()))
+                .allSatisfy(trade -> assertThat(trade.isEstimated()).isTrue());
+    }
+
+    @Test
+    @DisplayName("보유주식 조회가 실패하면 잔고 대조를 건너뛰고 손익은 그대로 계산한다")
+    void getRealizedProfit_whenHoldingsFail_skipsReconciliation() {
+        // 대조할 기준이 없을 뿐 체결 내역은 유효하다. 모르는 것을 "틀렸다"로 표시하지 않는다.
+        given(orderHistoryReader.readAll(OWNER, ACCOUNT_SEQ)).willReturn(new OrderHistory(List.of(
+                fill("005930", "KRW", TradeSide.BUY, "2025-06-01", "10", "10000", "0", "0"),
+                fill("005930", "KRW", TradeSide.SELL, "2026-01-10", "5", "7500", "0", "0")
+        ), Map.of()));
+        given(holdingsReader.read(OWNER, ACCOUNT_SEQ)).willThrow(new RuntimeException("boom"));
+
+        TossRealizedProfitResponse response = service.getRealizedProfit(request("2026-01-01", "2026-01-31"));
+
+        assertThat(response.isEstimated()).isFalse();
+        assertThat(response.getTrades().get(0).getProfitLoss()).isEqualByComparingTo("2500");
     }
 
     @Test

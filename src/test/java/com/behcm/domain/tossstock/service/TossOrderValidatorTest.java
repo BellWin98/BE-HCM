@@ -149,18 +149,41 @@ class TossOrderValidatorTest {
                 () -> validator.validate(OWNER, request("005930", "LIMIT", "1.5", "70000")));
     }
 
+    private TossOrderRequest usMarketSell(String quantity) {
+        TossOrderRequest request = request("AAPL", "MARKET", quantity, null);
+        request.setSide("SELL");
+        return request;
+    }
+
     @Test
-    @DisplayName("미국 종목은 소수점 수량을 허용한다")
-    void allowsFractionalQuantityForUsStock() {
-        assertThat(validator.validate(OWNER, request("AAPL", "LIMIT", "1.5", "185.5")).command().quantity())
+    @DisplayName("미국 종목 시장가 매도는 소수점 수량을 허용한다")
+    void allowsFractionalQuantityForUsMarketSell() {
+        assertThat(validator.validate(OWNER, usMarketSell("1.5")).command().quantity())
                 .isEqualByComparingTo("1.5");
+    }
+
+    @Test
+    @DisplayName("미국 종목이라도 지정가 주문의 소수점 수량은 거절한다")
+    void rejectsFractionalQuantityForUsLimit() {
+        // 토스는 소수점 수량을 시장가 매도에만 연다. 지정가·매수는 400 invalid-request 로 돌아온다.
+        TossOrderRequest request = request("AAPL", "LIMIT", "1.5", "185.5");
+        request.setSide("SELL");
+        assertRejectedWith(ErrorCode.TOSS_ORDER_INVALID, () -> validator.validate(OWNER, request));
+    }
+
+    @Test
+    @DisplayName("미국 종목이라도 시장가 매수의 소수점 수량은 거절한다")
+    void rejectsFractionalQuantityForUsMarketBuy() {
+        // 소수점 매수는 수량이 아니라 금액(orderAmount) 주문이다.
+        assertRejectedWith(ErrorCode.TOSS_ORDER_INVALID,
+                () -> validator.validate(OWNER, request("AAPL", "MARKET", "1.5", null)));
     }
 
     @Test
     @DisplayName("미국 종목의 소수점 수량은 여섯째 자리까지만 허용한다")
     void rejectsTooManyQuantityDecimalsForUsStock() {
         assertRejectedWith(ErrorCode.TOSS_ORDER_INVALID,
-                () -> validator.validate(OWNER, request("AAPL", "LIMIT", "1.2345678", "185.5")));
+                () -> validator.validate(OWNER, usMarketSell("1.2345678")));
     }
 
     @Test

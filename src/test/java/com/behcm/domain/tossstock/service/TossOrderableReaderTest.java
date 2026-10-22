@@ -3,6 +3,7 @@ package com.behcm.domain.tossstock.service;
 import com.behcm.domain.tossstock.dto.TossOrderableResponse;
 import com.behcm.global.config.toss.TossAccountOwner;
 import com.behcm.global.config.toss.TossInvestClient;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -15,6 +16,8 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
 import java.math.BigDecimal;
+import java.util.concurrent.CyclicBarrier;
+import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -46,12 +49,18 @@ class TossOrderableReaderTest {
     private TossHoldingsReader holdingsReader;
 
     private TossOrderableReader reader;
+    private final TossApiExecutor apiExecutor = new TossApiExecutor();
 
     @BeforeEach
     void setUp() {
-        reader = new TossOrderableReader(tossInvestClient, holdingsReader);
+        reader = new TossOrderableReader(tossInvestClient, holdingsReader, apiExecutor);
         given(tossInvestClient.get(eq(OWNER), eq(PRICES_PATH), any()))
                 .willReturn(objectMapper.readTree("[{\"symbol\":\"005930\",\"lastPrice\":\"72000\"}]"));
+    }
+
+    @AfterEach
+    void tearDown() {
+        apiExecutor.destroy();
     }
 
     private JsonNode holdings(String itemsJson) {
@@ -159,5 +168,43 @@ class TossOrderableReaderTest {
         given(holdingsReader.read(OWNER, ACCOUNT_SEQ, "005930")).willReturn(holdings("[]"));
 
         assertThat(reader.read(OWNER, ACCOUNT_SEQ, SAMSUNG, "SELL").sellCostRate()).isNull();
+    }
+
+    @Test
+    @DisplayName("주문 화면 값 네 가지를 동시에 조회한다")
+    void fetchesAllFieldsConcurrently() {
+        // 현재가·상하한가·보유·매수가능금액은 서로를 기다릴 이유가 없다. 차례로 부르면 시트가 왕복 4번만큼 늦게 뜬다.
+        // 넷이 모두 동시에 떠 있어야 장벽을 넘는다 — 순차 호출이면 첫 호출이 장벽에서 시간 초과로 실패한다.
+        CyclicBarrier allInFlight = new CyclicBarrier(4);
+        given(tossInvestClient.get(eq(OWNER), eq(PRICES_PATH), any())).willAnswer(invocation -> {
+            allInFlight.await(2, TimeUnit.SECONDS);
+            return objectMapper.readTree("""
+                    [{"symbol":"005930","lastPrice":"72000"}]
+                    """);
+        });
+        given(tossInvestClient.get(eq(OWNER), eq("/api/v1/price-limits"), any())).willAnswer(invocation -> {
+            allInFlight.await(2, TimeUnit.SECONDS);
+            return objectMapper.readTree("""
+                    {"upperLimitPrice":"93600","lowerLimitPrice":"50400"}
+                    """);
+        });
+        given(tossInvestClient.get(eq(OWNER), eq("/api/v1/buying-power"), any(), eq(ACCOUNT_SEQ))).willAnswer(invocation -> {
+            allInFlight.await(2, TimeUnit.SECONDS);
+            return objectMapper.readTree("""
+                    {"cashBuyingPower":"1000000"}
+                    """);
+        });
+        given(holdingsReader.read(OWNER, ACCOUNT_SEQ, "005930")).willAnswer(invocation -> {
+            allInFlight.await(2, TimeUnit.SECONDS);
+            return holdings("[]");
+        });
+
+        TossOrderableResponse response = reader.read(OWNER, ACCOUNT_SEQ, SAMSUNG, "BUY");
+
+        // 각 조회는 실패하면 null 로 삼켜지므로, 넷 다 값이 있어야 넷 다 장벽을 넘은 것이다.
+        assertThat(response.lastPrice()).isEqualByComparingTo("72000");
+        assertThat(response.upperLimitPrice()).isEqualByComparingTo("93600");
+        assertThat(response.cashBuyingPower()).isEqualByComparingTo("1000000");
+        assertThat(response.holdingQuantity()).isNull();
     }
 }

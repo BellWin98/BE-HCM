@@ -10,6 +10,7 @@ import com.behcm.domain.tossstock.dto.TossRealizedProfitResponse.TossTradeDto;
 import com.behcm.domain.tossstock.service.TossOrderHistoryReader.OrderHistory;
 import com.behcm.domain.tossstock.service.TossRealizedProfitCalculator.Fill;
 import com.behcm.domain.tossstock.service.TossRealizedProfitCalculator.RealizedFill;
+import com.behcm.domain.tossstock.service.TossRealizedProfitCalculator.Replay;
 import com.behcm.domain.tossstock.service.TossRealizedProfitCalculator.TradeSide;
 import com.behcm.global.config.toss.TossAccountOwner;
 import com.behcm.global.config.toss.TossInvestClient;
@@ -33,6 +34,9 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.TreeSet;
+import java.util.concurrent.CompletableFuture;
 
 /**
  * 토스증권 자산·손익 조회.
@@ -56,6 +60,7 @@ public class TossStockService {
     private final TossOrderHistoryReader orderHistoryReader;
     private final TossExchangeRateReader exchangeRateReader;
     private final TossRealizedProfitCalculator realizedProfitCalculator;
+    private final TossApiExecutor apiExecutor;
 
     private static final String BUYING_POWER_PATH = "/api/v1/buying-power";
     private static final DateTimeFormatter REQUEST_DATE_FORMAT = DateTimeFormatter.ofPattern("uuuu-MM-dd")
@@ -75,7 +80,11 @@ public class TossStockService {
 
     public TossPortfolioResponse getPortfolio(TossAccountOwner owner) {
         Long accountSeq = accountResolver.resolveAccountSeq(owner);
-        JsonNode holdings = holdingsReader.read(owner, accountSeq);
+
+        // 1단계: 보유주식과 원화 매수가능금액은 서로 무관해 동시에 보낸다(Rate Limits Group 도 ASSET / ORDER_INFO 로 다르다).
+        CompletableFuture<BigDecimal> cashBuyingPowerKrw =
+                apiExecutor.supply(() -> fetchBuyingPower(owner, accountSeq, "KRW"));
+        JsonNode holdings = TossApiExecutor.join(apiExecutor.supply(() -> holdingsReader.read(owner, accountSeq)));
 
         List<TossHoldingDto> holdingDtos = new ArrayList<>();
         boolean hasUsdHolding = false;
@@ -99,8 +108,14 @@ public class TossStockService {
         JsonNode dailyProfitLoss = holdings.path("dailyProfitLoss");
         JsonNode dailyProfitLossAmount = dailyProfitLoss.path("amount");
 
-        // 환율은 참고 표기 전용이라 해외 종목이 있을 때만 의미가 있다.
-        JsonNode exchangeRate = hasUsdHolding ? fetchUsdKrwRate(owner) : null;
+        // 2단계: 환율과 달러 매수가능금액은 해외 종목이 있을 때만 의미가 있어 보유주식을 기다리지만, 그 둘끼리는 무관하다.
+        CompletableFuture<JsonNode> exchangeRateFuture = hasUsdHolding
+                ? apiExecutor.supply(() -> fetchUsdKrwRate(owner))
+                : CompletableFuture.completedFuture(null);
+        CompletableFuture<BigDecimal> cashBuyingPowerUsd = hasUsdHolding
+                ? apiExecutor.supply(() -> fetchBuyingPower(owner, accountSeq, "USD"))
+                : CompletableFuture.completedFuture(null);
+        JsonNode exchangeRate = TossApiExecutor.join(exchangeRateFuture);
 
         return TossPortfolioResponse.builder()
                 .owner(owner.name())
@@ -124,8 +139,8 @@ public class TossStockService {
                 .usdKrwMidRate(TossJsonSupport.nullableDecimal(exchangeRate, "midRate"))
                 .usdKrwRateChangeType(TossJsonSupport.text(exchangeRate, "rateChangeType"))
                 .usdKrwRateAsOf(TossJsonSupport.text(exchangeRate, "validFrom"))
-                .cashBuyingPowerKrw(fetchBuyingPower(owner, accountSeq, "KRW"))
-                .cashBuyingPowerUsd(hasUsdHolding ? fetchBuyingPower(owner, accountSeq, "USD") : null)
+                .cashBuyingPowerKrw(TossApiExecutor.join(cashBuyingPowerKrw))
+                .cashBuyingPowerUsd(TossApiExecutor.join(cashBuyingPowerUsd))
                 .holdings(holdingDtos)
                 .lastUpdated(LocalDateTime.now().toString())
                 .build();
@@ -204,12 +219,14 @@ public class TossStockService {
         long historyNanos = System.nanoTime() - historyStartedAt;
 
         long seedStartedAt = System.nanoTime();
-        Map<String, BigDecimal> seeds = seedAveragePrices(owner, accountSeq);
+        HoldingsSnapshot holdings = readHoldingsSnapshot(owner, accountSeq);
         long seedNanos = System.nanoTime() - seedStartedAt;
 
         // 계좌 전체 기간을 재생해 원가를 만든 뒤, 조회 기간에 해당하는 체결만 화면에 보낸다.
         long calcStartedAt = System.nanoTime();
-        List<RealizedFill> allRealized = realizedProfitCalculator.calculate(history.fills(), seeds);
+        Replay replay = realizedProfitCalculator.replay(history.fills(), holdings.averagePrices());
+        List<RealizedFill> allRealized = replay.fills();
+        Set<String> mismatchedSymbols = findQuantityMismatches(owner, replay, holdings);
         long calcNanos = System.nanoTime() - calcStartedAt;
 
         List<TossTradeDto> trades = new ArrayList<>();
@@ -223,11 +240,14 @@ public class TossStockService {
                 continue;
             }
 
-            trades.add(toTradeDto(realized, history.names()));
+            // 잔고가 어긋난 종목의 매도는 원가가 틀렸을 수 있다. 매수는 체결 사실 그대로라 건드리지 않는다.
+            boolean tradeEstimated = realized.estimated()
+                    || (fill.side() == TradeSide.SELL && mismatchedSymbols.contains(fill.symbol()));
+            trades.add(toTradeDto(realized, history.names(), tradeEstimated));
             totalsByCurrency
                     .computeIfAbsent(fill.currency(), key -> new TotalsAccumulator())
                     .add(realized);
-            estimated |= realized.estimated();
+            estimated |= tradeEstimated;
         }
 
         // 최신순 정렬 — 한투 화면과 동일한 순서를 유지한다.
@@ -259,29 +279,73 @@ public class TossStockService {
     }
 
     /**
-     * 주문 이력보다 앞서 매수한 종목의 원가를 메우기 위한 현재 보유 평균단가.
-     * 시딩에 실패해도 손익 계산 자체는 진행되므로(해당 건이 추정치로 표시될 뿐) 예외를 삼킨다.
+     * 현재 보유 현황 중 실현손익 계산에 쓰는 두 값.
+     *
+     * @param averagePrices 주문 이력보다 앞서 매수한 종목의 원가를 메우는 평균단가(부족분 시딩)
+     * @param quantities    재생 잔고와 대조할 보유 수량. 조회에 실패했으면 null — 대조를 건너뛴다.
      */
-    private Map<String, BigDecimal> seedAveragePrices(TossAccountOwner owner, Long accountSeq) {
-        Map<String, BigDecimal> seeds = new HashMap<>();
+    private record HoldingsSnapshot(Map<String, BigDecimal> averagePrices, Map<String, BigDecimal> quantities) { }
+
+    /**
+     * 보유주식을 한 번 읽어 시딩과 대조에 함께 쓴다.
+     * 실패해도 손익 계산 자체는 진행되므로(해당 건이 추정치로 표시될 뿐) 예외를 삼킨다.
+     */
+    private HoldingsSnapshot readHoldingsSnapshot(TossAccountOwner owner, Long accountSeq) {
+        Map<String, BigDecimal> averagePrices = new HashMap<>();
+        Map<String, BigDecimal> quantities = new HashMap<>();
         try {
             JsonNode items = holdingsReader.read(owner, accountSeq).path("items");
             if (items.isArray()) {
                 for (JsonNode item : items) {
                     String symbol = item.path("symbol").asString("");
+                    if (symbol.isBlank()) {
+                        continue;
+                    }
                     BigDecimal averagePrice = TossJsonSupport.nullableDecimal(item, "averagePurchasePrice");
-                    if (!symbol.isBlank() && averagePrice != null) {
-                        seeds.put(symbol, averagePrice);
+                    if (averagePrice != null) {
+                        averagePrices.put(symbol, averagePrice);
+                    }
+                    BigDecimal quantity = TossJsonSupport.nullableDecimal(item, "quantity");
+                    if (quantity != null) {
+                        quantities.put(symbol, quantity);
                     }
                 }
             }
         } catch (Exception e) {
-            log.warn("Failed to seed average prices for owner={}; sells without buy history will be rough", owner, e);
+            log.warn("Failed to read Toss holdings for owner={}; sells without buy history will be rough "
+                    + "and the replay is not reconciled", owner, e);
+            return new HoldingsSnapshot(averagePrices, null);
         }
-        return seeds;
+        return new HoldingsSnapshot(averagePrices, quantities);
     }
 
-    private TossTradeDto toTradeDto(RealizedFill realized, Map<String, String> names) {
+    /**
+     * 재생이 끝난 잔여 수량이 실제 보유 수량과 다른 종목.
+     *
+     * <p>토스 주문내역은 Open API 가 지원하는 호가 유형의 주문만 돌려준다 — 앱에서 낸 시간외 종가 주문,
+     * 액면분할·무상증자, 타사 대체입고는 빠진다. 그런 거래가 있으면 이동평균 원가가 조용히 틀리는데,
+     * 수량이 모자라지 않는 한 부족분 메우기로는 드러나지 않는다. 잔고 대조가 그 신호다.
+     * 보유에 없는 종목은 0주로 본다(전량 매도했다면 재생 잔고도 0 이어야 한다).
+     */
+    private Set<String> findQuantityMismatches(TossAccountOwner owner, Replay replay, HoldingsSnapshot holdings) {
+        if (holdings.quantities() == null) {
+            return Set.of();
+        }
+        Set<String> mismatched = new TreeSet<>();
+        replay.remainingQuantities().forEach((symbol, replayed) -> {
+            BigDecimal held = holdings.quantities().getOrDefault(symbol, BigDecimal.ZERO);
+            if (replayed.compareTo(held) != 0) {
+                mismatched.add(symbol);
+            }
+        });
+        if (!mismatched.isEmpty()) {
+            log.info("Toss realized profit replay disagrees with holdings (owner={}, symbols={}); "
+                    + "marking their sells as estimated", owner, mismatched);
+        }
+        return mismatched;
+    }
+
+    private TossTradeDto toTradeDto(RealizedFill realized, Map<String, String> names, boolean estimated) {
         Fill fill = realized.fill();
         BigDecimal quantity = fill.quantity();
         BigDecimal amount = fill.amount();
@@ -305,7 +369,7 @@ public class TossStockService {
                 .profitLossRate(realized.profitLossRate())
                 .fee(fill.commission())
                 .tax(fill.tax())
-                .estimated(realized.estimated())
+                .estimated(estimated)
                 .build();
     }
 

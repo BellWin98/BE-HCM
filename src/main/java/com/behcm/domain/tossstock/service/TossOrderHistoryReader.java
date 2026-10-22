@@ -55,6 +55,7 @@ public class TossOrderHistoryReader {
     private final TossInvestClient tossInvestClient;
     private final TossOpenOrderReader openOrderReader;
     private final CacheManager cacheManager;
+    private final TossStockNameResolver nameResolver;
 
     private static final String ORDERS_PATH = "/api/v1/orders";
 
@@ -313,7 +314,7 @@ public class TossOrderHistoryReader {
         }
 
         Map<String, String> names = new HashMap<>(known);
-        names.putAll(TossStockNameResolver.resolve(tossInvestClient, owner, unknown));
+        names.putAll(nameResolver.resolve(owner, unknown));
         // 이 맵은 캐시된 스냅샷과 응답이 함께 참조한다. 불변으로 굳혀 두면 한쪽에서 건드릴 수 없다.
         return Map.copyOf(names);
     }

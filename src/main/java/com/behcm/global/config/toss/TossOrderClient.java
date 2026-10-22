@@ -30,6 +30,7 @@ public class TossOrderClient {
 
     private static final String ORDERS_PATH = "/api/v1/orders";
     private static final String CANCEL_PATH_FORMAT = "/api/v1/orders/%s/cancel";
+    private static final String MODIFY_PATH_FORMAT = "/api/v1/orders/%s/modify";
 
     /** 주문 생성 결과. */
     public record PlacedOrder(String orderId, String clientOrderId) { }
@@ -46,6 +47,19 @@ public class TossOrderClient {
             String side,
             String orderType,
             String timeInForce,
+            BigDecimal quantity,
+            BigDecimal price,
+            boolean confirmHighValueOrder
+    ) { }
+
+    /**
+     * 정정에 필요한 값 묶음. 정정은 같은 종목·같은 방향에서 호가 유형·가격·수량만 바꾼다.
+     *
+     * @param quantity 국내 주식만. 미국 주식은 {@code null} — 가격만 정정할 수 있다.
+     * @param price    {@code LIMIT} 일 때만. {@code MARKET} 이면 {@code null}.
+     */
+    public record TossModifyCommand(
+            String orderType,
             BigDecimal quantity,
             BigDecimal price,
             boolean confirmHighValueOrder
@@ -97,6 +111,44 @@ public class TossOrderClient {
                 owner, command.symbol(), command.side(), command.orderType(), command.timeInForce(),
                 command.quantity(), command.price(), command.clientOrderId(), orderId);
         return new PlacedOrder(orderId, result.path("clientOrderId").asString(command.clientOrderId()));
+    }
+
+    /**
+     * 주문을 정정한다.
+     *
+     * <p>정정은 <b>새 주문번호</b>를 발급한다(원주문 번호와 다르다). 이후 취소·재정정은 반환된 번호로 해야 한다.
+     *
+     * <p>재시도 정책은 취소와 같다({@link WriteRetryPolicy#RATE_LIMIT}). 정정에는 멱등키가 없어서,
+     * 타임아웃 뒤 다시 보내면 첫 요청이 이미 닿은 경우 {@code already-modified} 가 돌아와 성공한 정정을
+     * 실패로 보여 준다.
+     */
+    public String modify(TossAccountOwner owner, Long accountSeq, String orderId, TossModifyCommand command) {
+        // 주문 생성과 같은 규칙 — 수치는 문자열, 비어 있는 필드는 아예 뺀다(null 을 실으면 400).
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("orderType", command.orderType());
+        if (command.quantity() != null) {
+            body.put("quantity", command.quantity().stripTrailingZeros().toPlainString());
+        }
+        if (command.price() != null) {
+            body.put("price", command.price().stripTrailingZeros().toPlainString());
+        }
+        if (command.confirmHighValueOrder()) {
+            body.put("confirmHighValueOrder", true);
+        }
+
+        JsonNode result = tossInvestClient.post(
+                owner, MODIFY_PATH_FORMAT.formatted(orderId), body, accountSeq, WriteRetryPolicy.RATE_LIMIT);
+
+        String newOrderId = result.path("orderId").asString("");
+        if (newOrderId.isBlank()) {
+            // 2xx 인데 새 주문번호가 없으면 이후 취소·재정정을 할 수 없다. 성공으로 처리하면 화면이 거짓말을 한다.
+            log.error("Toss modify response has no orderId (owner={}, orderId={})", owner, orderId);
+            throw new CustomException(ErrorCode.TOSS_API_FAILED);
+        }
+        // 돈이 움직이는 기록이다. 행위자는 MDC memberId, 정정 내용은 여기에 전부 남긴다.
+        log.info("Modified Toss order (owner={}, orderId={}, newOrderId={}, orderType={}, quantity={}, price={})",
+                owner, orderId, newOrderId, command.orderType(), command.quantity(), command.price());
+        return newOrderId;
     }
 
     /**

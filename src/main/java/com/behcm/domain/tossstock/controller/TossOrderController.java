@@ -3,6 +3,8 @@ package com.behcm.domain.tossstock.controller;
 import com.behcm.domain.tossstock.dto.TossOpenOrderResponse;
 import com.behcm.domain.tossstock.dto.TossOrderCancelRequest;
 import com.behcm.domain.tossstock.dto.TossOrderCancelResponse;
+import com.behcm.domain.tossstock.dto.TossOrderModifyRequest;
+import com.behcm.domain.tossstock.dto.TossOrderModifyResponse;
 import com.behcm.domain.tossstock.dto.TossOrderRequest;
 import com.behcm.domain.tossstock.dto.TossOrderResponse;
 import com.behcm.domain.tossstock.service.TossOrderService;
@@ -58,6 +60,17 @@ public class TossOrderController {
             @Valid @RequestBody TossOrderRequest request
     ) {
         return ResponseEntity.ok(ApiResponse.success("주문이 접수되었습니다.", tossOrderService.placeOrder(request)));
+    }
+
+    /**
+     * 미체결 주문의 가격(국내는 수량도)을 정정한다. 응답의 주문번호는 정정으로 새로 발급된 것이다.
+     */
+    @PostMapping("/{orderId}/modify")
+    public ResponseEntity<ApiResponse<TossOrderModifyResponse>> modifyOrder(
+            @PathVariable("orderId") String orderId,
+            @Valid @RequestBody TossOrderModifyRequest request
+    ) {
+        return ResponseEntity.ok(ApiResponse.success("주문이 정정되었습니다.", tossOrderService.modifyOrder(orderId, request)));
     }
 
     /**

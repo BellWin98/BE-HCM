@@ -44,5 +44,11 @@ public record TossOrderableResponse(
          * <p>세율·수수료율을 우리가 들고 있지 않기 위한 우회다 — 표를 복제하면 제도 개정에 낡는다.
          * 미보유·평가금액 0·비용 누락이면 null. 0 으로 주면 "비용 없는 매도"가 된다.
          */
-        BigDecimal sellCostRate
+        BigDecimal sellCostRate,
+        /**
+         * 이 계좌에서 종목 시장에 오늘 적용되는 매매 수수료율(소수비율, 예: 0.00015). 화면이 주문 금액에 곱해
+         * 예상 수수료를 낸다 — 매수·미보유 종목처럼 {@link #sellCostRate} 가 없는 경우에도 쓸 수 있다.
+         * 세금은 포함하지 않는다. 조회 실패·오늘 유효한 요율 없음이면 null.
+         */
+        BigDecimal commissionRate
 ) { }

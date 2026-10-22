@@ -312,4 +312,76 @@ class TossInvestClientWriteTest {
 
         server.verify();
     }
+
+    // ---------------------------------------------------------------------
+    // 정정
+    // ---------------------------------------------------------------------
+
+    @Test
+    @DisplayName("국내 정정은 호가 유형·수량·가격을 문자열로 실어 정정 경로로 보내고 새 주문번호를 돌려준다")
+    void orderClientModifySendsKrBodyAndReturnsNewOrderId() {
+        // 정정은 새 주문번호를 발급한다 — 이후 취소·재정정은 이 번호로 해야 한다.
+        TossOrderClient orderClient = new TossOrderClient(client);
+        server.expect(once(), requestTo(ORDERS_URL + "/o-7/modify"))
+                .andExpect(method(POST))
+                .andExpect(header("X-Tossinvest-Account", "7"))
+                .andExpect(content().json("{\"orderType\":\"LIMIT\",\"quantity\":\"15\",\"price\":\"71000\"}", true))
+                .andRespond(withSuccess("{\"result\":{\"orderId\":\"o-8\"}}", APPLICATION_JSON));
+
+        String newOrderId = orderClient.modify(OWNER, ACCOUNT_SEQ, "o-7",
+                new TossOrderClient.TossModifyCommand("LIMIT", new BigDecimal("15"), new BigDecimal("71000.00"), false));
+
+        assertThat(newOrderId).isEqualTo("o-8");
+        server.verify();
+    }
+
+    @Test
+    @DisplayName("미국 정정·시장가 정정은 비어 있는 필드를 아예 빼고, 고액 확인은 필요할 때만 싣는다")
+    void orderClientModifyOmitsAbsentFields() {
+        // null 을 실어 보내면 토스가 "전달 불가 필드"로 400 을 준다(주문 생성과 같은 규칙).
+        TossOrderClient orderClient = new TossOrderClient(client);
+        server.expect(once(), requestTo(ORDERS_URL + "/o-9/modify"))
+                .andExpect(content().json("{\"orderType\":\"LIMIT\",\"price\":\"185.5\"}", true))
+                .andRespond(withSuccess("{\"result\":{\"orderId\":\"o-10\"}}", APPLICATION_JSON));
+        server.expect(once(), requestTo(ORDERS_URL + "/o-11/modify"))
+                .andExpect(content().json("{\"orderType\":\"MARKET\",\"quantity\":\"3\",\"confirmHighValueOrder\":true}", true))
+                .andRespond(withSuccess("{\"result\":{\"orderId\":\"o-12\"}}", APPLICATION_JSON));
+
+        orderClient.modify(OWNER, ACCOUNT_SEQ, "o-9",
+                new TossOrderClient.TossModifyCommand("LIMIT", null, new BigDecimal("185.50"), false));
+        orderClient.modify(OWNER, ACCOUNT_SEQ, "o-11",
+                new TossOrderClient.TossModifyCommand("MARKET", new BigDecimal("3"), null, true));
+
+        server.verify();
+    }
+
+    @Test
+    @DisplayName("정정은 타임아웃 뒤 다시 보내지 않는다 — 멱등키가 없다")
+    void orderClientModifyDoesNotResendAfterTimeout() {
+        // 첫 요청이 닿았다면 재전송은 already-modified 로 돌아와, 성공한 정정을 실패로 보여 준다.
+        TossOrderClient orderClient = new TossOrderClient(client);
+        server.expect(once(), requestTo(ORDERS_URL + "/o-13/modify")).andRespond(timeout());
+
+        assertThatThrownBy(() -> orderClient.modify(OWNER, ACCOUNT_SEQ, "o-13",
+                new TossOrderClient.TossModifyCommand("LIMIT", new BigDecimal("1"), new BigDecimal("70000"), false)))
+                .isInstanceOf(CustomException.class)
+                .extracting(TossInvestClientWriteTest::errorCodeOf)
+                .isEqualTo(ErrorCode.TOSS_ORDER_OUTCOME_UNKNOWN);
+
+        server.verify();
+    }
+
+    @Test
+    @DisplayName("정정 응답에 새 주문번호가 없으면 성공으로 처리하지 않는다")
+    void orderClientModifyWithoutOrderIdFails() {
+        TossOrderClient orderClient = new TossOrderClient(client);
+        server.expect(once(), requestTo(ORDERS_URL + "/o-14/modify"))
+                .andRespond(withSuccess("{\"result\":{}}", APPLICATION_JSON));
+
+        assertThatThrownBy(() -> orderClient.modify(OWNER, ACCOUNT_SEQ, "o-14",
+                new TossOrderClient.TossModifyCommand("LIMIT", new BigDecimal("1"), new BigDecimal("70000"), false)))
+                .isInstanceOf(CustomException.class)
+                .extracting(TossInvestClientWriteTest::errorCodeOf)
+                .isEqualTo(ErrorCode.TOSS_API_FAILED);
+    }
 }

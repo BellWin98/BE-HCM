@@ -1,7 +1,9 @@
 package com.behcm.domain.tossstock.service;
 
+import com.behcm.domain.tossstock.dto.TossOrderModifyRequest;
 import com.behcm.domain.tossstock.dto.TossOrderRequest;
 import com.behcm.global.config.toss.TossAccountOwner;
+import com.behcm.global.config.toss.TossOrderClient.TossModifyCommand;
 import com.behcm.global.config.toss.TossOrderClient.TossOrderCommand;
 import com.behcm.global.exception.CustomException;
 import com.behcm.global.exception.ErrorCode;
@@ -255,5 +257,96 @@ class TossOrderValidatorTest {
         request.setConfirmHighValueOrder(true);
 
         assertThat(validator.validate(OWNER, request).command().confirmHighValueOrder()).isTrue();
+    }
+
+    // ---------------------------------------------------------------------
+    // 정정 — 국내는 가격·수량, 미국은 가격만 (토스 스펙)
+    // ---------------------------------------------------------------------
+
+    private TossOrderModifyRequest modify(String symbol, String orderType, String quantity, String price) {
+        TossOrderModifyRequest request = new TossOrderModifyRequest();
+        request.setOwner("ME");
+        request.setSymbol(symbol);
+        request.setOrderType(orderType);
+        request.setQuantity(quantity);
+        request.setPrice(price);
+        return request;
+    }
+
+    @Test
+    @DisplayName("국내 정정은 가격과 수량을 함께 받아 정정 명령으로 바꾼다")
+    void modify_krLimitWithQuantityAndPrice_passes() {
+        TossModifyCommand command = validator.validateModify(OWNER, modify("005930", "LIMIT", "15", "71000"));
+
+        assertThat(command.orderType()).isEqualTo("LIMIT");
+        assertThat(command.quantity()).isEqualByComparingTo("15");
+        assertThat(command.price()).isEqualByComparingTo("71000");
+        assertThat(command.confirmHighValueOrder()).isFalse();
+    }
+
+    @Test
+    @DisplayName("국내 정정에 수량이 없으면 거절한다 — 토스가 필수로 받는다")
+    void modify_krWithoutQuantity_rejected() {
+        assertRejectedWith(ErrorCode.TOSS_ORDER_INVALID,
+                () -> validator.validateModify(OWNER, modify("005930", "LIMIT", null, "71000")));
+    }
+
+    @Test
+    @DisplayName("국내 정정 수량은 양의 정수여야 한다")
+    void modify_krNonPositiveOrFractionalQuantity_rejected() {
+        assertRejectedWith(ErrorCode.TOSS_ORDER_INVALID,
+                () -> validator.validateModify(OWNER, modify("005930", "LIMIT", "0", "71000")));
+        assertRejectedWith(ErrorCode.TOSS_ORDER_INVALID,
+                () -> validator.validateModify(OWNER, modify("005930", "LIMIT", "1.5", "71000")));
+    }
+
+    @Test
+    @DisplayName("미국 정정은 가격만 받는다")
+    void modify_usLimitPriceOnly_passes() {
+        TossModifyCommand command = validator.validateModify(OWNER, modify("AAPL", "LIMIT", null, "185.5"));
+
+        assertThat(command.quantity()).isNull();
+        assertThat(command.price()).isEqualByComparingTo("185.5");
+    }
+
+    @Test
+    @DisplayName("미국 정정에 수량을 실으면 가격만 정정할 수 있다고 거절한다")
+    void modify_usWithQuantity_rejected() {
+        // 토스는 400 us-modify-quantity-not-supported 를 준다. 종목의 시장은 변하지 않으니 왕복 없이 막는다.
+        assertRejectedWith(ErrorCode.TOSS_ORDER_US_MODIFY_PRICE_ONLY,
+                () -> validator.validateModify(OWNER, modify("AAPL", "LIMIT", "3", "185.5")));
+    }
+
+    @Test
+    @DisplayName("지정가 정정에 가격이 없으면, 시장가 정정에 가격이 있으면 거절한다")
+    void modify_pricePresenceMustMatchOrderType() {
+        assertRejectedWith(ErrorCode.TOSS_ORDER_INVALID,
+                () -> validator.validateModify(OWNER, modify("005930", "LIMIT", "10", null)));
+        assertRejectedWith(ErrorCode.TOSS_ORDER_INVALID,
+                () -> validator.validateModify(OWNER, modify("005930", "MARKET", "10", "71000")));
+    }
+
+    @Test
+    @DisplayName("시장가 정정은 가격 없이 통과한다")
+    void modify_marketWithoutPrice_passes() {
+        assertThat(validator.validateModify(OWNER, modify("005930", "MARKET", "10", null)).price()).isNull();
+    }
+
+    @Test
+    @DisplayName("정정 가격도 주문과 같은 자릿수 규칙을 따른다")
+    void modify_priceScaleFollowsMarket() {
+        assertRejectedWith(ErrorCode.TOSS_ORDER_INVALID,
+                () -> validator.validateModify(OWNER, modify("005930", "LIMIT", "10", "71000.5")));
+        assertRejectedWith(ErrorCode.TOSS_ORDER_INVALID,
+                () -> validator.validateModify(OWNER, modify("AAPL", "LIMIT", null, "185.555")));
+    }
+
+    @Test
+    @DisplayName("고액 주문 확인 플래그는 정정에도 그대로 전달한다")
+    void modify_passesThroughHighValueConfirmation() {
+        TossOrderModifyRequest request = modify("005930", "LIMIT", "1500", "71000");
+        request.setConfirmHighValueOrder(true);
+
+        assertThat(validator.validateModify(OWNER, request).confirmHighValueOrder()).isTrue();
     }
 }

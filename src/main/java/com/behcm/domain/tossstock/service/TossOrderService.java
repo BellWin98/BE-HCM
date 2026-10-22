@@ -1,12 +1,15 @@
 package com.behcm.domain.tossstock.service;
 
 import com.behcm.domain.tossstock.dto.TossOpenOrderResponse;
+import com.behcm.domain.tossstock.dto.TossOrderModifyRequest;
+import com.behcm.domain.tossstock.dto.TossOrderModifyResponse;
 import com.behcm.domain.tossstock.dto.TossOrderRequest;
 import com.behcm.domain.tossstock.dto.TossOrderResponse;
 import com.behcm.domain.tossstock.dto.TossOrderableResponse;
 import com.behcm.domain.tossstock.dto.TossStockSearchResponse;
 import com.behcm.global.config.toss.TossAccountOwner;
 import com.behcm.global.config.toss.TossOrderClient;
+import com.behcm.global.config.toss.TossOrderClient.TossModifyCommand;
 import com.behcm.global.config.toss.TossOrderClient.PlacedOrder;
 import com.behcm.global.exception.CustomException;
 import com.behcm.global.exception.ErrorCode;
@@ -82,14 +85,35 @@ public class TossOrderService {
         return new TossOrderResponse(placed.orderId(), placed.clientOrderId());
     }
 
+    /**
+     * 주문을 정정한다. 반환하는 주문번호는 정정으로 <b>새로 발급된</b> 것이다.
+     *
+     * <p>취소와 마찬가지로 주문이 아직 살아 있는지는 미리 묻지 않는다 — 확인과 정정 사이에 체결될 수 있어
+     * 미리 막아 봐야 소용이 없고, 토스가 {@code already-filled} 등으로 알려 준다({@code TOSS_ORDER_NOT_MODIFIABLE}).
+     */
+    public TossOrderModifyResponse modifyOrder(String orderId, TossOrderModifyRequest request) {
+        validateOrderId(orderId);
+        TossAccountOwner owner = TossAccountOwner.from(request.getOwner());
+        Long accountSeq = accountResolver.resolveAccountSeq(owner);
+
+        TossModifyCommand command = orderValidator.validateModify(owner, request);
+        return new TossOrderModifyResponse(tossOrderClient.modify(owner, accountSeq, orderId, command));
+    }
+
     public String cancelOrder(TossAccountOwner owner, String orderId) {
-        // orderId 는 URI 경로에 들어간다. 토스가 주는 값은 base64url 계열이므로 그 문자 집합만 받는다 —
-        // 이상한 값이 그대로 경로에 박히면 URI 템플릿이 깨져 500 이 난다.
-        if (orderId == null || !orderId.matches("^[A-Za-z0-9_-]{1,128}$")) {
-            throw new CustomException(ErrorCode.INVALID_INPUT);
-        }
+        validateOrderId(orderId);
 
         Long accountSeq = accountResolver.resolveAccountSeq(owner);
         return tossOrderClient.cancel(owner, accountSeq, orderId);
+    }
+
+    /**
+     * orderId 는 URI 경로에 들어간다. 토스가 주는 값은 base64url 계열이므로 그 문자 집합만 받는다 —
+     * 이상한 값이 그대로 경로에 박히면 URI 템플릿이 깨져 500 이 난다.
+     */
+    private static void validateOrderId(String orderId) {
+        if (orderId == null || !orderId.matches("^[A-Za-z0-9_-]{1,128}$")) {
+            throw new CustomException(ErrorCode.INVALID_INPUT);
+        }
     }
 }

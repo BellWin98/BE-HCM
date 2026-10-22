@@ -66,12 +66,23 @@ public class CacheConfig {
                         .build()
         );
 
+        // 계좌 수수료율. 계좌마다 다르고(우대 이벤트) 적용 기간 단위로만 바뀐다. 주문 시트를 열 때마다
+        // 묻지 않도록 소유자별로 길게 둔다 — 요율이 바뀌는 날에도 최대 6시간 뒤에는 새 값을 본다.
+        CaffeineCache tossCommissionCache = new CaffeineCache(
+                "tossCommission",
+                Caffeine.newBuilder()
+                        .expireAfterWrite(6, TimeUnit.HOURS)
+                        .maximumSize(10)
+                        .build()
+        );
+
         cacheManager.setCaches(List.of(
                 memberProfileCache,
                 workoutRoomDetailCache,
                 stockPortfolioCache,
                 tossOrderHistoryCache,
-                tossExchangeRateCache
+                tossExchangeRateCache,
+                tossCommissionCache
         ));
 
         return cacheManager;

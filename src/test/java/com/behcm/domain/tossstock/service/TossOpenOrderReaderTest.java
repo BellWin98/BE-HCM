@@ -176,6 +176,20 @@ class TossOpenOrderReaderTest {
     }
 
     @Test
+    @DisplayName("대기·부분 체결 주문은 정정할 수 있고, 정정·취소 요청이 이미 나간 주문은 정정할 수 없다")
+    void modifiableOnlyWhileNoReplaceOrCancelIsPending() {
+        // 이미 정정 중(PENDING_REPLACE)인 주문을 또 정정하면 토스가 거부한다. 버튼을 그리지 않는다.
+        stubOrders("{\"orders\": [%s, %s, %s, %s]}".formatted(
+                order("o-1", "005930", "LIMIT", "DAY", "PENDING", "10", "0"),
+                order("o-2", "005930", "LIMIT", "DAY", "PARTIAL_FILLED", "10", "3"),
+                order("o-3", "005930", "LIMIT", "DAY", "PENDING_REPLACE", "10", "0"),
+                order("o-4", "005930", "LIMIT", "DAY", "PENDING_CANCEL", "10", "0")));
+        stubNames("[]");
+
+        assertThat(read()).extracting(TossOpenOrderResponse::modifiable).containsExactly(true, true, false, false);
+    }
+
+    @Test
     @DisplayName("체결 정보가 없는 주문의 잔량은 주문 수량 그대로다")
     void treatsMissingExecutionAsUnfilled() {
         stubOrders("""

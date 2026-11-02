@@ -1,6 +1,7 @@
 package com.behcm.domain.admin.member.service;
 
 import com.behcm.domain.admin.member.dto.AdminMemberResponse;
+import com.behcm.domain.knowledge.repository.KnowledgeNoteRepository;
 import com.behcm.domain.member.entity.Member;
 import com.behcm.domain.member.entity.MemberRole;
 import com.behcm.domain.chat.repository.ChatMessageRepository;
@@ -49,6 +50,9 @@ class AdminMemberServiceTest {
 
     @Mock
     private TossAccessRepository tossAccessRepository;
+
+    @Mock
+    private KnowledgeNoteRepository knowledgeNoteRepository;
 
     @Mock
     private WorkoutRoomRepository workoutRoomRepository;
@@ -213,6 +217,27 @@ class AdminMemberServiceTest {
         // then — toss_access 가 member 를 FK 로 참조하므로 순서가 뒤집히면 제약에 걸린다.
         InOrder inOrder = inOrder(tossAccessRepository, memberRepository);
         inOrder.verify(tossAccessRepository).deleteByMemberId(2L);
+        inOrder.verify(memberRepository).delete(target);
+    }
+
+    @Test
+    @DisplayName("deleteMember는 회원을 지우기 전에 지식 메모를 먼저 삭제한다")
+    void deleteMember_deletesKnowledgeNotesBeforeMember() {
+        // given
+        Member admin = memberWithId(1L, "admin@example.com", "admin");
+        Member target = memberWithId(2L, "target@example.com", "target");
+
+        given(memberRepository.findById(2L)).willReturn(Optional.of(target));
+        given(workoutRoomRepository.findByOwner(target)).willReturn(List.of());
+        given(workoutRoomMemberRepository.findByMember(target)).willReturn(List.of());
+        given(memberSettingsRepository.findByMemberId(2L)).willReturn(Optional.empty());
+
+        // when
+        adminMemberService.deleteMember(2L, admin);
+
+        // then — knowledge_note 가 member 를 FK 로 참조하므로 순서가 뒤집히면 제약에 걸린다.
+        InOrder inOrder = inOrder(knowledgeNoteRepository, memberRepository);
+        inOrder.verify(knowledgeNoteRepository).deleteAllByMemberId(2L);
         inOrder.verify(memberRepository).delete(target);
     }
 

@@ -7,6 +7,7 @@ import com.behcm.domain.member.repository.MemberRepository;
 import com.behcm.support.IntegrationTestSupport;
 import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.PageRequest;
@@ -156,5 +157,45 @@ class KnowledgeNoteRepositoryTest extends IntegrationTestSupport {
                 .setParameter("id", otherNote.getId()).getSingleResult();
         assertThat(myTags.longValue()).isZero();
         assertThat(otherTags.longValue()).isEqualTo(1L);
+    }
+
+    private List<String> storedTagNames(Long noteId) {
+        @SuppressWarnings("unchecked")
+        List<String> names = em.createNativeQuery(
+                "SELECT name FROM knowledge_note_tag WHERE note_id = :id ORDER BY name")
+                .setParameter("id", noteId).getResultList();
+        return names;
+    }
+
+    @Test
+    @DisplayName("기존 태그 하나를 유지하고 다른 태그를 바꿔도 flush 가 성공한다")
+    void replaceTags_keepsOneAndReplacesAnother_flushSucceeds() {
+        KnowledgeNote note = saveNote(me, KnowledgeCategory.DEV, "메모", "출처", null, null, "spring", "jpa");
+        em.flush();
+        em.clear();
+
+        KnowledgeNote loaded = repository.findById(note.getId()).orElseThrow();
+        loaded.replaceTags(List.of("spring", "mysql"));
+        em.flush();
+        em.clear();
+
+        assertThat(storedTagNames(note.getId())).containsExactly("mysql", "spring");
+    }
+
+    @Test
+    @DisplayName("대소문자만 바꾼 태그(AI→ai)도 flush 가 성공하고 'ai' 로 저장된다")
+    void replaceTags_caseOnlyChange_flushesAndStoresNewSpelling() {
+        KnowledgeNote note = saveNote(me, KnowledgeCategory.DEV, "메모", "출처", null, null, "AI");
+        em.flush();
+        em.clear();
+
+        KnowledgeNote loaded = repository.findById(note.getId()).orElseThrow();
+        loaded.replaceTags(List.of("ai"));
+        em.flush();
+        em.clear();
+
+        List<String> names = storedTagNames(note.getId());
+        assertThat(names).hasSize(1);
+        assertThat(names.get(0)).isEqualTo("ai");
     }
 }

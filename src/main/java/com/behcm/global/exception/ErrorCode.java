@@ -108,7 +108,8 @@ public enum ErrorCode {
 
     // Knowledge Note
     KNOWLEDGE_NOTE_NOT_FOUND(HttpStatus.NOT_FOUND, "메모를 찾을 수 없습니다."),
-    KNOWLEDGE_NOTE_SOURCE_REQUIRED(HttpStatus.BAD_REQUEST, "출처(링크 또는 텍스트)는 필수입니다."),
+    KNOWLEDGE_NOTE_CONTENT_OR_IMAGE_REQUIRED(HttpStatus.BAD_REQUEST, "내용 또는 이미지를 입력하세요."),
+    KNOWLEDGE_NOTE_IMAGE_INVALID(HttpStatus.BAD_REQUEST, "이미지는 이 앱에서 올린 것으로 최대 5장까지 첨부할 수 있습니다."),
     KNOWLEDGE_NOTE_SOURCE_URL_INVALID(HttpStatus.BAD_REQUEST, "출처 링크는 http 또는 https 주소여야 합니다."),
     KNOWLEDGE_NOTE_STOCK_CATEGORY_MISMATCH(HttpStatus.BAD_REQUEST, "종목은 주식 분야 메모에만 연결할 수 있습니다."),
     KNOWLEDGE_NOTE_TAG_INVALID(HttpStatus.BAD_REQUEST, "태그는 30자 이하로 최대 10개까지 입력할 수 있습니다."),

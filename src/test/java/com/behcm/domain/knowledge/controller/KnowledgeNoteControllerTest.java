@@ -57,7 +57,7 @@ class KnowledgeNoteControllerTest extends IntegrationTestSupport {
 
     private KnowledgeNoteResponse response(Long id) {
         return new KnowledgeNoteResponse(id, KnowledgeCategory.STOCK, "내용", null, null,
-                List.of("반도체"), "005930", "삼성전자", LocalDateTime.now(), LocalDateTime.now());
+                List.of("반도체"), "005930", "삼성전자", List.of(), LocalDateTime.now(), LocalDateTime.now());
     }
 
     private String validBody() throws Exception {
@@ -97,11 +97,11 @@ class KnowledgeNoteControllerTest extends IntegrationTestSupport {
     }
 
     @Test
-    @DisplayName("create는 내용이 비어 있으면 400을 반환한다")
-    void create_withBlankContent_returns400() throws Exception {
+    @DisplayName("create는 내용이 2000자를 넘으면 400을 반환한다")
+    void create_withTooLongContent_returns400() throws Exception {
         KnowledgeNoteRequest request = new KnowledgeNoteRequest();
         request.setCategory(KnowledgeCategory.STOCK);
-        request.setContent("  ");
+        request.setContent("가".repeat(2001));
 
         mockMvc.perform(post("/api/knowledge-notes").with(user(grantedMember()))
                         .contentType(MediaType.APPLICATION_JSON)

@@ -9,6 +9,7 @@ import com.behcm.domain.knowledge.repository.StockNoteCount;
 import com.behcm.domain.member.entity.Member;
 import com.behcm.domain.member.entity.MemberRole;
 import com.behcm.global.exception.CustomException;
+import com.behcm.global.config.aws.S3Service;
 import com.behcm.global.exception.ErrorCode;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -49,6 +50,12 @@ class KnowledgeNoteServiceTest {
     @Mock
     private KnowledgeNoteRepository repository;
 
+    @Mock
+    private S3Service s3Service;
+
+    @Mock
+    private KnowledgeNoteImageCleaner imageCleaner;
+
     @InjectMocks
     private KnowledgeNoteService service;
 
@@ -69,6 +76,15 @@ class KnowledgeNoteServiceTest {
         return r;
     }
 
+    private static String img(String name) {
+        return "https://bucket.s3.ap-northeast-2.amazonaws.com/knowledge-notes/" + name + ".png";
+    }
+
+    private void allowAllImageUrls() {
+        // 개수·중복 검사에서 먼저 걸리는 테스트도 있어 호출되지 않을 수 있다.
+        org.mockito.Mockito.lenient().when(s3Service.isKnowledgeNoteImageUrl(any())).thenReturn(true);
+    }
+
     private KnowledgeNote saveAndCapture(KnowledgeNoteRequest r) {
         when(repository.save(any(KnowledgeNote.class))).thenAnswer(i -> i.getArgument(0));
         service.create(member, r);
@@ -85,21 +101,111 @@ class KnowledgeNoteServiceTest {
     }
 
     @Test
-    @DisplayName("공백 출처는 null 로 정리하고, 둘 다 비면 거부한다")
-    void create_trimsBlankSourcesToNull_andRequiresOne() {
-        assertCode(() -> service.create(member, request(KnowledgeCategory.DEV, "  ", " ")),
-                ErrorCode.KNOWLEDGE_NOTE_SOURCE_REQUIRED);
-        assertCode(() -> service.create(member, request(KnowledgeCategory.DEV, null, null)),
-                ErrorCode.KNOWLEDGE_NOTE_SOURCE_REQUIRED);
+    @DisplayName("출처가 둘 다 없어도 저장되고, 공백 출처는 null 로 정리한다")
+    void create_withoutSource_succeeds() {
+        KnowledgeNote saved = saveAndCapture(request(KnowledgeCategory.DEV, "  ", " "));
+
+        assertThat(saved.getSourceUrl()).isNull();
+        assertThat(saved.getSourceText()).isNull();
+        assertThat(saved.getContent()).isEqualTo("내용");
+    }
+
+    @Test
+    @DisplayName("내용이 공백뿐이고 이미지가 1장이면 content 는 null 로 저장된다")
+    void create_imageOnly_storesNullContent() {
+        allowAllImageUrls();
+        KnowledgeNoteRequest r = request(KnowledgeCategory.DEV, null, null);
+        r.setContent("  ");
+        r.setImageUrls(List.of(img("a")));
+        when(repository.save(any(KnowledgeNote.class))).thenAnswer(i -> i.getArgument(0));
+
+        KnowledgeNoteResponse response = service.create(member, r);
+
+        ArgumentCaptor<KnowledgeNote> captor = ArgumentCaptor.forClass(KnowledgeNote.class);
+        verify(repository).save(captor.capture());
+        assertThat(captor.getValue().getContent()).isNull();
+        assertThat(response.images()).containsExactly(img("a"));
+    }
+
+    @Test
+    @DisplayName("내용도 이미지도 없으면 거부한다")
+    void create_noContentNoImage_throwsContentOrImageRequired() {
+        KnowledgeNoteRequest blank = request(KnowledgeCategory.DEV, null, "출처");
+        blank.setContent("\u3000 ");
+        assertCode(() -> service.create(member, blank), ErrorCode.KNOWLEDGE_NOTE_CONTENT_OR_IMAGE_REQUIRED);
+
+        KnowledgeNoteRequest nulls = request(KnowledgeCategory.DEV, null, "출처");
+        nulls.setContent(null);
+        nulls.setImageUrls(List.of(" "));
+        assertCode(() -> service.create(member, nulls), ErrorCode.KNOWLEDGE_NOTE_CONTENT_OR_IMAGE_REQUIRED);
         verify(repository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("이미지가 6장이면 거부한다")
+    void create_sixImages_throwsImageInvalid() {
+        allowAllImageUrls();
+        KnowledgeNoteRequest r = request(KnowledgeCategory.DEV, null, null);
+        r.setImageUrls(IntStream.rangeClosed(1, 6).mapToObj(i -> img("i" + i)).toList());
+
+        assertCode(() -> service.create(member, r), ErrorCode.KNOWLEDGE_NOTE_IMAGE_INVALID);
+        verify(repository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("이 앱이 올린 이미지가 아닌 URL 은 거부한다")
+    void create_foreignUrl_throwsImageInvalid() {
+        when(s3Service.isKnowledgeNoteImageUrl("https://evil.com/x.png")).thenReturn(false);
+        KnowledgeNoteRequest r = request(KnowledgeCategory.DEV, null, null);
+        r.setImageUrls(List.of("https://evil.com/x.png"));
+
+        assertCode(() -> service.create(member, r), ErrorCode.KNOWLEDGE_NOTE_IMAGE_INVALID);
+        verify(repository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("중복된 이미지 URL 은 거부한다")
+    void create_duplicateUrls_throwsImageInvalid() {
+        allowAllImageUrls();
+        KnowledgeNoteRequest r = request(KnowledgeCategory.DEV, null, null);
+        r.setImageUrls(List.of(img("a"), " " + img("a") + " "));
+
+        assertCode(() -> service.create(member, r), ErrorCode.KNOWLEDGE_NOTE_IMAGE_INVALID);
+        verify(repository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("수정에서 빠진 이미지는 커밋 후 정리 대상으로 넘기고 순서를 유지한다")
+    void update_removedImages_cleanedAfterCommit() {
+        allowAllImageUrls();
+        KnowledgeNote note = KnowledgeNote.builder().member(member).category(KnowledgeCategory.DEV)
+                .content("old").build();
+        note.replaceImages(List.of(img("a"), img("b"), img("c"), img("d"), img("e")));
+        when(repository.findByIdAndMemberId(5L, 1L)).thenReturn(Optional.of(note));
+        KnowledgeNoteRequest r = request(KnowledgeCategory.DEV, null, null);
+        r.setImageUrls(List.of(img("a"), img("c"), img("d"), img("e")));
+
+        KnowledgeNoteResponse response = service.update(member, 5L, r);
+
+        verify(imageCleaner).deleteAfterCommit(List.of(img("b")));
+        assertThat(response.images()).containsExactly(img("a"), img("c"), img("d"), img("e"));
+    }
+
+    @Test
+    @DisplayName("이미지가 없는 수정은 정리 대상이 비어 있다")
+    void update_noRemovedImages_passesEmptyList() {
+        KnowledgeNote note = KnowledgeNote.builder().member(member).category(KnowledgeCategory.DEV)
+                .content("old").build();
+        when(repository.findByIdAndMemberId(5L, 1L)).thenReturn(Optional.of(note));
+
+        service.update(member, 5L, request(KnowledgeCategory.DEV, null, null));
+
+        verify(imageCleaner).deleteAfterCommit(List.of());
     }
 
     @Test
     @DisplayName("전각 공백(U+3000)만 있는 출처·종목은 빈 값으로 보고, 값의 앞뒤 전각 공백은 지운다")
     void create_fullWidthSpaceOnlyValues_areBlank() {
-        assertCode(() -> service.create(member, request(KnowledgeCategory.DEV, "\u3000", "\u3000 \u3000")),
-                ErrorCode.KNOWLEDGE_NOTE_SOURCE_REQUIRED);
-
         KnowledgeNoteRequest r = request(KnowledgeCategory.STOCK, "\u3000", "\u3000인프런\u3000");
         r.setStockSymbol("\u3000");
         r.setTags(List.of("\u3000", "\u3000태그\u3000"));
@@ -293,6 +399,18 @@ class KnowledgeNoteServiceTest {
         service.delete(member, 5L);
 
         verify(repository).delete(note);
+    }
+
+    @Test
+    @DisplayName("메모를 삭제하면 그 메모의 이미지 URL 전부를 정리 대상으로 넘긴다")
+    void delete_cleansAllImages() {
+        KnowledgeNote note = KnowledgeNote.builder().member(member).category(KnowledgeCategory.DEV).content("c").build();
+        note.replaceImages(List.of(img("a"), img("b")));
+        when(repository.findByIdAndMemberId(5L, 1L)).thenReturn(Optional.of(note));
+
+        service.delete(member, 5L);
+
+        verify(imageCleaner).deleteAfterCommit(List.of(img("a"), img("b")));
     }
 
     @Test

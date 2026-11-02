@@ -28,4 +28,8 @@ public interface KnowledgeNoteRepository
     @Modifying
     @Query("DELETE FROM KnowledgeNote n WHERE n.member.id = :memberId")
     void deleteAllByMemberId(@Param("memberId") Long memberId);
+
+    /** 회원의 모든 메모에 붙은 이미지 URL. 회원 삭제 시 저장소 파일 정리에 쓴다. */
+    @Query("SELECT i.imageUrl FROM KnowledgeNoteImage i WHERE i.note.member.id = :memberId")
+    List<String> findImageUrlsByMemberId(@Param("memberId") Long memberId);
 }

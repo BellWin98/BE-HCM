@@ -16,6 +16,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -197,5 +198,29 @@ class KnowledgeNoteRepositoryTest extends IntegrationTestSupport {
         List<String> names = storedTagNames(note.getId());
         assertThat(names).hasSize(1);
         assertThat(names.get(0)).isEqualTo("ai");
+    }
+
+    @Test
+    @DisplayName("내용 NULL + 이미지 메모도 저장·검색·종목 집계되고, 이미지 URL은 회원별로 조회된다")
+    void noteWithoutContentButWithImages_isStoredSearchedCountedAndImagesListedPerMember() {
+        KnowledgeNote note = saveNote(me, KnowledgeCategory.STOCK, null, null, "005930", "삼성전자", "hbm");
+        note.replaceImages(List.of("https://img/1.png", "https://img/2.png"));
+        KnowledgeNote otherNote = saveNote(other, KnowledgeCategory.STOCK, "남의 메모", null, null, null);
+        otherNote.replaceImages(List.of("https://img/other.png"));
+        em.flush();
+        em.clear();
+
+        KnowledgeNote loaded = repository.findById(note.getId()).orElseThrow();
+        assertThat(loaded.getContent()).isNull();
+        assertThat(loaded.getImageUrls()).containsExactly("https://img/1.png", "https://img/2.png");
+
+        assertThat(search(me, null, null, "hbm")).extracting(KnowledgeNote::getId)
+                .containsExactly(note.getId());
+
+        assertThat(repository.countByStockSymbols(me.getId(), Set.of("005930")))
+                .extracting(StockNoteCount::count).containsExactly(1L);
+
+        assertThat(repository.findImageUrlsByMemberId(me.getId()))
+                .containsExactlyInAnyOrder("https://img/1.png", "https://img/2.png");
     }
 }

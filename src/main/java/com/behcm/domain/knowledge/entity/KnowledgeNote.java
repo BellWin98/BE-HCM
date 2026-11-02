@@ -9,6 +9,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -35,6 +36,7 @@ public class KnowledgeNote extends BaseTimeEntity {
     public static final int MAX_CONTENT_LENGTH = 2000;
     public static final int MAX_SOURCE_URL_LENGTH = 2048;
     public static final int MAX_SOURCE_TEXT_LENGTH = 500;
+    public static final int MAX_IMAGES = 5;
     public static final int MAX_TAGS = 10;
     public static final int MAX_TAG_LENGTH = 30;
     public static final int MAX_STOCK_SYMBOL_LENGTH = 20;
@@ -52,7 +54,7 @@ public class KnowledgeNote extends BaseTimeEntity {
     @Column(nullable = false, length = 20)
     private KnowledgeCategory category;
 
-    @Column(nullable = false, columnDefinition = "text")
+    @Column(columnDefinition = "text")
     private String content;
 
     @Column(length = MAX_SOURCE_URL_LENGTH)
@@ -69,6 +71,10 @@ public class KnowledgeNote extends BaseTimeEntity {
 
     @OneToMany(mappedBy = "note", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<KnowledgeNoteTag> tags = new ArrayList<>();
+
+    @OneToMany(mappedBy = "note", cascade = CascadeType.ALL, orphanRemoval = true)
+    @OrderBy("position ASC")
+    private List<KnowledgeNoteImage> images = new ArrayList<>();
 
     @Builder
     public KnowledgeNote(Member member, KnowledgeCategory category, String content, String sourceUrl,
@@ -121,5 +127,40 @@ public class KnowledgeNote extends BaseTimeEntity {
 
     public List<String> getTagNames() {
         return tags.stream().map(KnowledgeNoteTag::getName).toList();
+    }
+
+    /**
+     * 이미지를 URL 기준 diff 로 교체하고 빠진 URL 목록을 돌려준다(저장소 파일 정리용).
+     * 유지되는 이미지는 position 만 갱신하고, 빠진 것만 지우고 새 것만 추가한다.
+     * 개수·형식 검증은 서비스 책임이다.
+     *
+     * <p>{@link #replaceTags} 와 같은 이유로 {@code clear()} 후 재삽입하지 않는다 —
+     * Hibernate 가 IDENTITY insert 를 orphan delete 보다 먼저 실행한다.
+     */
+    public List<String> replaceImages(List<String> urls) {
+        Map<String, Integer> wanted = new LinkedHashMap<>();
+        for (String url : urls) {
+            wanted.putIfAbsent(url, wanted.size());
+        }
+        List<String> removed = new ArrayList<>();
+        Iterator<KnowledgeNoteImage> it = images.iterator();
+        while (it.hasNext()) {
+            KnowledgeNoteImage image = it.next();
+            Integer position = wanted.remove(image.getImageUrl());
+            if (position == null) {
+                removed.add(image.getImageUrl());
+                it.remove();
+            } else {
+                image.changePosition(position);
+            }
+        }
+        wanted.forEach((url, position) -> images.add(new KnowledgeNoteImage(this, url, position)));
+        // 새 행이 뒤에 붙으므로, 같은 트랜잭션 안에서 읽어도 position 순이 되도록 정렬해 둔다.
+        images.sort(Comparator.comparingInt(KnowledgeNoteImage::getPosition));
+        return removed;
+    }
+
+    public List<String> getImageUrls() {
+        return images.stream().map(KnowledgeNoteImage::getImageUrl).toList();
     }
 }

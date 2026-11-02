@@ -41,9 +41,12 @@ public class S3Service {
     private static final Set<String> ALLOWED_CONTENT_TYPES = Set.of("image/jpeg", "image/png", "image/webp");
     private static final Set<String> ALLOWED_IMAGE_EXTENSIONS = Set.of(".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp");
 
-    private static final Set<String> KNOWLEDGE_NOTE_CONTENT_TYPES =
-            Set.of("image/jpeg", "image/png", "image/webp", "image/gif");
-    private static final Set<String> KNOWLEDGE_NOTE_EXTENSIONS = Set.of(".jpg", ".jpeg", ".png", ".webp", ".gif");
+    /** 메모 전용: 허용 Content-Type 과 키에 붙일 확장자. 파일명 확장자는 보지 않는다. */
+    private static final Map<String, String> KNOWLEDGE_NOTE_EXTENSION_BY_CONTENT_TYPE = Map.of(
+            "image/jpeg", ".jpg",
+            "image/png", ".png",
+            "image/webp", ".webp",
+            "image/gif", ".gif");
 
     @Value("${cloud.aws.s3.bucket}")
     private String bucket;
@@ -83,10 +86,15 @@ public class S3Service {
             throw new CustomException(ErrorCode.INVALID_FILE);
         }
 
-        List<String> uploadedUrls = new ArrayList<>();
+        // 일부만 올라간 채 거절되면 고아 객체가 남으므로 전부 검증한 뒤에 올린다.
+        List<String> extensions = new ArrayList<>();
         for (MultipartFile file : files) {
-            uploadedUrls.add(uploadImage(file, KNOWLEDGE_NOTE_IMAGE_PREFIX,
-                    KNOWLEDGE_NOTE_CONTENT_TYPES, KNOWLEDGE_NOTE_EXTENSIONS));
+            extensions.add(validateKnowledgeNoteImage(file));
+        }
+
+        List<String> uploadedUrls = new ArrayList<>();
+        for (int i = 0; i < files.size(); i++) {
+            uploadedUrls.add(putImage(files.get(i), KNOWLEDGE_NOTE_IMAGE_PREFIX, extensions.get(i)));
         }
         return uploadedUrls;
     }
@@ -118,11 +126,6 @@ public class S3Service {
     }
 
     private String uploadImage(MultipartFile file, String keyPrefix) {
-        return uploadImage(file, keyPrefix, ALLOWED_CONTENT_TYPES, ALLOWED_IMAGE_EXTENSIONS);
-    }
-
-    private String uploadImage(MultipartFile file, String keyPrefix,
-                               Set<String> allowedContentTypes, Set<String> allowedExtensions) {
         if (file == null || file.isEmpty()) {
             throw new CustomException(ErrorCode.INVALID_FILE);
         }
@@ -136,15 +139,36 @@ public class S3Service {
             throw rejected(file, ErrorCode.FILE_TOO_LARGE);
         }
 
-        if (!isAllowedContentType(file.getContentType(), allowedContentTypes)) {
+        if (!isAllowedContentType(file.getContentType(), ALLOWED_CONTENT_TYPES)) {
             throw rejected(file, ErrorCode.INVALID_FILE_TYPE);
         }
 
-        if (!isValidImageFile(originalFilename, allowedExtensions)) {
+        if (!isValidImageFile(originalFilename, ALLOWED_IMAGE_EXTENSIONS)) {
             throw rejected(file, ErrorCode.INVALID_FILE_TYPE);
         }
 
-        String fileName = generateFileName(originalFilename);
+        return putImage(file, keyPrefix, originalFilename.substring(originalFilename.lastIndexOf(".")));
+    }
+
+    /** 메모 이미지를 실제 Content-Type 으로만 판단하고, 키에 붙일 확장자를 돌려준다. */
+    private String validateKnowledgeNoteImage(MultipartFile file) {
+        if (file == null || file.isEmpty()) {
+            throw new CustomException(ErrorCode.INVALID_FILE);
+        }
+        if (file.getSize() > IMAGE_MAX_SIZE_BYTES) {
+            throw rejected(file, ErrorCode.FILE_TOO_LARGE);
+        }
+        String contentType = file.getContentType();
+        String extension = contentType == null ? null
+                : KNOWLEDGE_NOTE_EXTENSION_BY_CONTENT_TYPE.get(contentType.toLowerCase(Locale.ROOT));
+        if (extension == null) {
+            throw rejected(file, ErrorCode.INVALID_FILE_TYPE);
+        }
+        return extension;
+    }
+
+    private String putImage(MultipartFile file, String keyPrefix, String extension) {
+        String fileName = UUID.randomUUID() + extension;
         String filePath = keyPrefix + getFolderName();
         String key = filePath + "/" + fileName;
 
@@ -212,10 +236,5 @@ public class S3Service {
 
     private String getFolderName() {
         return LocalDate.now().format(FOLDER_DATE_FORMATTER);
-    }
-
-    private String generateFileName(String originalFilename) {
-        String extension = originalFilename.substring(originalFilename.lastIndexOf("."));
-        return UUID.randomUUID() + extension;
     }
 }

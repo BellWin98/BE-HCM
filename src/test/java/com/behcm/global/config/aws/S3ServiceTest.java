@@ -140,6 +140,43 @@ class S3ServiceTest {
     }
 
     @Test
+    @DisplayName("지식 메모 이미지는 확장자 없는 파일명이어도 Content-Type 으로 판단해 올린다")
+    void uploadKnowledgeNoteImages_acceptsFilenameWithoutExtension() {
+        s3Service.uploadKnowledgeNoteImages(List.of(file("shared-0", "image/png")));
+
+        verify(s3Client).putObject(putObjectRequestCaptor.capture(), any(RequestBody.class));
+        assertThat(putObjectRequestCaptor.getValue().key())
+                .matches("^knowledge-notes/\\d{4}/\\d{2}/\\d{2}/[0-9a-f-]{36}\\.png$");
+    }
+
+    @Test
+    @DisplayName("지식 메모 키 확장자는 파일명이 아닌 Content-Type 에서 정한다")
+    void uploadKnowledgeNoteImages_extensionFromContentType() {
+        s3Service.uploadKnowledgeNoteImages(List.of(file("photo.jpeg", "image/webp")));
+
+        verify(s3Client).putObject(putObjectRequestCaptor.capture(), any(RequestBody.class));
+        assertThat(putObjectRequestCaptor.getValue().key()).endsWith(".webp");
+    }
+
+    @Test
+    @DisplayName("지식 메모 이미지는 하나라도 거부되면 어떤 파일도 올리지 않는다")
+    void uploadKnowledgeNoteImages_validatesAllBeforeUploading() {
+        assertThatThrownBy(() -> s3Service.uploadKnowledgeNoteImages(List.of(
+                file("a.png", "image/png"), file("b.png", "image/png"), file("c.svg", "image/svg+xml"))))
+                .isInstanceOfSatisfying(CustomException.class,
+                        e -> assertThat(e.getErrorCode()).isEqualTo(ErrorCode.INVALID_FILE_TYPE));
+        verify(s3Client, never()).putObject(any(PutObjectRequest.class), any(RequestBody.class));
+    }
+
+    @Test
+    @DisplayName("프로필 업로드는 여전히 확장자 없는 파일명을 거부한다")
+    void profileUpload_stillRequiresExtension() {
+        assertThatThrownBy(() -> s3Service.uploadProfileImage(file("shared-0", "image/png")))
+                .isInstanceOfSatisfying(CustomException.class,
+                        e -> assertThat(e.getErrorCode()).isEqualTo(ErrorCode.INVALID_FILE_TYPE));
+    }
+
+    @Test
     @DisplayName("프로필 업로드는 여전히 GIF 를 거부한다")
     void profileUpload_stillRejectsGif() {
         assertThatThrownBy(() -> s3Service.uploadProfileImage(file("a.gif", "image/gif")))

@@ -2,6 +2,7 @@ package com.behcm.domain.knowledge.service;
 
 import com.behcm.domain.member.entity.Member;
 import com.behcm.domain.member.entity.MemberRole;
+import com.behcm.domain.tossstock.entity.TossAccess;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -41,5 +42,19 @@ class KnowledgeAccessCheckerTest {
     void canAccess_anonymousString_false() {
         assertThat(knowledgeAccessChecker.canAccess("anonymousUser")).isFalse();
         assertThat(knowledgeAccessChecker.canAccess(null)).isFalse();
+    }
+
+    @Test
+    @DisplayName("토스 접근 권한(toss_access)이 있는 USER와 FAMILY도 메모에는 접근할 수 없다")
+    void canAccess_tossAccessUserOrFamily_false() {
+        Member tossUser = member(MemberRole.USER);
+        Member family = member(MemberRole.FAMILY);
+        TossAccess tossUserAccess = TossAccess.builder().member(tossUser).grantedBy(99L).build();
+        TossAccess familyAccess = TossAccess.builder().member(family).grantedBy(99L).build();
+
+        assertThat(tossUserAccess.getMember()).isSameAs(tossUser);
+        assertThat(familyAccess.getMember()).isSameAs(family);
+        assertThat(knowledgeAccessChecker.canAccess(tossUser)).isFalse();
+        assertThat(knowledgeAccessChecker.canAccess(family)).isFalse();
     }
 }

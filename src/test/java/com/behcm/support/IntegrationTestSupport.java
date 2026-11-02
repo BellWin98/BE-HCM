@@ -7,6 +7,7 @@ import com.behcm.domain.auth.service.AuthService;
 import com.behcm.domain.auth.service.EmailVerificationService;
 import com.behcm.domain.chat.service.ChatService;
 import com.behcm.domain.knowledge.service.KnowledgeAccessChecker;
+import com.behcm.domain.knowledge.service.KnowledgeNoteService;
 import com.behcm.domain.member.service.MemberService;
 import com.behcm.domain.notification.service.NotificationFacade;
 import com.behcm.domain.penalty.service.PenaltyService;
@@ -73,6 +74,9 @@ public abstract class IntegrationTestSupport {
 
     @MockitoBean
     protected KnowledgeAccessChecker knowledgeAccessChecker;
+
+    @MockitoBean
+    protected KnowledgeNoteService knowledgeNoteService;
 
     @MockitoBean
     protected MemberService memberService;

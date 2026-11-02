@@ -34,4 +34,8 @@ public class KnowledgeNoteTag {
         this.note = note;
         this.name = name;
     }
+
+    public void rename(String name) {
+        this.name = name;
+    }
 }

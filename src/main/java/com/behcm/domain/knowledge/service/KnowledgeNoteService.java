@@ -73,6 +73,8 @@ public class KnowledgeNoteService {
         NormalizedNote n = normalize(request);
         note.update(n.category(), n.content(), n.sourceUrl(), n.sourceText(), n.stockSymbol(), n.stockName());
         note.replaceTags(n.tags());
+        // updatedAt 은 flush 시점에 갱신되므로, 응답을 만들기 전에 flush 해서 최신 값을 반영한다.
+        knowledgeNoteRepository.flush();
         log.info("Knowledge note updated (memberId={}, noteId={})", member.getId(), id);
         return KnowledgeNoteResponse.from(note);
     }

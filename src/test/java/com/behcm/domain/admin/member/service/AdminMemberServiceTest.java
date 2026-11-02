@@ -2,6 +2,7 @@ package com.behcm.domain.admin.member.service;
 
 import com.behcm.domain.admin.member.dto.AdminMemberResponse;
 import com.behcm.domain.knowledge.repository.KnowledgeNoteRepository;
+import com.behcm.domain.knowledge.service.KnowledgeNoteImageCleaner;
 import com.behcm.domain.member.entity.Member;
 import com.behcm.domain.member.entity.MemberRole;
 import com.behcm.domain.chat.repository.ChatMessageRepository;
@@ -53,6 +54,9 @@ class AdminMemberServiceTest {
 
     @Mock
     private KnowledgeNoteRepository knowledgeNoteRepository;
+
+    @Mock
+    private KnowledgeNoteImageCleaner knowledgeNoteImageCleaner;
 
     @Mock
     private WorkoutRoomRepository workoutRoomRepository;
@@ -239,6 +243,30 @@ class AdminMemberServiceTest {
         InOrder inOrder = inOrder(knowledgeNoteRepository, memberRepository);
         inOrder.verify(knowledgeNoteRepository).deleteAllByMemberId(2L);
         inOrder.verify(memberRepository).delete(target);
+    }
+
+    @Test
+    @DisplayName("deleteMember는 메모 행을 지우기 전에 조회한 이미지 URL 을 커밋 후 삭제 대상으로 넘긴다")
+    void deleteMember_schedulesImageCleanupBeforeDeletingNotes() {
+        // given
+        Member admin = memberWithId(1L, "admin@example.com", "admin");
+        Member target = memberWithId(2L, "target@example.com", "target");
+        List<String> urls = List.of("https://b/knowledge-notes/a.png", "https://b/knowledge-notes/b.png");
+
+        given(memberRepository.findById(2L)).willReturn(Optional.of(target));
+        given(workoutRoomRepository.findByOwner(target)).willReturn(List.of());
+        given(workoutRoomMemberRepository.findByMember(target)).willReturn(List.of());
+        given(memberSettingsRepository.findByMemberId(2L)).willReturn(Optional.empty());
+        given(knowledgeNoteRepository.findImageUrlsByMemberId(2L)).willReturn(urls);
+
+        // when
+        adminMemberService.deleteMember(2L, admin);
+
+        // then — 행이 지워진 뒤에는 URL 을 알 수 없으므로 조회·등록이 삭제보다 먼저여야 한다.
+        InOrder inOrder = inOrder(knowledgeNoteRepository, knowledgeNoteImageCleaner);
+        inOrder.verify(knowledgeNoteRepository).findImageUrlsByMemberId(2L);
+        inOrder.verify(knowledgeNoteImageCleaner).deleteAfterCommit(urls);
+        inOrder.verify(knowledgeNoteRepository).deleteAllByMemberId(2L);
     }
 
     private Member memberWithId(Long id, String email, String nickname) {

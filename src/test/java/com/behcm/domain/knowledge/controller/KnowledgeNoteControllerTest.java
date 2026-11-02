@@ -11,6 +11,9 @@ import org.junit.jupiter.api.Test;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.http.MediaType;
+import org.springframework.mock.web.MockMultipartFile;
+import com.behcm.global.exception.CustomException;
+import com.behcm.global.exception.ErrorCode;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -25,6 +28,7 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -184,5 +188,100 @@ class KnowledgeNoteControllerTest extends IntegrationTestSupport {
         mockMvc.perform(get("/api/knowledge-notes/access").with(user(member(MemberRole.FAMILY))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.hasAccess", is(false)));
+    }
+
+    private MockMultipartFile png(String name) {
+        return new MockMultipartFile("files", name, "image/png", new byte[]{1});
+    }
+
+    @Test
+    @DisplayName("uploadImages는 파일 2개를 받아 URL 2개를 반환한다")
+    void uploadImages_returnsUrls() throws Exception {
+        given(knowledgeNoteService.uploadImages(any()))
+                .willReturn(List.of("https://b/knowledge-notes/a.png", "https://b/knowledge-notes/b.png"));
+
+        mockMvc.perform(multipart("/api/knowledge-notes/images").file(png("a.png")).file(png("b.png"))
+                        .with(user(grantedMember())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.urls.length()", is(2)));
+    }
+
+    @Test
+    @DisplayName("uploadImages는 서비스가 개수 위반으로 거부하면 400을 반환한다")
+    void uploadImages_whenServiceRejects_returns400() throws Exception {
+        given(knowledgeNoteService.uploadImages(any()))
+                .willThrow(new CustomException(ErrorCode.KNOWLEDGE_NOTE_IMAGE_INVALID));
+
+        mockMvc.perform(multipart("/api/knowledge-notes/images")
+                        .file(png("1.png")).file(png("2.png")).file(png("3.png"))
+                        .file(png("4.png")).file(png("5.png")).file(png("6.png"))
+                        .with(user(grantedMember())))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    @DisplayName("uploadImages는 files 파트가 없으면 400을 반환한다")
+    void uploadImages_withoutFiles_returns400() throws Exception {
+        mockMvc.perform(multipart("/api/knowledge-notes/images").with(user(grantedMember())))
+                .andExpect(status().isBadRequest());
+
+        verifyNoInteractions(knowledgeNoteService);
+    }
+
+    @Test
+    @DisplayName("uploadImages는 checker 가 거부하면 403을 반환하고 서비스를 호출하지 않는다")
+    void uploadImages_whenCheckerDenies_returns403() throws Exception {
+        mockMvc.perform(multipart("/api/knowledge-notes/images").file(png("a.png"))
+                        .with(user(deniedMember())))
+                .andExpect(status().isForbidden());
+
+        verifyNoInteractions(knowledgeNoteService);
+    }
+
+    @Test
+    @DisplayName("create는 imageUrls 가 6개면 빈 검증으로 400을 반환한다")
+    void create_withTooManyImageUrls_returns400() throws Exception {
+        KnowledgeNoteRequest request = new KnowledgeNoteRequest();
+        request.setCategory(KnowledgeCategory.STOCK);
+        request.setImageUrls(List.of("u1", "u2", "u3", "u4", "u5", "u6"));
+
+        mockMvc.perform(post("/api/knowledge-notes").with(user(grantedMember()))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message", is("이미지는 최대 5장까지 첨부할 수 있습니다.")));
+
+        verifyNoInteractions(knowledgeNoteService);
+    }
+
+    @Test
+    @DisplayName("create는 내용 없이 imageUrls 만 있어도 요청을 서비스에 전달한다")
+    void create_withOnlyImageUrls_bindsToService() throws Exception {
+        given(knowledgeNoteService.create(any(), any(KnowledgeNoteRequest.class))).willReturn(response(8L));
+        KnowledgeNoteRequest request = new KnowledgeNoteRequest();
+        request.setCategory(KnowledgeCategory.STOCK);
+        request.setImageUrls(List.of("https://b/knowledge-notes/a.png"));
+
+        mockMvc.perform(post("/api/knowledge-notes").with(user(grantedMember()))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk());
+
+        verify(knowledgeNoteService).create(any(),
+                org.mockito.ArgumentMatchers.argThat(r -> r.getImageUrls().size() == 1 && r.getContent() == null));
+    }
+
+    @Test
+    @DisplayName("create 응답 JSON 은 images 배열을 포함한다")
+    void create_responseIncludesImages() throws Exception {
+        given(knowledgeNoteService.create(any(), any(KnowledgeNoteRequest.class)))
+                .willReturn(new KnowledgeNoteResponse(9L, KnowledgeCategory.STOCK, null, null, null,
+                        List.of(), null, null, List.of("https://b/knowledge-notes/a.png"),
+                        LocalDateTime.now(), LocalDateTime.now()));
+
+        mockMvc.perform(post("/api/knowledge-notes").with(user(grantedMember()))
+                        .contentType(MediaType.APPLICATION_JSON).content(validBody()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.images[0]", is("https://b/knowledge-notes/a.png")));
     }
 }

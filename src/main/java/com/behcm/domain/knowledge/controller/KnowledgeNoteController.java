@@ -1,5 +1,6 @@
 package com.behcm.domain.knowledge.controller;
 
+import com.behcm.domain.knowledge.dto.KnowledgeNoteImageUploadResponse;
 import com.behcm.domain.knowledge.dto.KnowledgeNoteRequest;
 import com.behcm.domain.knowledge.dto.KnowledgeNoteResponse;
 import com.behcm.domain.knowledge.entity.KnowledgeCategory;
@@ -8,7 +9,9 @@ import com.behcm.domain.member.entity.Member;
 import com.behcm.global.common.ApiResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -20,7 +23,10 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.RestController;
+
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 import java.util.Map;
@@ -31,6 +37,7 @@ import java.util.Map;
  * <p>{@code @PreAuthorize} 를 클래스 레벨에 두는 것은 의도적이다: 엔드포인트가 추가돼도 기본이 차단이어야 한다.
  * 권한 확인용 {@code /access} 는 403 을 받으면 안 되므로 {@link KnowledgeAccessController} 에 따로 둔다.
  */
+@Slf4j
 @RestController
 @RequestMapping("/api/knowledge-notes")
 @RequiredArgsConstructor
@@ -46,6 +53,17 @@ public class KnowledgeNoteController {
     ) {
         return ResponseEntity.ok(ApiResponse.success("메모를 저장했습니다.",
                 knowledgeNoteService.create(member, request)));
+    }
+
+    @PostMapping(value = "/images", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<ApiResponse<KnowledgeNoteImageUploadResponse>> uploadImages(
+            @AuthenticationPrincipal Member member,
+            @RequestPart("files") List<MultipartFile> files
+    ) {
+        List<String> urls = knowledgeNoteService.uploadImages(files);
+        log.info("Knowledge note images uploaded (memberId={}, count={})", member.getId(), urls.size());
+        return ResponseEntity.ok(ApiResponse.success("이미지를 업로드했습니다.",
+                new KnowledgeNoteImageUploadResponse(urls)));
     }
 
     @GetMapping

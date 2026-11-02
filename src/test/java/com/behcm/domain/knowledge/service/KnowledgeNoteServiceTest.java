@@ -19,6 +19,8 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.mock.web.MockMultipartFile;
+import org.springframework.web.multipart.MultipartFile;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
@@ -486,5 +488,38 @@ class KnowledgeNoteServiceTest {
         ArgumentCaptor<Collection<String>> captor = ArgumentCaptor.forClass(Collection.class);
         verify(repository).countByStockSymbols(any(), captor.capture());
         assertThat(captor.getValue()).containsExactlyInAnyOrder("AAPL", "TSLA");
+    }
+
+    private static List<MultipartFile> files(int count) {
+        return IntStream.range(0, count)
+                .<MultipartFile>mapToObj(i -> new MockMultipartFile("files", "a" + i + ".png", "image/png", new byte[]{1}))
+                .toList();
+    }
+
+    @Test
+    @DisplayName("uploadImages는 파일이 0개면 KNOWLEDGE_NOTE_IMAGE_INVALID 를 던진다")
+    void uploadImages_withNoFiles_throws() {
+        assertThatThrownBy(() -> service.uploadImages(List.of()))
+                .isInstanceOf(CustomException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.KNOWLEDGE_NOTE_IMAGE_INVALID);
+        verifyNoInteractions(s3Service);
+    }
+
+    @Test
+    @DisplayName("uploadImages는 파일이 6개면 S3 를 호출하지 않고 KNOWLEDGE_NOTE_IMAGE_INVALID 를 던진다")
+    void uploadImages_withTooManyFiles_throwsWithoutS3Call() {
+        assertThatThrownBy(() -> service.uploadImages(files(KnowledgeNote.MAX_IMAGES + 1)))
+                .isInstanceOf(CustomException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.KNOWLEDGE_NOTE_IMAGE_INVALID);
+        verifyNoInteractions(s3Service);
+    }
+
+    @Test
+    @DisplayName("uploadImages는 파일 2개를 S3 에 위임하고 URL 을 반환한다")
+    void uploadImages_delegatesToS3() {
+        List<MultipartFile> files = files(2);
+        when(s3Service.uploadKnowledgeNoteImages(files)).thenReturn(List.of(img("a"), img("b")));
+
+        assertThat(service.uploadImages(files)).containsExactly(img("a"), img("b"));
     }
 }

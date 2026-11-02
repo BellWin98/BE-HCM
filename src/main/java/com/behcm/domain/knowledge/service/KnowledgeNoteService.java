@@ -18,6 +18,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -68,6 +69,14 @@ public class KnowledgeNoteService {
         KnowledgeNote saved = knowledgeNoteRepository.save(note);
         log.info("Knowledge note created (memberId={}, noteId={})", member.getId(), saved.getId());
         return KnowledgeNoteResponse.from(saved);
+    }
+
+    /** 메모에 붙일 이미지를 S3 에 올리고 URL 을 돌려준다. 장수(1~5)는 S3 호출 전에 확인한다. */
+    public List<String> uploadImages(List<MultipartFile> files) {
+        if (files == null || files.isEmpty() || files.size() > KnowledgeNote.MAX_IMAGES) {
+            throw new CustomException(ErrorCode.KNOWLEDGE_NOTE_IMAGE_INVALID);
+        }
+        return s3Service.uploadKnowledgeNoteImages(files);
     }
 
     public KnowledgeNoteResponse get(Member member, Long id) {

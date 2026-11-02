@@ -8,6 +8,7 @@ import com.behcm.domain.knowledge.repository.KnowledgeNoteRepository;
 import com.behcm.domain.knowledge.repository.KnowledgeNoteSpecs;
 import com.behcm.domain.knowledge.repository.StockNoteCount;
 import com.behcm.domain.member.entity.Member;
+import com.behcm.global.config.aws.S3Service;
 import com.behcm.global.exception.CustomException;
 import com.behcm.global.exception.ErrorCode;
 import lombok.RequiredArgsConstructor;
@@ -47,6 +48,8 @@ public class KnowledgeNoteService {
     private static final Sort DEFAULT_SORT = Sort.by(Sort.Order.desc("createdAt"), Sort.Order.desc("id"));
 
     private final KnowledgeNoteRepository knowledgeNoteRepository;
+    private final S3Service s3Service;
+    private final KnowledgeNoteImageCleaner imageCleaner;
 
     @Transactional
     public KnowledgeNoteResponse create(Member member, KnowledgeNoteRequest request) {
@@ -61,6 +64,7 @@ public class KnowledgeNoteService {
                 .stockName(n.stockName())
                 .build();
         note.replaceTags(n.tags());
+        note.replaceImages(n.imageUrls());
         KnowledgeNote saved = knowledgeNoteRepository.save(note);
         log.info("Knowledge note created (memberId={}, noteId={})", member.getId(), saved.getId());
         return KnowledgeNoteResponse.from(saved);
@@ -76,8 +80,10 @@ public class KnowledgeNoteService {
         NormalizedNote n = normalize(request);
         note.update(n.category(), n.content(), n.sourceUrl(), n.sourceText(), n.stockSymbol(), n.stockName());
         note.replaceTags(n.tags());
+        List<String> removedImages = note.replaceImages(n.imageUrls());
         // updatedAt 은 flush 시점에 갱신되므로, 응답을 만들기 전에 flush 해서 최신 값을 반영한다.
         knowledgeNoteRepository.flush();
+        imageCleaner.deleteAfterCommit(removedImages);
         log.info("Knowledge note updated (memberId={}, noteId={})", member.getId(), id);
         return KnowledgeNoteResponse.from(note);
     }
@@ -85,7 +91,9 @@ public class KnowledgeNoteService {
     @Transactional
     public void delete(Member member, Long id) {
         KnowledgeNote note = findOwned(member, id);
+        List<String> imageUrls = note.getImageUrls();
         knowledgeNoteRepository.delete(note);
+        imageCleaner.deleteAfterCommit(imageUrls);
         log.info("Knowledge note deleted (memberId={}, noteId={})", member.getId(), id);
     }
 
@@ -132,9 +140,6 @@ public class KnowledgeNoteService {
     private NormalizedNote normalize(KnowledgeNoteRequest request) {
         String sourceUrl = blankToNull(request.getSourceUrl());
         String sourceText = blankToNull(request.getSourceText());
-        if (sourceUrl == null && sourceText == null) {
-            throw new CustomException(ErrorCode.KNOWLEDGE_NOTE_SOURCE_REQUIRED);
-        }
         if (sourceUrl != null && !isHttpUrl(sourceUrl)) {
             throw new CustomException(ErrorCode.KNOWLEDGE_NOTE_SOURCE_URL_INVALID);
         }
@@ -150,8 +155,34 @@ public class KnowledgeNoteService {
             stockName = stockSymbol;
         }
 
-        return new NormalizedNote(request.getCategory(), request.getContent(), sourceUrl, sourceText,
-                stockSymbol, stockName, normalizeTags(request.getTags()));
+        String content = blankToNull(request.getContent());
+        List<String> imageUrls = normalizeImageUrls(request.getImageUrls());
+        if (content == null && imageUrls.isEmpty()) {
+            throw new CustomException(ErrorCode.KNOWLEDGE_NOTE_CONTENT_OR_IMAGE_REQUIRED);
+        }
+
+        return new NormalizedNote(request.getCategory(), content, sourceUrl, sourceText,
+                stockSymbol, stockName, normalizeTags(request.getTags()), imageUrls);
+    }
+
+    /** 이 앱이 올린 이미지(knowledge-notes/ 아래)만, 중복 없이 최대 {@link KnowledgeNote#MAX_IMAGES}장까지 허용한다. */
+    private List<String> normalizeImageUrls(List<String> rawUrls) {
+        if (rawUrls == null) {
+            return List.of();
+        }
+        List<String> urls = new ArrayList<>();
+        for (String raw : rawUrls) {
+            String url = blankToNull(raw);
+            if (url != null) {
+                urls.add(url);
+            }
+        }
+        if (urls.size() > KnowledgeNote.MAX_IMAGES
+                || new LinkedHashSet<>(urls).size() != urls.size()
+                || !urls.stream().allMatch(s3Service::isKnowledgeNoteImageUrl)) {
+            throw new CustomException(ErrorCode.KNOWLEDGE_NOTE_IMAGE_INVALID);
+        }
+        return urls;
     }
 
     private List<String> normalizeTags(List<String> rawTags) {
@@ -202,6 +233,7 @@ public class KnowledgeNoteService {
     }
 
     private record NormalizedNote(KnowledgeCategory category, String content, String sourceUrl, String sourceText,
-                                  String stockSymbol, String stockName, List<String> tags) {
+                                  String stockSymbol, String stockName, List<String> tags,
+                                  List<String> imageUrls) {
     }
 }

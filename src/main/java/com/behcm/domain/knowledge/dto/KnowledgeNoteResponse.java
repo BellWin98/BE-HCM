@@ -15,6 +15,7 @@ public record KnowledgeNoteResponse(
         List<String> tags,
         String stockSymbol,
         String stockName,
+        List<String> images,
         LocalDateTime createdAt,
         LocalDateTime updatedAt
 ) {
@@ -29,6 +30,7 @@ public record KnowledgeNoteResponse(
                 note.getTagNames(),
                 note.getStockSymbol(),
                 note.getStockName(),
+                note.getImageUrls(),
                 note.getCreatedAt(),
                 note.getUpdatedAt()
         );

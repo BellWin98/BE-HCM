@@ -223,4 +223,23 @@ class KnowledgeNoteRepositoryTest extends IntegrationTestSupport {
         assertThat(repository.findImageUrlsByMemberId(me.getId()))
                 .containsExactlyInAnyOrder("https://img/1.png", "https://img/2.png");
     }
+
+    @Test
+    @DisplayName("저장된 메모의 이미지를 하나 빼고 순서를 바꾸고 새로 추가한 뒤 flush·재조회해도 순서가 유지된다")
+    void replaceImages_onPersistedNote_keepsOrderAfterRemoveReorderAdd() {
+        KnowledgeNote note = saveNote(me, KnowledgeCategory.ETC, "c", null, null, null);
+        note.replaceImages(List.of("https://img/a.png", "https://img/b.png", "https://img/c.png"));
+        em.flush();
+        em.clear();
+
+        KnowledgeNote loaded = repository.findById(note.getId()).orElseThrow();
+        List<String> removed = loaded.replaceImages(
+                List.of("https://img/c.png", "https://img/new.png", "https://img/a.png"));
+        em.flush();
+        em.clear();
+
+        assertThat(removed).containsExactly("https://img/b.png");
+        assertThat(repository.findById(note.getId()).orElseThrow().getImageUrls())
+                .containsExactly("https://img/c.png", "https://img/new.png", "https://img/a.png");
+    }
 }

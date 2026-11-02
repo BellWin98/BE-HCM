@@ -2,6 +2,7 @@ package com.behcm.domain.admin.member.service;
 
 import com.behcm.domain.admin.member.dto.AdminMemberResponse;
 import com.behcm.domain.chat.repository.ChatMessageRepository;
+import com.behcm.domain.knowledge.repository.KnowledgeNoteRepository;
 import com.behcm.domain.member.entity.Member;
 import com.behcm.domain.member.entity.MemberRole;
 import com.behcm.domain.member.repository.MemberRepository;
@@ -47,6 +48,7 @@ public class AdminMemberService {
     private final PenaltyRepository penaltyRepository;
     private final RestRepository restRepository;
     private final TossAccessRepository tossAccessRepository;
+    private final KnowledgeNoteRepository knowledgeNoteRepository;
 
     public Page<AdminMemberResponse> getMembers(String query, MemberRole role, Pageable pageable) {
         String normalizedQuery = (query != null && !query.isBlank()) ? query : null;
@@ -113,6 +115,9 @@ public class AdminMemberService {
 
         // 토스 접근 권한 삭제 (member 를 FK 로 참조하므로 회원보다 먼저 지워야 한다).
         tossAccessRepository.deleteByMemberId(memberId);
+
+        // 지식 메모 삭제 (knowledge_note 가 member 를 FK 로 참조. 태그는 ON DELETE CASCADE).
+        knowledgeNoteRepository.deleteAllByMemberId(memberId);
 
         // 리액션/댓글 삭제 (workout_record 를 참조하므로 반드시 먼저 지워야 FK 제약에 걸리지 않는다).
         // 본인이 남긴 것과 본인 인증에 달린 남의 것을 함께 지운다.

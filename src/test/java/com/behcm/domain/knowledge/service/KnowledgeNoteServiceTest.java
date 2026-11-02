@@ -218,6 +218,26 @@ class KnowledgeNoteServiceTest {
     }
 
     @Test
+    @DisplayName("수정 응답은 flush 이후의 updatedAt 을 담는다")
+    void update_flushesBeforeBuildingResponse() {
+        KnowledgeNote note = KnowledgeNote.builder().member(member).category(KnowledgeCategory.DEV)
+                .content("old").sourceText("s").build();
+        java.time.LocalDateTime flushed = java.time.LocalDateTime.of(2026, 11, 2, 10, 0);
+        when(repository.findByIdAndMemberId(5L, 1L)).thenReturn(Optional.of(note));
+        org.mockito.Mockito.doAnswer(i -> {
+            ReflectionTestUtils.setField(note, "updatedAt", flushed);
+            return null;
+        }).when(repository).flush();
+
+        KnowledgeNoteResponse response = service.update(member, 5L, request(KnowledgeCategory.DEV, null, "새 출처"));
+
+        org.mockito.InOrder order = org.mockito.Mockito.inOrder(repository);
+        order.verify(repository).findByIdAndMemberId(5L, 1L);
+        order.verify(repository).flush();
+        assertThat(response.updatedAt()).isEqualTo(flushed);
+    }
+
+    @Test
     @DisplayName("다른 회원의 메모 삭제는 NOT_FOUND")
     void delete_otherMembersNote_throwsNotFound() {
         when(repository.findByIdAndMemberId(5L, 1L)).thenReturn(Optional.empty());

@@ -11,6 +11,7 @@ import software.amazon.awssdk.awscore.exception.AwsServiceException;
 import software.amazon.awssdk.core.exception.SdkException;
 import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
 import software.amazon.awssdk.services.s3.model.GetUrlRequest;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 
@@ -35,9 +36,14 @@ public class S3Service {
     private static final String PROFILE_IMAGE_PREFIX = "profiles/";
     private static final String CHAT_IMAGE_PREFIX = "chat/rooms/";
     private static final String WORKOUT_IMAGE_PREFIX = "workout/";
+    private static final String KNOWLEDGE_NOTE_IMAGE_PREFIX = "knowledge-notes/";
     private static final DateTimeFormatter FOLDER_DATE_FORMATTER = DateTimeFormatter.ofPattern("yyyy/MM/dd");
     private static final Set<String> ALLOWED_CONTENT_TYPES = Set.of("image/jpeg", "image/png", "image/webp");
     private static final Set<String> ALLOWED_IMAGE_EXTENSIONS = Set.of(".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp");
+
+    private static final Set<String> KNOWLEDGE_NOTE_CONTENT_TYPES =
+            Set.of("image/jpeg", "image/png", "image/webp", "image/gif");
+    private static final Set<String> KNOWLEDGE_NOTE_EXTENSIONS = Set.of(".jpg", ".jpeg", ".png", ".webp", ".gif");
 
     @Value("${cloud.aws.s3.bucket}")
     private String bucket;
@@ -69,11 +75,54 @@ public class S3Service {
         return uploadedUrls;
     }
 
+    /**
+     * S3 키: knowledge-notes/{yyyy/MM/dd}/{uuid}.{ext}. 메모 전용으로 GIF 를 허용한다.
+     */
+    public List<String> uploadKnowledgeNoteImages(List<MultipartFile> files) {
+        if (files == null || files.isEmpty()) {
+            throw new CustomException(ErrorCode.INVALID_FILE);
+        }
+
+        List<String> uploadedUrls = new ArrayList<>();
+        for (MultipartFile file : files) {
+            uploadedUrls.add(uploadImage(file, KNOWLEDGE_NOTE_IMAGE_PREFIX,
+                    KNOWLEDGE_NOTE_CONTENT_TYPES, KNOWLEDGE_NOTE_EXTENSIONS));
+        }
+        return uploadedUrls;
+    }
+
+    /** 이 버킷의 knowledge-notes/ 아래 객체 URL 인지 판별한다. */
+    public boolean isKnowledgeNoteImageUrl(String url) {
+        return url != null && url.startsWith(getFileUrl(KNOWLEDGE_NOTE_IMAGE_PREFIX));
+    }
+
+    /**
+     * 이 버킷의 객체 URL 에서 키를 뽑아 삭제한다. 이 버킷 URL 이 아니면 아무것도 하지 않는다.
+     * S3 예외는 호출자가 처리하도록 그대로 던진다.
+     */
+    public void deleteByUrl(String url) {
+        String knowledgeNoteBaseUrl = getFileUrl(KNOWLEDGE_NOTE_IMAGE_PREFIX);
+        String bucketBaseUrl = knowledgeNoteBaseUrl.substring(
+                0, knowledgeNoteBaseUrl.length() - KNOWLEDGE_NOTE_IMAGE_PREFIX.length());
+        if (url == null || !url.startsWith(bucketBaseUrl) || url.length() == bucketBaseUrl.length()) {
+            log.warn("S3 delete skipped: URL does not belong to bucket (bucket={}, url={})", bucket, url);
+            return;
+        }
+        String key = url.substring(bucketBaseUrl.length());
+        s3Client.deleteObject(DeleteObjectRequest.builder().bucket(bucket).key(key).build());
+        log.debug("S3 delete done (key={})", key);
+    }
+
     private String uploadWorkoutImage(MultipartFile file) {
         return uploadImage(file, WORKOUT_IMAGE_PREFIX);
     }
 
     private String uploadImage(MultipartFile file, String keyPrefix) {
+        return uploadImage(file, keyPrefix, ALLOWED_CONTENT_TYPES, ALLOWED_IMAGE_EXTENSIONS);
+    }
+
+    private String uploadImage(MultipartFile file, String keyPrefix,
+                               Set<String> allowedContentTypes, Set<String> allowedExtensions) {
         if (file == null || file.isEmpty()) {
             throw new CustomException(ErrorCode.INVALID_FILE);
         }
@@ -87,11 +136,11 @@ public class S3Service {
             throw rejected(file, ErrorCode.FILE_TOO_LARGE);
         }
 
-        if (!isAllowedContentType(file.getContentType())) {
+        if (!isAllowedContentType(file.getContentType(), allowedContentTypes)) {
             throw rejected(file, ErrorCode.INVALID_FILE_TYPE);
         }
 
-        if (!isValidImageFile(originalFilename)) {
+        if (!isValidImageFile(originalFilename, allowedExtensions)) {
             throw rejected(file, ErrorCode.INVALID_FILE_TYPE);
         }
 
@@ -131,20 +180,20 @@ public class S3Service {
         return new CustomException(errorCode);
     }
 
-    private boolean isAllowedContentType(String contentType) {
+    private boolean isAllowedContentType(String contentType, Set<String> allowedContentTypes) {
         if (contentType == null) {
             return false;
         }
         String lowerCaseContentType = contentType.toLowerCase(Locale.ROOT);
-        return ALLOWED_CONTENT_TYPES.contains(lowerCaseContentType);
+        return allowedContentTypes.contains(lowerCaseContentType);
     }
 
-    private boolean isValidImageFile(String filename) {
+    private boolean isValidImageFile(String filename, Set<String> allowedExtensions) {
         if (filename == null) {
             return false;
         }
         String lowerCaseFilename = filename.toLowerCase(Locale.ROOT);
-        for (String ext : ALLOWED_IMAGE_EXTENSIONS) {
+        for (String ext : allowedExtensions) {
             if (lowerCaseFilename.endsWith(ext)) {
                 return true;
             }

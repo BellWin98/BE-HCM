@@ -95,6 +95,44 @@ class KnowledgeNoteServiceTest {
     }
 
     @Test
+    @DisplayName("전각 공백(U+3000)만 있는 출처·종목은 빈 값으로 보고, 값의 앞뒤 전각 공백은 지운다")
+    void create_fullWidthSpaceOnlyValues_areBlank() {
+        assertCode(() -> service.create(member, request(KnowledgeCategory.DEV, "\u3000", "\u3000 \u3000")),
+                ErrorCode.KNOWLEDGE_NOTE_SOURCE_REQUIRED);
+
+        KnowledgeNoteRequest r = request(KnowledgeCategory.STOCK, "\u3000", "\u3000인프런\u3000");
+        r.setStockSymbol("\u3000");
+        r.setTags(List.of("\u3000", "\u3000태그\u3000"));
+        KnowledgeNote saved = saveAndCapture(r);
+
+        assertThat(saved.getSourceUrl()).isNull();
+        assertThat(saved.getSourceText()).isEqualTo("인프런");
+        assertThat(saved.getStockSymbol()).isNull();
+        assertThat(saved.getTagNames()).containsExactly("태그");
+    }
+
+    @Test
+    @DisplayName("검색어는 전각 공백(U+3000)으로도 나누고, 전각 공백만 있으면 검색어가 없다")
+    @SuppressWarnings("unchecked")
+    void search_splitsOnFullWidthSpace() {
+        when(repository.findAll(any(Specification.class), any(Pageable.class))).thenReturn(Page.empty());
+
+        try (var specs = mockStatic(com.behcm.domain.knowledge.repository.KnowledgeNoteSpecs.class)) {
+            Specification<KnowledgeNote> spec = mock(Specification.class);
+            specs.when(() -> com.behcm.domain.knowledge.repository.KnowledgeNoteSpecs
+                    .search(any(), any(), any(), any())).thenReturn(spec);
+
+            service.search(member, "\u3000삼성\u3000반도체 \u3000", null, "\u3000", 0, 20);
+            specs.verify(() -> com.behcm.domain.knowledge.repository.KnowledgeNoteSpecs.search(
+                    1L, null, null, List.of("삼성", "반도체")));
+
+            service.search(member, "\u3000\u3000", null, null, 0, 20);
+            specs.verify(() -> com.behcm.domain.knowledge.repository.KnowledgeNoteSpecs.search(
+                    1L, null, null, List.of()));
+        }
+    }
+
+    @Test
     @DisplayName("텍스트 출처만 있어도 저장된다")
     void create_acceptsTextOnlySource() {
         KnowledgeNote saved = saveAndCapture(request(KnowledgeCategory.DEV, "  ", " 인프런 3강 "));

@@ -26,6 +26,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.regex.Pattern;
 
 /**
  * 지식 메모 CRUD·검색. 모든 조회·변경은 요청한 회원 본인의 메모로 한정하며,
@@ -41,6 +42,8 @@ public class KnowledgeNoteService {
     private static final int MIN_PAGE_SIZE = 1;
     private static final int MAX_PAGE_SIZE = 50;
     private static final int MAX_COUNT_SYMBOLS = 100;
+    /** 검색어 구분자. Java 정규식 \s 는 ASCII 공백만 잡으므로 전각 공백(U+3000)을 따로 넣는다. */
+    private static final Pattern WHITESPACE = Pattern.compile("[\\s\\u3000]+");
     private static final Sort DEFAULT_SORT = Sort.by(Sort.Order.desc("createdAt"), Sort.Order.desc("id"));
 
     private final KnowledgeNoteRepository knowledgeNoteRepository;
@@ -176,7 +179,7 @@ public class KnowledgeNoteService {
             return List.of();
         }
         List<String> terms = new ArrayList<>();
-        for (String term : trimmed.split("\\s+")) {
+        for (String term : WHITESPACE.split(trimmed)) {
             if (!term.isBlank() && terms.size() < MAX_SEARCH_TERMS) {
                 terms.add(term);
             }
@@ -189,12 +192,13 @@ public class KnowledgeNoteService {
         return lower.startsWith("http://") || lower.startsWith("https://");
     }
 
+    /** strip() 은 전각 공백(U+3000) 같은 유니코드 공백도 지운다 — trim() 은 ASCII 제어 문자·공백만 지운다. */
     private String blankToNull(String value) {
         if (value == null) {
             return null;
         }
-        String trimmed = value.trim();
-        return trimmed.isEmpty() ? null : trimmed;
+        String stripped = value.strip();
+        return stripped.isEmpty() ? null : stripped;
     }
 
     private record NormalizedNote(KnowledgeCategory category, String content, String sourceUrl, String sourceText,

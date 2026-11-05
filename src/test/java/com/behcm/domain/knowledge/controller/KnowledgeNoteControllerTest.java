@@ -1,8 +1,10 @@
 package com.behcm.domain.knowledge.controller;
 
+import com.behcm.domain.knowledge.dto.KnowledgeNoteAuthor;
 import com.behcm.domain.knowledge.dto.KnowledgeNoteRequest;
 import com.behcm.domain.knowledge.dto.KnowledgeNoteResponse;
 import com.behcm.domain.knowledge.entity.KnowledgeCategory;
+import com.behcm.domain.knowledge.entity.KnowledgeVisibility;
 import com.behcm.domain.member.entity.Member;
 import com.behcm.domain.member.entity.MemberRole;
 import com.behcm.support.IntegrationTestSupport;
@@ -61,7 +63,8 @@ class KnowledgeNoteControllerTest extends IntegrationTestSupport {
 
     private KnowledgeNoteResponse response(Long id) {
         return new KnowledgeNoteResponse(id, KnowledgeCategory.STOCK, "내용", null, null,
-                List.of("반도체"), "005930", "삼성전자", List.of(), LocalDateTime.now(), LocalDateTime.now());
+                List.of("반도체"), "005930", "삼성전자", List.of(), LocalDateTime.now(), LocalDateTime.now(),
+                KnowledgeVisibility.PUBLIC, new KnowledgeNoteAuthor(1L, "n", null), true);
     }
 
     private String validBody() throws Exception {
@@ -130,7 +133,7 @@ class KnowledgeNoteControllerTest extends IntegrationTestSupport {
     @Test
     @DisplayName("search는 쿼리 파라미터를 서비스에 그대로 전달한다")
     void search_passesQueryParamsToService() throws Exception {
-        given(knowledgeNoteService.search(any(), any(), any(), any(), eq(0), eq(20)))
+        given(knowledgeNoteService.search(any(), any(), any(), any(), any(), eq(0), eq(20)))
                 .willReturn(new PageImpl<>(List.of(response(1L)), PageRequest.of(0, 20), 1));
 
         mockMvc.perform(get("/api/knowledge-notes").with(user(grantedMember()))
@@ -141,7 +144,7 @@ class KnowledgeNoteControllerTest extends IntegrationTestSupport {
                 .andExpect(jsonPath("$.data.content[0].id", is(1)));
 
         verify(knowledgeNoteService).search(any(), eq("삼성 반도체"), eq(KnowledgeCategory.STOCK),
-                eq("005930"), eq(0), eq(20));
+                eq("005930"), any(), eq(0), eq(20));
     }
 
     @Test
@@ -277,7 +280,8 @@ class KnowledgeNoteControllerTest extends IntegrationTestSupport {
         given(knowledgeNoteService.create(any(), any(KnowledgeNoteRequest.class)))
                 .willReturn(new KnowledgeNoteResponse(9L, KnowledgeCategory.STOCK, null, null, null,
                         List.of(), null, null, List.of("https://b/knowledge-notes/a.png"),
-                        LocalDateTime.now(), LocalDateTime.now()));
+                        LocalDateTime.now(), LocalDateTime.now(),
+                        KnowledgeVisibility.PUBLIC, new KnowledgeNoteAuthor(1L, "n", null), true));
 
         mockMvc.perform(post("/api/knowledge-notes").with(user(grantedMember()))
                         .contentType(MediaType.APPLICATION_JSON).content(validBody()))

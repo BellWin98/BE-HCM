@@ -4,6 +4,7 @@ import com.behcm.domain.knowledge.dto.KnowledgeNoteRequest;
 import com.behcm.domain.knowledge.dto.KnowledgeNoteResponse;
 import com.behcm.domain.knowledge.entity.KnowledgeCategory;
 import com.behcm.domain.knowledge.entity.KnowledgeNote;
+import com.behcm.domain.knowledge.entity.KnowledgeVisibility;
 import com.behcm.domain.knowledge.repository.KnowledgeNoteRepository;
 import com.behcm.domain.knowledge.repository.StockNoteCount;
 import com.behcm.domain.member.entity.Member;
@@ -33,6 +34,7 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.stream.IntStream;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -59,15 +61,41 @@ class KnowledgeNoteServiceTest {
     @Mock
     private KnowledgeNoteImageCleaner imageCleaner;
 
+    @Mock
+    private KnowledgeAccessChecker accessChecker;
+
     @InjectMocks
     private KnowledgeNoteService service;
 
+    private static final KnowledgePermissions READER = new KnowledgePermissions(false, true, false);
+    private static final KnowledgePermissions WRITER_ONLY = new KnowledgePermissions(false, false, true);
+    private static final KnowledgePermissions READ_WRITE = new KnowledgePermissions(false, true, true);
+
     private Member member;
+    private Member other;
 
     @BeforeEach
     void setUp() {
-        member = Member.builder().email("a@b.c").password("p").nickname("n").role(MemberRole.ADMIN).build();
-        ReflectionTestUtils.setField(member, "id", 1L);
+        member = member(1L, "n");
+        other = member(2L, "other");
+        // 기본은 작성 권한만 있는 회원(본인 메모만). 테스트마다 필요하면 다시 지정한다.
+        org.mockito.Mockito.lenient().when(accessChecker.permissionsOf(any())).thenReturn(WRITER_ONLY);
+    }
+
+    private static Member member(Long id, String nickname) {
+        Member m = Member.builder().email(nickname + "@b.c").password("p").nickname(nickname)
+                .role(MemberRole.FAMILY).build();
+        ReflectionTestUtils.setField(m, "id", id);
+        return m;
+    }
+
+    private void givenPermissions(KnowledgePermissions p) {
+        when(accessChecker.permissionsOf(member)).thenReturn(p);
+    }
+
+    private static KnowledgeNote note(Member author, KnowledgeVisibility visibility) {
+        return KnowledgeNote.builder().member(author).category(KnowledgeCategory.DEV)
+                .content("c").visibility(visibility).build();
     }
 
     private KnowledgeNoteRequest request(KnowledgeCategory category, String sourceUrl, String sourceText) {
@@ -234,11 +262,11 @@ class KnowledgeNoteServiceTest {
                     .matches(any(), any(), any())).thenReturn(spec);
             when(spec.and(any(Specification.class))).thenReturn(spec);
 
-            service.search(member, "\u3000삼성\u3000반도체 \u3000", null, "\u3000", 0, 20);
+            service.search(member, "\u3000삼성\u3000반도체 \u3000", null, "\u3000", Set.of(), 0, 20);
             specs.verify(() -> com.behcm.domain.knowledge.repository.KnowledgeNoteSpecs.matches(
                     null, null, List.of("삼성", "반도체")));
 
-            service.search(member, "\u3000\u3000", null, null, 0, 20);
+            service.search(member, "\u3000\u3000", null, null, Set.of(), 0, 20);
             specs.verify(() -> com.behcm.domain.knowledge.repository.KnowledgeNoteSpecs.matches(
                     null, null, List.of()));
         }
@@ -433,7 +461,7 @@ class KnowledgeNoteServiceTest {
                     .matches(any(), any(), any())).thenReturn(spec);
             when(spec.and(any(Specification.class))).thenReturn(spec);
 
-            service.search(member, "a b  c d e f g", KnowledgeCategory.DEV, " AAPL ", 2, 0);
+            service.search(member, "a b  c d e f g", KnowledgeCategory.DEV, " AAPL ", Set.of(), 2, 0);
             specs.verify(() -> com.behcm.domain.knowledge.repository.KnowledgeNoteSpecs.matches(
                     KnowledgeCategory.DEV, "AAPL", List.of("a", "b", "c", "d", "e")));
 
@@ -444,7 +472,7 @@ class KnowledgeNoteServiceTest {
             assertThat(pageable.getValue().getSort())
                     .isEqualTo(Sort.by(Sort.Order.desc("createdAt"), Sort.Order.desc("id")));
 
-            service.search(member, "   ", null, " ", -3, 999);
+            service.search(member, "   ", null, " ", Set.of(), -3, 999);
             specs.verify(() -> com.behcm.domain.knowledge.repository.KnowledgeNoteSpecs.matches(
                     null, null, List.of()));
             ArgumentCaptor<Pageable> second = ArgumentCaptor.forClass(Pageable.class);
@@ -461,7 +489,7 @@ class KnowledgeNoteServiceTest {
         when(repository.findAll(any(Specification.class), any(Pageable.class)))
                 .thenReturn(new PageImpl<>(List.of()));
 
-        assertThat(service.search(member, null, null, null, 0, 20).getContent()).isEmpty();
+        assertThat(service.search(member, null, null, null, Set.of(), 0, 20).getContent()).isEmpty();
     }
 
     @Test
@@ -495,6 +523,200 @@ class KnowledgeNoteServiceTest {
         ArgumentCaptor<Collection<String>> captor = ArgumentCaptor.forClass(Collection.class);
         verify(repository).countVisibleByStockSymbols(any(), anyBoolean(), captor.capture());
         assertThat(captor.getValue()).containsExactlyInAnyOrder("AAPL", "TSLA");
+    }
+
+    @Test
+    @DisplayName("공개 범위 없이 만들면 PUBLIC 으로 저장한다")
+    void create_withoutVisibility_savesPublic() {
+        KnowledgeNote saved = saveAndCapture(request(KnowledgeCategory.DEV, null, null));
+
+        assertThat(saved.getVisibility()).isEqualTo(KnowledgeVisibility.PUBLIC);
+    }
+
+    @Test
+    @DisplayName("PRIVATE 으로 만들면 PRIVATE 으로 저장하고 응답에도 담는다")
+    void create_withPrivate_savesPrivate() {
+        KnowledgeNoteRequest r = request(KnowledgeCategory.DEV, null, null);
+        r.setVisibility(KnowledgeVisibility.PRIVATE);
+        when(repository.save(any(KnowledgeNote.class))).thenAnswer(i -> i.getArgument(0));
+
+        KnowledgeNoteResponse response = service.create(member, r);
+
+        ArgumentCaptor<KnowledgeNote> captor = ArgumentCaptor.forClass(KnowledgeNote.class);
+        verify(repository).save(captor.capture());
+        assertThat(captor.getValue().getVisibility()).isEqualTo(KnowledgeVisibility.PRIVATE);
+        assertThat(response.visibility()).isEqualTo(KnowledgeVisibility.PRIVATE);
+        assertThat(response.author().id()).isEqualTo(1L);
+        assertThat(response.editable()).isTrue();
+    }
+
+    @Test
+    @DisplayName("ADMIN 이 아니면 단건 조회는 보이는 범위 조회를 쓰고 findById 는 쓰지 않는다")
+    void get_nonAdmin_usesVisibleLookup() {
+        givenPermissions(READER);
+        when(repository.findVisibleById(5L, 1L, true)).thenReturn(Optional.of(note(other, KnowledgeVisibility.PUBLIC)));
+
+        KnowledgeNoteResponse response = service.get(member, 5L);
+
+        verify(repository).findVisibleById(5L, 1L, true);
+        verify(repository, never()).findById(any());
+        assertThat(response.author().id()).isEqualTo(2L);
+        assertThat(response.author().nickname()).isEqualTo("other");
+        assertThat(response.editable()).isFalse();
+    }
+
+    @Test
+    @DisplayName("ADMIN 은 누구의 메모든 findById 로 조회한다")
+    void get_admin_findsAnyNote() {
+        givenPermissions(KnowledgePermissions.ADMIN);
+        when(repository.findById(5L)).thenReturn(Optional.of(note(other, KnowledgeVisibility.PRIVATE)));
+
+        KnowledgeNoteResponse response = service.get(member, 5L);
+
+        verify(repository).findById(5L);
+        verify(repository, never()).findVisibleById(any(), any(), anyBoolean());
+        assertThat(response.visibility()).isEqualTo(KnowledgeVisibility.PRIVATE);
+        assertThat(response.editable()).isTrue();
+    }
+
+    @Test
+    @DisplayName("ADMIN 이 찾는 메모가 없으면 NOT_FOUND")
+    void get_admin_missingNote_throwsNotFound() {
+        givenPermissions(KnowledgePermissions.ADMIN);
+        when(repository.findById(5L)).thenReturn(Optional.empty());
+
+        assertCode(() -> service.get(member, 5L), ErrorCode.KNOWLEDGE_NOTE_NOT_FOUND);
+    }
+
+    @Test
+    @DisplayName("작성 권한자가 남의 공개 메모를 수정하면 FORBIDDEN 이고 저장·이미지 정리를 하지 않는다")
+    void update_othersPublicNote_throwsForbidden() {
+        givenPermissions(READ_WRITE);
+        KnowledgeNote note = note(other, KnowledgeVisibility.PUBLIC);
+        when(repository.findVisibleById(5L, 1L, true)).thenReturn(Optional.of(note));
+        KnowledgeNoteRequest r = request(KnowledgeCategory.STOCK, null, null);
+        r.setContent("바뀐 내용");
+
+        assertCode(() -> service.update(member, 5L, r), ErrorCode.KNOWLEDGE_NOTE_FORBIDDEN);
+
+        assertThat(note.getContent()).isEqualTo("c");
+        assertThat(note.getCategory()).isEqualTo(KnowledgeCategory.DEV);
+        verify(repository, never()).flush();
+        verify(repository, never()).save(any());
+        verifyNoInteractions(imageCleaner);
+    }
+
+    @Test
+    @DisplayName("작성 권한자가 남의 공개 메모를 삭제하면 FORBIDDEN 이고 삭제·이미지 정리를 하지 않는다")
+    void delete_othersPublicNote_throwsForbidden() {
+        givenPermissions(READ_WRITE);
+        when(repository.findVisibleById(5L, 1L, true)).thenReturn(Optional.of(note(other, KnowledgeVisibility.PUBLIC)));
+
+        assertCode(() -> service.delete(member, 5L), ErrorCode.KNOWLEDGE_NOTE_FORBIDDEN);
+
+        verify(repository, never()).delete(any(KnowledgeNote.class));
+        verifyNoInteractions(imageCleaner);
+    }
+
+    @Test
+    @DisplayName("ADMIN 이 남의 비공개 메모를 visibility 없이 수정하면 작성자와 공개 범위가 유지된다")
+    void update_byAdmin_keepsAuthorAndVisibility() {
+        givenPermissions(KnowledgePermissions.ADMIN);
+        KnowledgeNote note = note(other, KnowledgeVisibility.PRIVATE);
+        when(repository.findById(5L)).thenReturn(Optional.of(note));
+        KnowledgeNoteRequest r = request(KnowledgeCategory.DEV, null, null);
+        r.setVisibility(null);
+
+        KnowledgeNoteResponse response = service.update(member, 5L, r);
+
+        assertThat(note.getMember()).isSameAs(other);
+        assertThat(response.author().id()).isEqualTo(2L);
+        assertThat(response.visibility()).isEqualTo(KnowledgeVisibility.PRIVATE);
+        assertThat(response.editable()).isTrue();
+    }
+
+    @Test
+    @DisplayName("작성 권한자는 자기 메모를 PRIVATE 으로 바꿀 수 있다")
+    void update_ownNote_changesVisibility() {
+        KnowledgeNote note = note(member, KnowledgeVisibility.PUBLIC);
+        when(repository.findVisibleById(5L, 1L, false)).thenReturn(Optional.of(note));
+        KnowledgeNoteRequest r = request(KnowledgeCategory.DEV, null, null);
+        r.setVisibility(KnowledgeVisibility.PRIVATE);
+
+        KnowledgeNoteResponse response = service.update(member, 5L, r);
+
+        assertThat(note.getVisibility()).isEqualTo(KnowledgeVisibility.PRIVATE);
+        assertThat(response.visibility()).isEqualTo(KnowledgeVisibility.PRIVATE);
+        assertThat(response.editable()).isTrue();
+    }
+
+    @Test
+    @DisplayName("검색 응답의 editable 은 권한을 따른다: reader 는 모두 false, writer 는 본인 것만, ADMIN 은 모두 true")
+    @SuppressWarnings("unchecked")
+    void search_responseEditable_followsPermissions() {
+        KnowledgeNote mine = note(member, KnowledgeVisibility.PUBLIC);
+        KnowledgeNote others = note(other, KnowledgeVisibility.PUBLIC);
+        when(repository.findAll(any(Specification.class), any(Pageable.class)))
+                .thenAnswer(i -> new PageImpl<>(List.of(mine, others)));
+
+        givenPermissions(READER);
+        assertThat(service.search(member, null, null, null, Set.of(), 0, 20).getContent())
+                .extracting(KnowledgeNoteResponse::editable).containsExactly(false, false);
+
+        givenPermissions(READ_WRITE);
+        assertThat(service.search(member, null, null, null, Set.of(), 0, 20).getContent())
+                .extracting(KnowledgeNoteResponse::editable).containsExactly(true, false);
+
+        givenPermissions(KnowledgePermissions.ADMIN);
+        assertThat(service.search(member, null, null, null, Set.of(), 0, 20).getContent())
+                .extracting(KnowledgeNoteResponse::editable).containsExactly(true, true);
+    }
+
+    @Test
+    @DisplayName("검색은 요청자의 권한과 scopes 를 노출 범위 조건에 넘긴다")
+    @SuppressWarnings("unchecked")
+    void search_passesPermissionsAndScopesToVisibleTo() {
+        givenPermissions(READER);
+        when(repository.findAll(any(Specification.class), any(Pageable.class))).thenReturn(Page.empty());
+
+        try (var specs = mockStatic(com.behcm.domain.knowledge.repository.KnowledgeNoteSpecs.class)) {
+            Specification<KnowledgeNote> spec = mock(Specification.class);
+            specs.when(() -> com.behcm.domain.knowledge.repository.KnowledgeNoteSpecs
+                    .visibleTo(any(), any(), any())).thenReturn(spec);
+            specs.when(() -> com.behcm.domain.knowledge.repository.KnowledgeNoteSpecs
+                    .matches(any(), any(), any())).thenReturn(spec);
+            when(spec.and(any(Specification.class))).thenReturn(spec);
+
+            Set<com.behcm.domain.knowledge.repository.KnowledgeNoteScope> scopes =
+                    Set.of(com.behcm.domain.knowledge.repository.KnowledgeNoteScope.PUBLIC);
+            service.search(member, null, null, null, scopes, 0, 20);
+
+            specs.verify(() -> com.behcm.domain.knowledge.repository.KnowledgeNoteSpecs.visibleTo(1L, READER, scopes));
+        }
+    }
+
+    @Test
+    @DisplayName("조회 권한자의 종목별 건수는 공개 메모를 포함한다(includePublic=true)")
+    void countByStockSymbols_readerPassesIncludePublicTrue() {
+        givenPermissions(READER);
+        when(repository.countVisibleByStockSymbols(any(), anyBoolean(), anyCollection())).thenReturn(List.of());
+
+        service.countByStockSymbols(member, List.of("AAPL"));
+
+        verify(repository).countVisibleByStockSymbols(org.mockito.ArgumentMatchers.eq(1L),
+                org.mockito.ArgumentMatchers.eq(true), anyCollection());
+    }
+
+    @Test
+    @DisplayName("작성 권한만 있으면 종목별 건수는 본인 메모만 센다(includePublic=false)")
+    void countByStockSymbols_writerOnlyPassesIncludePublicFalse() {
+        givenPermissions(WRITER_ONLY);
+        when(repository.countVisibleByStockSymbols(any(), anyBoolean(), anyCollection())).thenReturn(List.of());
+
+        service.countByStockSymbols(member, List.of("AAPL"));
+
+        verify(repository).countVisibleByStockSymbols(org.mockito.ArgumentMatchers.eq(1L),
+                org.mockito.ArgumentMatchers.eq(false), anyCollection());
     }
 
     private static List<MultipartFile> files(int count) {

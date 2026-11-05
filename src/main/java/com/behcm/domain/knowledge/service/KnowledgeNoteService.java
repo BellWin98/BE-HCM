@@ -4,6 +4,7 @@ import com.behcm.domain.knowledge.dto.KnowledgeNoteRequest;
 import com.behcm.domain.knowledge.dto.KnowledgeNoteResponse;
 import com.behcm.domain.knowledge.entity.KnowledgeCategory;
 import com.behcm.domain.knowledge.entity.KnowledgeNote;
+import com.behcm.domain.knowledge.entity.KnowledgeVisibility;
 import com.behcm.domain.knowledge.repository.KnowledgeNoteRepository;
 import com.behcm.domain.knowledge.repository.KnowledgeNoteScope;
 import com.behcm.domain.knowledge.repository.KnowledgeNoteSpecs;
@@ -32,8 +33,17 @@ import java.util.Set;
 import java.util.regex.Pattern;
 
 /**
- * 지식 메모 CRUD·검색. 모든 조회·변경은 요청한 회원 본인의 메모로 한정하며,
- * 남의 메모는 존재 여부를 숨기기 위해 NOT_FOUND 로 응답한다. 접근 권한(ADMIN) 판정은 컨트롤러 책임이다.
+ * 지식 메모 CRUD·검색. 조회 범위와 수정 가능 여부는 요청자의 {@link KnowledgePermissions} 로 정한다.
+ *
+ * <ul>
+ *   <li>ADMIN: 모든 메모를 조회·수정·삭제한다.</li>
+ *   <li>조회 권한: 본인 메모 + 다른 회원의 공개 메모를 조회한다.</li>
+ *   <li>작성 권한: 본인 메모를 만들고, 본인 메모만 수정·삭제한다.</li>
+ * </ul>
+ *
+ * <p>다른 회원의 비공개 메모는 ADMIN 이 아니면 어떤 경로로도 보이지 않으며, 존재 여부를 숨기기 위해
+ * NOT_FOUND 로 응답한다. 보이지만 수정할 수 없는 메모(남의 공개 메모)는 FORBIDDEN 이다.
+ * 메뉴·API 진입 가능 여부는 컨트롤러가 {@link KnowledgeAccessChecker} 로 판정한다.
  */
 @Slf4j
 @Service
@@ -52,9 +62,11 @@ public class KnowledgeNoteService {
     private final KnowledgeNoteRepository knowledgeNoteRepository;
     private final S3Service s3Service;
     private final KnowledgeNoteImageCleaner imageCleaner;
+    private final KnowledgeAccessChecker accessChecker;
 
     @Transactional
     public KnowledgeNoteResponse create(Member member, KnowledgeNoteRequest request) {
+        KnowledgePermissions p = accessChecker.permissionsOf(member);
         NormalizedNote n = normalize(request);
         KnowledgeNote note = KnowledgeNote.builder()
                 .member(member)
@@ -64,12 +76,13 @@ public class KnowledgeNoteService {
                 .sourceText(n.sourceText())
                 .stockSymbol(n.stockSymbol())
                 .stockName(n.stockName())
+                .visibility(request.getVisibility() != null ? request.getVisibility() : KnowledgeVisibility.PUBLIC)
                 .build();
         note.replaceTags(n.tags());
         note.replaceImages(n.imageUrls());
         KnowledgeNote saved = knowledgeNoteRepository.save(note);
         log.info("Knowledge note created (memberId={}, noteId={})", member.getId(), saved.getId());
-        return KnowledgeNoteResponse.from(saved);
+        return KnowledgeNoteResponse.of(saved, member.getId(), p);
     }
 
     /** 메모에 붙일 이미지를 S3 에 올리고 URL 을 돌려준다. 장수(1~5)는 S3 호출 전에 확인한다. */
@@ -81,47 +94,56 @@ public class KnowledgeNoteService {
     }
 
     public KnowledgeNoteResponse get(Member member, Long id) {
-        return KnowledgeNoteResponse.from(findOwned(member, id));
+        KnowledgePermissions p = accessChecker.permissionsOf(member);
+        return KnowledgeNoteResponse.of(findVisible(member, p, id), member.getId(), p);
     }
 
     @Transactional
     public KnowledgeNoteResponse update(Member member, Long id, KnowledgeNoteRequest request) {
-        KnowledgeNote note = findOwned(member, id);
+        KnowledgePermissions p = accessChecker.permissionsOf(member);
+        KnowledgeNote note = findEditable(member, p, id);
         NormalizedNote n = normalize(request);
+        KnowledgeVisibility visibility = request.getVisibility() != null ? request.getVisibility() : note.getVisibility();
+        // 작성자(member)는 바꾸지 않는다 — ADMIN 이 고쳐도 원 작성자의 메모로 남는다.
         note.update(n.category(), n.content(), n.sourceUrl(), n.sourceText(), n.stockSymbol(), n.stockName(),
-                note.getVisibility());
+                visibility);
         note.replaceTags(n.tags());
         List<String> removedImages = note.replaceImages(n.imageUrls());
         // updatedAt 은 flush 시점에 갱신되므로, 응답을 만들기 전에 flush 해서 최신 값을 반영한다.
         knowledgeNoteRepository.flush();
         imageCleaner.deleteAfterCommit(removedImages);
-        log.info("Knowledge note updated (memberId={}, noteId={})", member.getId(), id);
-        return KnowledgeNoteResponse.from(note);
+        log.info("Knowledge note updated (actorId={}, authorId={}, noteId={})",
+                member.getId(), note.getMember().getId(), id);
+        return KnowledgeNoteResponse.of(note, member.getId(), p);
     }
 
     @Transactional
     public void delete(Member member, Long id) {
-        KnowledgeNote note = findOwned(member, id);
+        KnowledgePermissions p = accessChecker.permissionsOf(member);
+        KnowledgeNote note = findEditable(member, p, id);
+        Long authorId = note.getMember().getId();
         List<String> imageUrls = note.getImageUrls();
         knowledgeNoteRepository.delete(note);
         imageCleaner.deleteAfterCommit(imageUrls);
-        log.info("Knowledge note deleted (memberId={}, noteId={})", member.getId(), id);
+        log.info("Knowledge note deleted (actorId={}, authorId={}, noteId={})", member.getId(), authorId, id);
     }
 
     public Page<KnowledgeNoteResponse> search(Member member, String keyword, KnowledgeCategory category,
-                                              String stockSymbol, int page, int size) {
+                                              String stockSymbol, Set<KnowledgeNoteScope> scopes,
+                                              int page, int size) {
+        KnowledgePermissions p = accessChecker.permissionsOf(member);
+        Long me = member.getId();
         int safeSize = Math.min(Math.max(size, MIN_PAGE_SIZE), MAX_PAGE_SIZE);
         PageRequest pageable = PageRequest.of(Math.max(page, 0), safeSize, DEFAULT_SORT);
-        // TODO(Task 4): 요청자 권한·scopes 로 범위를 정한다. 그때까지는 기존처럼 본인 메모만 조회한다.
         return knowledgeNoteRepository
-                .findAll(KnowledgeNoteSpecs.visibleTo(member.getId(), KnowledgePermissions.ADMIN,
-                                Set.of(KnowledgeNoteScope.MINE))
+                .findAll(KnowledgeNoteSpecs.visibleTo(me, p, scopes)
                         .and(KnowledgeNoteSpecs.matches(category, blankToNull(stockSymbol), splitTerms(keyword))),
                         pageable)
-                .map(KnowledgeNoteResponse::from);
+                .map(note -> KnowledgeNoteResponse.of(note, me, p));
     }
 
     public Map<String, Long> countByStockSymbols(Member member, List<String> symbols) {
+        KnowledgePermissions p = accessChecker.permissionsOf(member);
         if (symbols == null) {
             return Map.of();
         }
@@ -139,16 +161,27 @@ public class KnowledgeNoteService {
             return Map.of();
         }
         Map<String, Long> result = new HashMap<>();
-        for (StockNoteCount row : knowledgeNoteRepository.countVisibleByStockSymbols(member.getId(), false, distinct)) {
+        for (StockNoteCount row : knowledgeNoteRepository.countVisibleByStockSymbols(member.getId(), p.seesOthersPublic(), distinct)) {
             result.put(row.stockSymbol(), row.count());
         }
         return result;
     }
 
-    private KnowledgeNote findOwned(Member member, Long id) {
-        // TODO(Task 4): 권한에 따라 공개 메모 조회·수정 가능 여부를 판정한다. 그때까지는 본인 메모만.
-        return knowledgeNoteRepository.findVisibleById(id, member.getId(), false)
+    /** 요청자에게 보이는 메모. ADMIN 은 모든 메모, 그 외에는 본인 메모(+조회 권한이면 공개 메모). */
+    private KnowledgeNote findVisible(Member member, KnowledgePermissions p, Long id) {
+        return (p.admin()
+                ? knowledgeNoteRepository.findById(id)
+                : knowledgeNoteRepository.findVisibleById(id, member.getId(), p.seesOthersPublic()))
                 .orElseThrow(() -> new CustomException(ErrorCode.KNOWLEDGE_NOTE_NOT_FOUND));
+    }
+
+    /** 수정·삭제할 메모. 보이지 않으면 NOT_FOUND, 보이지만 고칠 수 없으면 FORBIDDEN. */
+    private KnowledgeNote findEditable(Member member, KnowledgePermissions p, Long id) {
+        KnowledgeNote note = findVisible(member, p, id);
+        if (!p.canEdit(note, member.getId())) {
+            throw new CustomException(ErrorCode.KNOWLEDGE_NOTE_FORBIDDEN);
+        }
+        return note;
     }
 
     /** 생성·수정 공통 정규화 및 검증. 요청 DTO 는 형식(길이·필수)만 보고, 의미 검증은 여기서 한다. */

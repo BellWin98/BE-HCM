@@ -30,6 +30,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * 지식 메모 CRUD·검색 API. 접근 권한은 {@code KnowledgeAccessChecker} 가 판정한다.
@@ -75,8 +76,9 @@ public class KnowledgeNoteController {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size
     ) {
+        // TODO(Task 6): scopes 쿼리 파라미터를 받아 넘긴다. 빈 집합은 기본 범위다.
         return ResponseEntity.ok(ApiResponse.success(
-                knowledgeNoteService.search(member, keyword, category, stockSymbol, page, size)));
+                knowledgeNoteService.search(member, keyword, category, stockSymbol, Set.of(), page, size)));
     }
 
     @GetMapping("/stock-counts")

@@ -30,7 +30,7 @@ public class KnowledgeAccessController {
     public ResponseEntity<ApiResponse<KnowledgeAccessResponse>> getAccess(
             @AuthenticationPrincipal Member member
     ) {
-        boolean hasAccess = knowledgeAccessChecker.canAccess(member);
-        return ResponseEntity.ok(ApiResponse.success(new KnowledgeAccessResponse(hasAccess)));
+        return ResponseEntity.ok(ApiResponse.success(
+                KnowledgeAccessResponse.from(knowledgeAccessChecker.permissionsOf(member))));
     }
 }

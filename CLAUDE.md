@@ -91,7 +91,15 @@ BE-HCM("헬창모임")은 그룹 운동 습관 관리 앱을 위한 Spring Boot 
   푸시는 알림 피로를 고려해 댓글에만 보냅니다(리액션은 보내지 않음).
   **`workout_reaction`/`workout_comment` 는 `workout_record` 를 FK 로 참조하므로, 회원/운동방 삭제
   경로(`AdminMemberService`, `AdminWorkoutRoomService`)에서 반드시 운동 기록보다 먼저 지워야 합니다.**
-- `domain/knowledge` — 지식 메모(종목별 메모, `KnowledgeNote`). 권한은 `knowledge_access` 행(`canRead`/`canWrite`, 회원당 UK)으로 관리자가 부여하며, ADMIN 은 행 없이도 항상 읽기·쓰기 전권을 가지고, 두 플래그가 모두 false 면 행을 삭제합니다. 인가 판정(`@PreAuthorize` SpEL 용 `KnowledgeAccessChecker`)과 메모 단위 권한 판단(`KnowledgePermissions`)은 `KnowledgeAccessChecker.permissionsOf` 한 곳에서 만듭니다. 비공개 메모가 새지 않도록 노출 범위는 `KnowledgeNoteSpecs.visibleTo` / `findVisibleById` / `countVisibleByStockSymbols` 세 곳이 같은 규칙을 공유하므로, 새 조회 경로는 반드시 이 중 하나를 거쳐야 합니다. 이미지 URL 은 메모 간 공유를 막고(`findUrlsUsedByOtherNotes`로 다른 메모가 쓰는 URL 은 정리 시 삭제하지 않음).
+- `domain/knowledge` — 지식 메모(종목별 메모, `KnowledgeNote`). 권한은 `knowledge_access` 행
+  (`canRead`/`canWrite`, 회원당 UK)으로 관리자가 부여하며, ADMIN 은 행 없이도 항상 읽기·쓰기 전권을
+  가지고, 두 플래그가 모두 false 면 행을 삭제합니다. 인가 판정(`@PreAuthorize` SpEL 용
+  `KnowledgeAccessChecker`)과 메모 단위 권한 판단(`KnowledgePermissions`)은
+  `KnowledgeAccessChecker.permissionsOf` 한 곳에서 만듭니다. 비공개 메모가 새지 않도록 노출 범위는
+  `KnowledgeNoteSpecs.visibleTo` / `findVisibleById` / `countVisibleByStockSymbols` 세 곳이 같은 규칙을
+  공유하므로, 새 조회 경로는 반드시 이 중 하나를 거쳐야 합니다. 관리자가 아니면 본인이 쓴 메모만
+  수정·삭제할 수 있습니다(`KnowledgePermissions.canEdit`). 이미지 URL 은 메모 간 공유를 막고, 정리할 때
+  `findUrlsUsedByOtherNotes` 로 확인해 다른 메모가 쓰는 URL 은 삭제하지 않습니다.
 - `domain/stats` — 통계/랜딩 페이지용 집계 데이터. `SecurityConfig`에서 `/api/stats/**` 엔드포인트는
   `permitAll`로 설정되어 있다는 점에 유의하세요.
 

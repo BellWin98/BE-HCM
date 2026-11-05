@@ -31,7 +31,9 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * 지식 메모 CRUD·검색 API. 접근 권한은 {@code KnowledgeAccessChecker} 가 판정한다.
@@ -80,10 +82,11 @@ public class KnowledgeNoteController {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size
     ) {
-        // scopes 가 없으면 빈 집합 — 서비스가 기본 범위로 해석한다.
+        // scopes 가 없으면 빈 집합 — 서비스가 기본 범위로 해석한다. 빈 값("scopes=")은 null 로 바인딩되므로 버린다.
         return ResponseEntity.ok(ApiResponse.success(
                 knowledgeNoteService.search(member, keyword, category, stockSymbol,
-                        scopes == null ? Set.of() : scopes, page, size)));
+                        scopes == null ? Set.of()
+                                : scopes.stream().filter(Objects::nonNull).collect(Collectors.toSet()), page, size)));
     }
 
     @GetMapping("/stock-counts")

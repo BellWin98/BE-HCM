@@ -1,6 +1,7 @@
 package com.behcm.domain.knowledge.dto;
 
 import com.behcm.domain.knowledge.entity.KnowledgeCategory;
+import com.behcm.domain.knowledge.entity.KnowledgeVisibility;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import lombok.Data;
@@ -34,4 +35,7 @@ public class KnowledgeNoteRequest {
 
     @Size(max = 100, message = "종목명은 100자 이하로 입력해주세요.")
     private String stockName;
+
+    // 생략하면 생성은 PUBLIC, 수정은 기존 값을 유지한다.
+    private KnowledgeVisibility visibility;
 }

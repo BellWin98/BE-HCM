@@ -1,5 +1,6 @@
 package com.behcm.domain.knowledge.controller;
 
+import com.behcm.domain.knowledge.service.KnowledgePermissions;
 import com.behcm.domain.member.entity.Member;
 import com.behcm.domain.member.entity.MemberRole;
 import com.behcm.support.IntegrationTestSupport;
@@ -39,10 +40,23 @@ class KnowledgeAccessControllerTest extends IntegrationTestSupport {
     @Test
     @DisplayName("getAccess는 권한이 없어도 200으로 판정 결과(false)를 반환한다")
     void getAccess_returnsCheckerResult() throws Exception {
-        given(knowledgeAccessChecker.canAccess(any())).willReturn(false);
+        given(knowledgeAccessChecker.permissionsOf(any())).willReturn(KnowledgePermissions.NONE);
 
         mockMvc.perform(get("/api/knowledge-notes/access").with(user(member())))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.hasAccess", is(false)));
+    }
+
+    @Test
+    @DisplayName("getAccess는 hasAccess/canRead/canWrite/isAdmin 을 모두 반환한다")
+    void getAccess_returnsAllFlags() throws Exception {
+        given(knowledgeAccessChecker.permissionsOf(any())).willReturn(new KnowledgePermissions(false, true, false));
+
+        mockMvc.perform(get("/api/knowledge-notes/access").with(user(member())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.hasAccess", is(true)))
+                .andExpect(jsonPath("$.data.canRead", is(true)))
+                .andExpect(jsonPath("$.data.canWrite", is(false)))
+                .andExpect(jsonPath("$.data.isAdmin", is(false)));
     }
 }

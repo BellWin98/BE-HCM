@@ -4,6 +4,7 @@ import com.behcm.domain.knowledge.dto.KnowledgeNoteImageUploadResponse;
 import com.behcm.domain.knowledge.dto.KnowledgeNoteRequest;
 import com.behcm.domain.knowledge.dto.KnowledgeNoteResponse;
 import com.behcm.domain.knowledge.entity.KnowledgeCategory;
+import com.behcm.domain.knowledge.repository.KnowledgeNoteScope;
 import com.behcm.domain.knowledge.service.KnowledgeNoteService;
 import com.behcm.domain.member.entity.Member;
 import com.behcm.global.common.ApiResponse;
@@ -47,6 +48,7 @@ public class KnowledgeNoteController {
 
     private final KnowledgeNoteService knowledgeNoteService;
 
+    @PreAuthorize("@knowledgeAccessChecker.canWrite(principal)")
     @PostMapping
     public ResponseEntity<ApiResponse<KnowledgeNoteResponse>> create(
             @AuthenticationPrincipal Member member,
@@ -56,6 +58,7 @@ public class KnowledgeNoteController {
                 knowledgeNoteService.create(member, request)));
     }
 
+    @PreAuthorize("@knowledgeAccessChecker.canWrite(principal)")
     @PostMapping(value = "/images", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<ApiResponse<KnowledgeNoteImageUploadResponse>> uploadImages(
             @AuthenticationPrincipal Member member,
@@ -73,12 +76,14 @@ public class KnowledgeNoteController {
             @RequestParam(required = false) String keyword,
             @RequestParam(required = false) KnowledgeCategory category,
             @RequestParam(required = false) String stockSymbol,
+            @RequestParam(required = false) Set<KnowledgeNoteScope> scopes,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size
     ) {
-        // TODO(Task 6): scopes 쿼리 파라미터를 받아 넘긴다. 빈 집합은 기본 범위다.
+        // scopes 가 없으면 빈 집합 — 서비스가 기본 범위로 해석한다.
         return ResponseEntity.ok(ApiResponse.success(
-                knowledgeNoteService.search(member, keyword, category, stockSymbol, Set.of(), page, size)));
+                knowledgeNoteService.search(member, keyword, category, stockSymbol,
+                        scopes == null ? Set.of() : scopes, page, size)));
     }
 
     @GetMapping("/stock-counts")
@@ -98,6 +103,7 @@ public class KnowledgeNoteController {
         return ResponseEntity.ok(ApiResponse.success(knowledgeNoteService.get(member, id)));
     }
 
+    @PreAuthorize("@knowledgeAccessChecker.canWrite(principal)")
     @PutMapping("/{id}")
     public ResponseEntity<ApiResponse<KnowledgeNoteResponse>> update(
             @AuthenticationPrincipal Member member,
@@ -108,6 +114,7 @@ public class KnowledgeNoteController {
                 knowledgeNoteService.update(member, id, request)));
     }
 
+    @PreAuthorize("@knowledgeAccessChecker.canWrite(principal)")
     @DeleteMapping("/{id}")
     public ResponseEntity<ApiResponse<Void>> delete(
             @AuthenticationPrincipal Member member,

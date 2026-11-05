@@ -5,6 +5,8 @@ import com.behcm.domain.knowledge.dto.KnowledgeNoteRequest;
 import com.behcm.domain.knowledge.dto.KnowledgeNoteResponse;
 import com.behcm.domain.knowledge.entity.KnowledgeCategory;
 import com.behcm.domain.knowledge.entity.KnowledgeVisibility;
+import com.behcm.domain.knowledge.repository.KnowledgeNoteScope;
+import com.behcm.domain.knowledge.service.KnowledgePermissions;
 import com.behcm.domain.member.entity.Member;
 import com.behcm.domain.member.entity.MemberRole;
 import com.behcm.support.IntegrationTestSupport;
@@ -20,6 +22,7 @@ import com.behcm.global.exception.ErrorCode;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import static org.hamcrest.Matchers.is;
 import static org.mockito.ArgumentMatchers.any;
@@ -53,7 +56,14 @@ class KnowledgeNoteControllerTest extends IntegrationTestSupport {
 
     private Member grantedMember() {
         given(knowledgeAccessChecker.canAccess(any())).willReturn(true);
+        given(knowledgeAccessChecker.canWrite(any())).willReturn(true);
         return member(MemberRole.ADMIN);
+    }
+
+    private Member readOnlyMember() {
+        given(knowledgeAccessChecker.canAccess(any())).willReturn(true);
+        given(knowledgeAccessChecker.canWrite(any())).willReturn(false);
+        return member(MemberRole.USER);
     }
 
     private Member deniedMember() {
@@ -99,6 +109,63 @@ class KnowledgeNoteControllerTest extends IntegrationTestSupport {
         mockMvc.perform(get("/api/knowledge-notes/stock-counts").param("symbols", "005930")
                         .with(user(denied)))
                 .andExpect(status().isForbidden());
+
+        verifyNoInteractions(knowledgeNoteService);
+    }
+
+    @Test
+    @DisplayName("쓰기 엔드포인트는 읽기 권한만 있으면 403을 반환하고 서비스를 호출하지 않는다")
+    void write_whenCanAccessButNotWrite_returns403() throws Exception {
+        Member readOnly = readOnlyMember();
+
+        mockMvc.perform(post("/api/knowledge-notes").with(user(readOnly))
+                        .contentType(MediaType.APPLICATION_JSON).content(validBody()))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(put("/api/knowledge-notes/3").with(user(readOnly))
+                        .contentType(MediaType.APPLICATION_JSON).content(validBody()))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(delete("/api/knowledge-notes/3").with(user(readOnly)))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(multipart("/api/knowledge-notes/images").file(png("a.png")).with(user(readOnly)))
+                .andExpect(status().isForbidden());
+
+        verifyNoInteractions(knowledgeNoteService);
+    }
+
+    @Test
+    @DisplayName("조회 엔드포인트는 읽기 권한만 있어도 200을 반환한다")
+    void read_whenCanAccessButNotWrite_returns200() throws Exception {
+        Member readOnly = readOnlyMember();
+        given(knowledgeNoteService.search(any(), any(), any(), any(), any(), eq(0), eq(20)))
+                .willReturn(new PageImpl<>(List.of(response(1L)), PageRequest.of(0, 20), 1));
+        given(knowledgeNoteService.get(any(), eq(3L))).willReturn(response(3L));
+
+        mockMvc.perform(get("/api/knowledge-notes").with(user(readOnly))).andExpect(status().isOk());
+        mockMvc.perform(get("/api/knowledge-notes/3").with(user(readOnly))).andExpect(status().isOk());
+    }
+
+    @Test
+    @DisplayName("search는 scopes 파라미터를 Set 으로 바인딩하고, 없으면 빈 Set 을 전달한다")
+    void search_bindsScopes() throws Exception {
+        given(knowledgeNoteService.search(any(), any(), any(), any(), any(), eq(0), eq(20)))
+                .willReturn(new PageImpl<>(List.of(), PageRequest.of(0, 20), 0));
+        Member granted = grantedMember();
+
+        mockMvc.perform(get("/api/knowledge-notes").with(user(granted))
+                        .param("scopes", "MINE").param("scopes", "PRIVATE"))
+                .andExpect(status().isOk());
+        verify(knowledgeNoteService).search(any(), any(), any(), any(),
+                eq(Set.of(KnowledgeNoteScope.MINE, KnowledgeNoteScope.PRIVATE)), eq(0), eq(20));
+
+        mockMvc.perform(get("/api/knowledge-notes").with(user(granted))).andExpect(status().isOk());
+        verify(knowledgeNoteService).search(any(), any(), any(), any(), eq(Set.of()), eq(0), eq(20));
+    }
+
+    @Test
+    @DisplayName("search는 알 수 없는 scopes 값이면 400을 반환한다")
+    void search_invalidScope_returns400() throws Exception {
+        mockMvc.perform(get("/api/knowledge-notes").with(user(grantedMember())).param("scopes", "ALL"))
+                .andExpect(status().isBadRequest());
 
         verifyNoInteractions(knowledgeNoteService);
     }
@@ -186,7 +253,7 @@ class KnowledgeNoteControllerTest extends IntegrationTestSupport {
     @Test
     @DisplayName("access 엔드포인트는 {id} 경로에 가려지지 않아 권한이 없어도 200을 반환한다")
     void access_endpoint_isNotShadowedBy_idPath() throws Exception {
-        given(knowledgeAccessChecker.canAccess(any())).willReturn(false);
+        given(knowledgeAccessChecker.permissionsOf(any())).willReturn(KnowledgePermissions.NONE);
 
         mockMvc.perform(get("/api/knowledge-notes/access").with(user(member(MemberRole.FAMILY))))
                 .andExpect(status().isOk())

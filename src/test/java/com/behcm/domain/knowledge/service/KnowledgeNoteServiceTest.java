@@ -436,6 +436,82 @@ class KnowledgeNoteServiceTest {
     }
 
     @Test
+    @DisplayName("다른 메모가 이미 쓰는 이미지 URL 로는 만들 수 없다")
+    void create_withUrlUsedByOtherNote_throwsImageInvalid() {
+        allowAllImageUrls();
+        when(repository.findUrlsUsedByOtherNotes(List.of(img("a")), -1L)).thenReturn(Set.of(img("a")));
+        KnowledgeNoteRequest r = request(KnowledgeCategory.DEV, null, null);
+        r.setImageUrls(List.of(img("a")));
+
+        assertCode(() -> service.create(member, r), ErrorCode.KNOWLEDGE_NOTE_IMAGE_INVALID);
+        verify(repository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("수정에서 기존 URL 을 그대로 보내면 사용 중 검사에 넘기지 않고 성공한다")
+    void update_keepingOwnImages_passes() {
+        allowAllImageUrls();
+        KnowledgeNote note = KnowledgeNote.builder().member(member).category(KnowledgeCategory.DEV)
+                .content("old").build();
+        note.replaceImages(List.of(img("a"), img("b")));
+        when(repository.findVisibleById(5L, 1L, false)).thenReturn(Optional.of(note));
+        KnowledgeNoteRequest r = request(KnowledgeCategory.DEV, null, null);
+        r.setImageUrls(List.of(img("a"), img("b")));
+
+        KnowledgeNoteResponse response = service.update(member, 5L, r);
+
+        assertThat(response.images()).containsExactly(img("a"), img("b"));
+        verify(repository, never()).findUrlsUsedByOtherNotes(anyCollection(), any());
+    }
+
+    @Test
+    @DisplayName("수정에서 새로 넣은 URL 이 다른 메모에서 쓰이면 거부한다")
+    void update_newUrlUsedByOtherNote_throwsImageInvalid() {
+        allowAllImageUrls();
+        KnowledgeNote note = KnowledgeNote.builder().member(member).category(KnowledgeCategory.DEV)
+                .content("old").build();
+        note.replaceImages(List.of(img("a")));
+        when(repository.findVisibleById(5L, 1L, false)).thenReturn(Optional.of(note));
+        when(repository.findUrlsUsedByOtherNotes(List.of(img("n")), 5L)).thenReturn(Set.of(img("n")));
+        KnowledgeNoteRequest r = request(KnowledgeCategory.DEV, null, null);
+        r.setImageUrls(List.of(img("a"), img("n")));
+
+        assertCode(() -> service.update(member, 5L, r), ErrorCode.KNOWLEDGE_NOTE_IMAGE_INVALID);
+        assertThat(note.getImageUrls()).containsExactly(img("a"));
+        verifyNoInteractions(imageCleaner);
+    }
+
+    @Test
+    @DisplayName("수정에서 빠진 URL 이 다른 메모에서 쓰이면 정리 대상에서 뺀다")
+    void update_removedUrlStillUsedElsewhere_notCleaned() {
+        allowAllImageUrls();
+        KnowledgeNote note = KnowledgeNote.builder().member(member).category(KnowledgeCategory.DEV)
+                .content("old").build();
+        note.replaceImages(List.of(img("a"), img("b")));
+        when(repository.findVisibleById(5L, 1L, false)).thenReturn(Optional.of(note));
+        when(repository.findUrlsUsedByOtherNotes(List.of(img("a"), img("b")), 5L)).thenReturn(Set.of(img("a")));
+        KnowledgeNoteRequest r = request(KnowledgeCategory.DEV, null, null);
+        r.setImageUrls(List.of());
+
+        service.update(member, 5L, r);
+
+        verify(imageCleaner).deleteAfterCommit(List.of(img("b")));
+    }
+
+    @Test
+    @DisplayName("삭제할 메모의 URL 이 다른 메모에서 쓰이면 정리 대상에서 뺀다")
+    void delete_sharedUrl_notCleaned() {
+        KnowledgeNote note = KnowledgeNote.builder().member(member).category(KnowledgeCategory.DEV).content("c").build();
+        note.replaceImages(List.of(img("a"), img("b")));
+        when(repository.findVisibleById(5L, 1L, false)).thenReturn(Optional.of(note));
+        when(repository.findUrlsUsedByOtherNotes(List.of(img("a"), img("b")), 5L)).thenReturn(Set.of(img("b")));
+
+        service.delete(member, 5L);
+
+        verify(imageCleaner).deleteAfterCommit(List.of(img("a")));
+    }
+
+    @Test
     @DisplayName("메모를 삭제하면 그 메모의 이미지 URL 전부를 정리 대상으로 넘긴다")
     void delete_cleansAllImages() {
         KnowledgeNote note = KnowledgeNote.builder().member(member).category(KnowledgeCategory.DEV).content("c").build();

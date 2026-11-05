@@ -120,7 +120,13 @@ public class AdminMemberService {
 
         // 지식 메모 삭제 (knowledge_note 가 member 를 FK 로 참조. 태그는 ON DELETE CASCADE).
         // 행이 지워진 뒤에는 이미지 URL 을 알 수 없으므로 먼저 조회해 커밋 후 S3 삭제를 예약한다.
-        knowledgeNoteImageCleaner.deleteAfterCommit(knowledgeNoteRepository.findImageUrlsByMemberId(memberId));
+        // 다른 회원의 메모가 같은 URL 을 아직 쓰고 있으면 파일을 남긴다.
+        List<String> noteImageUrls = knowledgeNoteRepository.findImageUrlsByMemberId(memberId);
+        if (!noteImageUrls.isEmpty()) {
+            Set<String> sharedUrls = knowledgeNoteRepository.findUrlsUsedByOtherMembers(noteImageUrls, memberId);
+            noteImageUrls = noteImageUrls.stream().filter(url -> !sharedUrls.contains(url)).toList();
+        }
+        knowledgeNoteImageCleaner.deleteAfterCommit(noteImageUrls);
         knowledgeNoteRepository.deleteAllByMemberId(memberId);
 
         // 리액션/댓글 삭제 (workout_record 를 참조하므로 반드시 먼저 지워야 FK 제약에 걸리지 않는다).

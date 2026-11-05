@@ -388,6 +388,38 @@ class KnowledgeNoteRepositoryTest extends IntegrationTestSupport {
     }
 
     @Test
+    @DisplayName("findUrlsUsedByOtherNotes 는 자기 메모는 제외하고 다른 메모가 쓰는 URL 만 돌려준다")
+    void findUrlsUsedByOtherNotes_excludesSelf() {
+        String shared = "https://img/" + UUID.randomUUID() + ".png";
+        String onlyA = "https://img/" + UUID.randomUUID() + ".png";
+        String onlyB = "https://img/" + UUID.randomUUID() + ".png";
+        KnowledgeNote a = saveNote(me, KnowledgeCategory.ETC, "a", null, null, null);
+        a.replaceImages(List.of(shared, onlyA));
+        KnowledgeNote b = saveNote(other, KnowledgeCategory.ETC, "b", null, null, null);
+        b.replaceImages(List.of(shared, onlyB));
+        em.flush();
+        em.clear();
+
+        assertThat(repository.findUrlsUsedByOtherNotes(List.of(shared, onlyA), a.getId()))
+                .containsExactly(shared)
+                .doesNotContain(onlyA, onlyB);
+        assertThat(repository.findUrlsUsedByOtherNotes(List.of(shared), -1L)).containsExactly(shared);
+    }
+
+    @Test
+    @DisplayName("findUrlsUsedByOtherMembers 는 같은 회원의 메모는 제외한다")
+    void findUrlsUsedByOtherMembers_excludesSameMember() {
+        String shared = "https://img/" + UUID.randomUUID() + ".png";
+        String mine = "https://img/" + UUID.randomUUID() + ".png";
+        saveNote(me, KnowledgeCategory.ETC, "a", null, null, null).replaceImages(List.of(shared, mine));
+        saveNote(other, KnowledgeCategory.ETC, "b", null, null, null).replaceImages(List.of(shared));
+        em.flush();
+        em.clear();
+
+        assertThat(repository.findUrlsUsedByOtherMembers(List.of(shared, mine), me.getId())).containsExactly(shared);
+    }
+
+    @Test
     @DisplayName("visibility 컬럼 도입 전 행(DEFAULT 값)은 PUBLIC 으로 읽힌다")
     void legacyRowWithoutVisibility_readsAsPublic() {
         em.createNativeQuery("INSERT INTO knowledge_note (created_at, member_id, category, content) VALUES (NOW(6), ?, 'ETC', 'x')")

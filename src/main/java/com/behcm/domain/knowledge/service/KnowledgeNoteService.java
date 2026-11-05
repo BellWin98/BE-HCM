@@ -51,6 +51,7 @@ import java.util.regex.Pattern;
 @Transactional(readOnly = true)
 public class KnowledgeNoteService {
 
+    private static final long NEW_NOTE_ID = -1L;
     private static final int MAX_SEARCH_TERMS = 5;
     private static final int MIN_PAGE_SIZE = 1;
     private static final int MAX_PAGE_SIZE = 50;
@@ -68,6 +69,8 @@ public class KnowledgeNoteService {
     public KnowledgeNoteResponse create(Member member, KnowledgeNoteRequest request) {
         KnowledgePermissions p = accessChecker.permissionsOf(member);
         NormalizedNote n = normalize(request);
+        // 새 메모에는 id 가 없다 — 어떤 메모에서든 이미 쓰는 URL 이면 거부한다.
+        rejectUrlsUsedByOtherNotes(n.imageUrls(), NEW_NOTE_ID);
         KnowledgeNote note = KnowledgeNote.builder()
                 .member(member)
                 .category(n.category())
@@ -103,6 +106,9 @@ public class KnowledgeNoteService {
         KnowledgePermissions p = accessChecker.permissionsOf(member);
         KnowledgeNote note = findEditable(member, p, id);
         NormalizedNote n = normalize(request);
+        // 이 메모에 원래 있던 URL 은 그대로 보내도 되므로, 새로 들어오는 URL 만 검사한다.
+        List<String> currentUrls = note.getImageUrls();
+        rejectUrlsUsedByOtherNotes(n.imageUrls().stream().filter(url -> !currentUrls.contains(url)).toList(), id);
         KnowledgeVisibility visibility = request.getVisibility() != null ? request.getVisibility() : note.getVisibility();
         // 작성자(member)는 바꾸지 않는다 — ADMIN 이 고쳐도 원 작성자의 메모로 남는다.
         note.update(n.category(), n.content(), n.sourceUrl(), n.sourceText(), n.stockSymbol(), n.stockName(),
@@ -111,7 +117,7 @@ public class KnowledgeNoteService {
         List<String> removedImages = note.replaceImages(n.imageUrls());
         // updatedAt 은 flush 시점에 갱신되므로, 응답을 만들기 전에 flush 해서 최신 값을 반영한다.
         knowledgeNoteRepository.flush();
-        imageCleaner.deleteAfterCommit(removedImages);
+        imageCleaner.deleteAfterCommit(withoutUsedByOtherNotes(removedImages, id));
         log.info("Knowledge note updated (actorId={}, authorId={}, noteId={})",
                 member.getId(), note.getMember().getId(), id);
         return KnowledgeNoteResponse.of(note, member.getId(), p);
@@ -124,7 +130,7 @@ public class KnowledgeNoteService {
         Long authorId = note.getMember().getId();
         List<String> imageUrls = note.getImageUrls();
         knowledgeNoteRepository.delete(note);
-        imageCleaner.deleteAfterCommit(imageUrls);
+        imageCleaner.deleteAfterCommit(withoutUsedByOtherNotes(imageUrls, id));
         log.info("Knowledge note deleted (actorId={}, authorId={}, noteId={})", member.getId(), authorId, id);
     }
 
@@ -165,6 +171,22 @@ public class KnowledgeNoteService {
             result.put(row.stockSymbol(), row.count());
         }
         return result;
+    }
+
+    /** urls 중 하나라도 noteId 가 아닌 다른 메모에서 쓰이면 거부한다. 빈 목록이면 쿼리하지 않는다. */
+    private void rejectUrlsUsedByOtherNotes(List<String> urls, Long noteId) {
+        if (!urls.isEmpty() && !knowledgeNoteRepository.findUrlsUsedByOtherNotes(urls, noteId).isEmpty()) {
+            throw new CustomException(ErrorCode.KNOWLEDGE_NOTE_IMAGE_INVALID);
+        }
+    }
+
+    /** 저장소 파일 정리 대상에서, 다른 메모가 아직 쓰는 URL 을 뺀다. 순서는 유지한다. */
+    private List<String> withoutUsedByOtherNotes(List<String> urls, Long noteId) {
+        if (urls.isEmpty()) {
+            return urls;
+        }
+        Set<String> shared = knowledgeNoteRepository.findUrlsUsedByOtherNotes(urls, noteId);
+        return urls.stream().filter(url -> !shared.contains(url)).toList();
     }
 
     /** 요청자에게 보이는 메모. ADMIN 은 모든 메모, 그 외에는 본인 메모(+조회 권한이면 공개 메모). */

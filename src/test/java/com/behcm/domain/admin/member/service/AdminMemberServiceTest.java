@@ -269,6 +269,26 @@ class AdminMemberServiceTest {
         inOrder.verify(knowledgeNoteRepository).deleteAllByMemberId(2L);
     }
 
+    @Test
+    @DisplayName("deleteMember는 다른 회원의 메모도 쓰는 이미지 URL 은 삭제 대상에서 뺀다")
+    void deleteMember_sharedImageWithOtherMember_notCleaned() {
+        Member admin = memberWithId(1L, "admin@example.com", "admin");
+        Member target = memberWithId(2L, "target@example.com", "target");
+        List<String> urls = List.of("https://b/knowledge-notes/a.png", "https://b/knowledge-notes/b.png");
+
+        given(memberRepository.findById(2L)).willReturn(Optional.of(target));
+        given(workoutRoomRepository.findByOwner(target)).willReturn(List.of());
+        given(workoutRoomMemberRepository.findByMember(target)).willReturn(List.of());
+        given(memberSettingsRepository.findByMemberId(2L)).willReturn(Optional.empty());
+        given(knowledgeNoteRepository.findImageUrlsByMemberId(2L)).willReturn(urls);
+        given(knowledgeNoteRepository.findUrlsUsedByOtherMembers(urls, 2L))
+                .willReturn(java.util.Set.of("https://b/knowledge-notes/a.png"));
+
+        adminMemberService.deleteMember(2L, admin);
+
+        verify(knowledgeNoteImageCleaner).deleteAfterCommit(List.of("https://b/knowledge-notes/b.png"));
+    }
+
     private Member memberWithId(Long id, String email, String nickname) {
         Member member = Member.builder()
                 .email(email)

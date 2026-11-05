@@ -10,6 +10,7 @@ import org.springframework.data.repository.query.Param;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 public interface KnowledgeNoteRepository
         extends JpaRepository<KnowledgeNote, Long>, JpaSpecificationExecutor<KnowledgeNote> {
@@ -46,4 +47,15 @@ public interface KnowledgeNoteRepository
     /** 회원의 모든 메모에 붙은 이미지 URL. 회원 삭제 시 저장소 파일 정리에 쓴다. */
     @Query("SELECT i.imageUrl FROM KnowledgeNoteImage i WHERE i.note.member.id = :memberId")
     List<String> findImageUrlsByMemberId(@Param("memberId") Long memberId);
+
+    /**
+     * urls 중 noteId 가 아닌 다른 메모에 붙어 있는 것. 이미지 재사용 차단과 공유 파일 보호에 쓴다.
+     * 새 메모에는 id 가 없으므로 noteId 로 -1L 을 넘긴다. urls 가 비면 호출하지 않는다(IN () 회피).
+     */
+    @Query("SELECT DISTINCT i.imageUrl FROM KnowledgeNoteImage i WHERE i.imageUrl IN :urls AND i.note.id <> :noteId")
+    Set<String> findUrlsUsedByOtherNotes(@Param("urls") Collection<String> urls, @Param("noteId") Long noteId);
+
+    /** urls 중 memberId 가 아닌 다른 회원의 메모에 붙어 있는 것. 회원 삭제 시 공유 파일 보호에 쓴다. */
+    @Query("SELECT DISTINCT i.imageUrl FROM KnowledgeNoteImage i WHERE i.imageUrl IN :urls AND i.note.member.id <> :memberId")
+    Set<String> findUrlsUsedByOtherMembers(@Param("urls") Collection<String> urls, @Param("memberId") Long memberId);
 }

@@ -65,10 +65,10 @@ class KnowledgeNoteRepositoryTest extends IntegrationTestSupport {
                 .build());
     }
 
-    private KnowledgeNote saveVisibilityNote(Member owner, KnowledgeVisibility visibility) {
+    private KnowledgeNote saveVisibilityNote(Member owner, KnowledgeVisibility visibility, String stockSymbol) {
         return repository.save(KnowledgeNote.builder()
                 .member(owner).category(KnowledgeCategory.STOCK).content(visibility.name())
-                .stockSymbol("005930").stockName("삼성전자").visibility(visibility)
+                .stockSymbol(stockSymbol).stockName("삼성전자").visibility(visibility)
                 .build());
     }
 
@@ -93,7 +93,8 @@ class KnowledgeNoteRepositoryTest extends IntegrationTestSupport {
     private record Fixture(Member viewer, Member admin,
                            Long viewerPublic, Long viewerPrivate,
                            Long otherPublic, Long otherPrivate,
-                           Long adminPublic, Long adminPrivate) {
+                           Long adminPublic, Long adminPrivate,
+                           String symbol) {
         Set<Long> all() {
             return Set.of(viewerPublic, viewerPrivate, otherPublic, otherPrivate, adminPublic, adminPrivate);
         }
@@ -101,13 +102,16 @@ class KnowledgeNoteRepositoryTest extends IntegrationTestSupport {
 
     private Fixture visibilityFixture() {
         Member admin = saveMember("admin", MemberRole.ADMIN);
+        // 공유 DB 의 다른 행과 집계가 섞이지 않도록 fixture 전용 종목 코드를 쓴다(최대 20자).
+        String symbol = "T" + UUID.randomUUID().toString().replace("-", "").substring(0, 12);
         Fixture f = new Fixture(me, admin,
-                saveVisibilityNote(me, KnowledgeVisibility.PUBLIC).getId(),
-                saveVisibilityNote(me, KnowledgeVisibility.PRIVATE).getId(),
-                saveVisibilityNote(other, KnowledgeVisibility.PUBLIC).getId(),
-                saveVisibilityNote(other, KnowledgeVisibility.PRIVATE).getId(),
-                saveVisibilityNote(admin, KnowledgeVisibility.PUBLIC).getId(),
-                saveVisibilityNote(admin, KnowledgeVisibility.PRIVATE).getId());
+                saveVisibilityNote(me, KnowledgeVisibility.PUBLIC, symbol).getId(),
+                saveVisibilityNote(me, KnowledgeVisibility.PRIVATE, symbol).getId(),
+                saveVisibilityNote(other, KnowledgeVisibility.PUBLIC, symbol).getId(),
+                saveVisibilityNote(other, KnowledgeVisibility.PRIVATE, symbol).getId(),
+                saveVisibilityNote(admin, KnowledgeVisibility.PUBLIC, symbol).getId(),
+                saveVisibilityNote(admin, KnowledgeVisibility.PRIVATE, symbol).getId(),
+                symbol);
         em.flush();
         em.clear();
         return f;
@@ -190,7 +194,7 @@ class KnowledgeNoteRepositoryTest extends IntegrationTestSupport {
     void countVisible_excludesOthersPrivate() {
         Fixture f = visibilityFixture();
 
-        assertThat(repository.countVisibleByStockSymbols(f.viewer().getId(), true, Set.of("005930")))
+        assertThat(repository.countVisibleByStockSymbols(f.viewer().getId(), true, Set.of(f.symbol())))
                 .extracting(StockNoteCount::count).containsExactly(4L);
     }
 
@@ -198,7 +202,7 @@ class KnowledgeNoteRepositoryTest extends IntegrationTestSupport {
     void countVisible_adminSeesOwnAndPublic() {
         Fixture f = visibilityFixture();
 
-        assertThat(repository.countVisibleByStockSymbols(f.admin().getId(), true, Set.of("005930")))
+        assertThat(repository.countVisibleByStockSymbols(f.admin().getId(), true, Set.of(f.symbol())))
                 .extracting(StockNoteCount::count).containsExactly(4L);
     }
 

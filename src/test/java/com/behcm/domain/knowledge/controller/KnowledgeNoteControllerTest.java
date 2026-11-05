@@ -162,6 +162,20 @@ class KnowledgeNoteControllerTest extends IntegrationTestSupport {
     }
 
     @Test
+    @DisplayName("search는 빈 scopes 값을 무시하고 200을 반환한다")
+    void search_emptyScopeValue_isIgnored() throws Exception {
+        given(knowledgeNoteService.search(any(), any(), any(), any(), any(), eq(0), eq(20)))
+                .willReturn(new PageImpl<>(List.of(), PageRequest.of(0, 20), 0));
+
+        mockMvc.perform(get("/api/knowledge-notes").with(user(grantedMember()))
+                        .param("scopes", "MINE").param("scopes", ""))
+                .andExpect(status().isOk());
+
+        verify(knowledgeNoteService).search(any(), any(), any(), any(),
+                eq(Set.of(KnowledgeNoteScope.MINE)), eq(0), eq(20));
+    }
+
+    @Test
     @DisplayName("search는 알 수 없는 scopes 값이면 400을 반환한다")
     void search_invalidScope_returns400() throws Exception {
         mockMvc.perform(get("/api/knowledge-notes").with(user(grantedMember())).param("scopes", "ALL"))
@@ -194,7 +208,11 @@ class KnowledgeNoteControllerTest extends IntegrationTestSupport {
                         .contentType(MediaType.APPLICATION_JSON).content(validBody()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.message", is("메모를 저장했습니다.")))
-                .andExpect(jsonPath("$.data.id", is(7)));
+                .andExpect(jsonPath("$.data.id", is(7)))
+                .andExpect(jsonPath("$.data.visibility", is("PUBLIC")))
+                .andExpect(jsonPath("$.data.author.id", is(1)))
+                .andExpect(jsonPath("$.data.author.nickname", is("n")))
+                .andExpect(jsonPath("$.data.editable", is(true)));
     }
 
     @Test

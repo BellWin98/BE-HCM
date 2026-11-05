@@ -17,7 +17,7 @@ import java.util.Locale;
 import java.util.Map;
 
 /**
- * 관리자 전용 지식 메모. 소유 범위는 작성한 회원 본인이다(별도 owner 개념 없음).
+ * 권한이 부여된 회원이 작성하는 지식 메모. 소유 범위는 작성한 회원 본인이다(별도 owner 개념 없음).
  *
  * <p>태그 정규화(trim/중복 제거/개수·길이 검증)는 서비스 책임이며, {@link #replaceTags} 는 받은 이름으로 교체한다.
  */
@@ -54,6 +54,10 @@ public class KnowledgeNote extends BaseTimeEntity {
     @Column(nullable = false, length = 20)
     private KnowledgeCategory category;
 
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 10)
+    private KnowledgeVisibility visibility;
+
     @Column(columnDefinition = "text")
     private String content;
 
@@ -78,7 +82,7 @@ public class KnowledgeNote extends BaseTimeEntity {
 
     @Builder
     public KnowledgeNote(Member member, KnowledgeCategory category, String content, String sourceUrl,
-                         String sourceText, String stockSymbol, String stockName) {
+                         String sourceText, String stockSymbol, String stockName, KnowledgeVisibility visibility) {
         this.member = member;
         this.category = category;
         this.content = content;
@@ -86,16 +90,22 @@ public class KnowledgeNote extends BaseTimeEntity {
         this.sourceText = sourceText;
         this.stockSymbol = stockSymbol;
         this.stockName = stockName;
+        this.visibility = visibility != null ? visibility : KnowledgeVisibility.PUBLIC;
     }
 
     public void update(KnowledgeCategory category, String content, String sourceUrl, String sourceText,
-                       String stockSymbol, String stockName) {
+                       String stockSymbol, String stockName, KnowledgeVisibility visibility) {
         this.category = category;
         this.content = content;
         this.sourceUrl = sourceUrl;
         this.sourceText = sourceText;
         this.stockSymbol = stockSymbol;
         this.stockName = stockName;
+        this.visibility = visibility;
+    }
+
+    public boolean isWrittenBy(Long memberId) {
+        return member != null && member.getId() != null && member.getId().equals(memberId);
     }
 
     /**

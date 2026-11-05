@@ -33,4 +33,11 @@ class KnowledgeNoteTest {
         assertThat(removed).isEmpty();
         assertThat(note.getImageUrls()).containsExactly("b", "a");
     }
+
+    @Test
+    void builder_withoutVisibility_defaultsToPublic() {
+        KnowledgeNote note = KnowledgeNote.builder().category(KnowledgeCategory.ETC).content("c").build();
+
+        assertThat(note.getVisibility()).isEqualTo(KnowledgeVisibility.PUBLIC);
+    }
 }

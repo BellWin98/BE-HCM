@@ -2,6 +2,7 @@ package com.behcm.domain.knowledge.repository;
 
 import com.behcm.domain.knowledge.entity.KnowledgeCategory;
 import com.behcm.domain.knowledge.entity.KnowledgeNote;
+import com.behcm.domain.knowledge.entity.KnowledgeVisibility;
 import com.behcm.domain.member.entity.Member;
 import com.behcm.domain.member.repository.MemberRepository;
 import com.behcm.support.IntegrationTestSupport;
@@ -241,5 +242,17 @@ class KnowledgeNoteRepositoryTest extends IntegrationTestSupport {
         assertThat(removed).containsExactly("https://img/b.png");
         assertThat(repository.findById(note.getId()).orElseThrow().getImageUrls())
                 .containsExactly("https://img/c.png", "https://img/new.png", "https://img/a.png");
+    }
+
+    @Test
+    @DisplayName("visibility 컬럼 도입 전 행(DEFAULT 값)은 PUBLIC 으로 읽힌다")
+    void legacyRowWithoutVisibility_readsAsPublic() {
+        em.createNativeQuery("INSERT INTO knowledge_note (created_at, member_id, category, content) VALUES (NOW(6), ?, 'ETC', 'x')")
+                .setParameter(1, me.getId())
+                .executeUpdate();
+        Long id = ((Number) em.createNativeQuery("SELECT LAST_INSERT_ID()").getSingleResult()).longValue();
+        em.clear();
+
+        assertThat(repository.findById(id).orElseThrow().getVisibility()).isEqualTo(KnowledgeVisibility.PUBLIC);
     }
 }

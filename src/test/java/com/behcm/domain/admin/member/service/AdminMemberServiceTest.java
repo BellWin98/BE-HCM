@@ -1,6 +1,9 @@
 package com.behcm.domain.admin.member.service;
 
 import com.behcm.domain.admin.member.dto.AdminMemberResponse;
+import com.behcm.domain.admin.member.dto.KnowledgeAccessFlags;
+import com.behcm.domain.knowledge.entity.KnowledgeAccess;
+import com.behcm.domain.knowledge.repository.KnowledgeAccessRepository;
 import com.behcm.domain.knowledge.repository.KnowledgeNoteRepository;
 import com.behcm.domain.knowledge.service.KnowledgeNoteImageCleaner;
 import com.behcm.domain.member.entity.Member;
@@ -41,6 +44,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.inOrder;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
 @ExtendWith(MockitoExtension.class)
@@ -51,6 +55,9 @@ class AdminMemberServiceTest {
 
     @Mock
     private TossAccessRepository tossAccessRepository;
+
+    @Mock
+    private KnowledgeAccessRepository knowledgeAccessRepository;
 
     @Mock
     private KnowledgeNoteRepository knowledgeNoteRepository;
@@ -201,6 +208,44 @@ class AdminMemberServiceTest {
 
         // 건별 조회를 추가하면 그대로 N+1 이 되므로, 페이지당 한 번만 조회해야 한다.
         verify(tossAccessRepository).findGrantedMemberIds(List.of(1L, 2L));
+    }
+
+    @Test
+    @DisplayName("getMembers는 knowledge_access 를 한 번에 조회해 회원별 권한을 채우고 행이 없으면 NONE 이다")
+    void getMembers_fillsKnowledgeAccessInOneQuery() {
+        Pageable pageable = PageRequest.of(0, 10);
+        Member granted = memberWithId(1L, "granted@example.com", "granted");
+        Member denied = memberWithId(2L, "denied@example.com", "denied");
+
+        given(memberRepository.searchAdminMembers(isNull(), isNull(), eq(pageable)))
+                .willReturn(new PageImpl<>(List.of(granted, denied), pageable, 2));
+        given(knowledgeAccessRepository.findByMemberIdIn(List.of(1L, 2L))).willReturn(List.of(
+                KnowledgeAccess.builder().member(granted).canRead(true).canWrite(false).build()));
+
+        Page<AdminMemberResponse> result = adminMemberService.getMembers(null, null, pageable);
+
+        assertThat(result.getContent().get(0).getKnowledgeAccess()).isEqualTo(new KnowledgeAccessFlags(true, false));
+        assertThat(result.getContent().get(1).getKnowledgeAccess()).isEqualTo(KnowledgeAccessFlags.NONE);
+        verify(knowledgeAccessRepository, times(1)).findByMemberIdIn(List.of(1L, 2L));
+    }
+
+    @Test
+    @DisplayName("deleteMember는 회원을 지우기 전에 지식 메모 권한을 삭제한다")
+    void deleteMember_deletesKnowledgeAccess() {
+        Member admin = memberWithId(1L, "admin@example.com", "admin");
+        Member target = memberWithId(2L, "target@example.com", "target");
+
+        given(memberRepository.findById(2L)).willReturn(Optional.of(target));
+        given(workoutRoomRepository.findByOwner(target)).willReturn(List.of());
+        given(workoutRoomMemberRepository.findByMember(target)).willReturn(List.of());
+        given(memberSettingsRepository.findByMemberId(2L)).willReturn(Optional.empty());
+
+        adminMemberService.deleteMember(2L, admin);
+
+        InOrder inOrder = inOrder(tossAccessRepository, knowledgeAccessRepository, memberRepository);
+        inOrder.verify(tossAccessRepository).deleteByMemberId(2L);
+        inOrder.verify(knowledgeAccessRepository).deleteByMemberId(2L);
+        inOrder.verify(memberRepository).delete(target);
     }
 
     @Test

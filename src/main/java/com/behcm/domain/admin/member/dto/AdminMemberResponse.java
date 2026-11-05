@@ -21,8 +21,10 @@ public class AdminMemberResponse {
     private LocalDateTime createdAt;
     /** 토스증권 접근 권한 보유 여부. role 과 별개로 toss_access 에 등록되어 있는지를 뜻한다. */
     private boolean tossAccess;
+    /** 지식 메모 읽기/쓰기 권한. knowledge_access 에 행이 없으면 둘 다 false 다. */
+    private KnowledgeAccessFlags knowledgeAccess;
 
-    public static AdminMemberResponse from(Member member, boolean tossAccess) {
+    public static AdminMemberResponse from(Member member, boolean tossAccess, KnowledgeAccessFlags knowledgeAccess) {
         return AdminMemberResponse.builder()
                 .id(member.getId())
                 .email(member.getEmail())
@@ -33,6 +35,7 @@ public class AdminMemberResponse {
                 .totalPenalty(member.getTotalPenalty())
                 .createdAt(member.getCreatedAt())
                 .tossAccess(tossAccess)
+                .knowledgeAccess(knowledgeAccess)
                 .build();
     }
 }

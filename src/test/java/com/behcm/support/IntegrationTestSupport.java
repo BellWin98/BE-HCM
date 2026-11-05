@@ -1,5 +1,6 @@
 package com.behcm.support;
 
+import com.behcm.domain.admin.knowledgeaccess.service.AdminKnowledgeAccessService;
 import com.behcm.domain.admin.member.service.AdminMemberService;
 import com.behcm.domain.admin.tossaccess.service.AdminTossAccessService;
 import com.behcm.domain.admin.workout.service.AdminWorkoutRoomService;
@@ -56,6 +57,9 @@ public abstract class IntegrationTestSupport {
 
     @MockitoBean
     protected AdminMemberService adminMemberService;
+
+    @MockitoBean
+    protected AdminKnowledgeAccessService adminKnowledgeAccessService;
 
     @MockitoBean
     protected AdminTossAccessService adminTossAccessService;

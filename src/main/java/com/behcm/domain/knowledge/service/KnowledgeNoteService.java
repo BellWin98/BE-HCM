@@ -5,6 +5,7 @@ import com.behcm.domain.knowledge.dto.KnowledgeNoteResponse;
 import com.behcm.domain.knowledge.entity.KnowledgeCategory;
 import com.behcm.domain.knowledge.entity.KnowledgeNote;
 import com.behcm.domain.knowledge.repository.KnowledgeNoteRepository;
+import com.behcm.domain.knowledge.repository.KnowledgeNoteScope;
 import com.behcm.domain.knowledge.repository.KnowledgeNoteSpecs;
 import com.behcm.domain.knowledge.repository.StockNoteCount;
 import com.behcm.domain.member.entity.Member;
@@ -111,9 +112,12 @@ public class KnowledgeNoteService {
                                               String stockSymbol, int page, int size) {
         int safeSize = Math.min(Math.max(size, MIN_PAGE_SIZE), MAX_PAGE_SIZE);
         PageRequest pageable = PageRequest.of(Math.max(page, 0), safeSize, DEFAULT_SORT);
+        // TODO(Task 4): 요청자 권한·scopes 로 범위를 정한다. 그때까지는 기존처럼 본인 메모만 조회한다.
         return knowledgeNoteRepository
-                .findAll(KnowledgeNoteSpecs.search(member.getId(), category, blankToNull(stockSymbol),
-                        splitTerms(keyword)), pageable)
+                .findAll(KnowledgeNoteSpecs.visibleTo(member.getId(), KnowledgePermissions.ADMIN,
+                                Set.of(KnowledgeNoteScope.MINE))
+                        .and(KnowledgeNoteSpecs.matches(category, blankToNull(stockSymbol), splitTerms(keyword))),
+                        pageable)
                 .map(KnowledgeNoteResponse::from);
     }
 
@@ -135,14 +139,15 @@ public class KnowledgeNoteService {
             return Map.of();
         }
         Map<String, Long> result = new HashMap<>();
-        for (StockNoteCount row : knowledgeNoteRepository.countByStockSymbols(member.getId(), distinct)) {
+        for (StockNoteCount row : knowledgeNoteRepository.countVisibleByStockSymbols(member.getId(), false, distinct)) {
             result.put(row.stockSymbol(), row.count());
         }
         return result;
     }
 
     private KnowledgeNote findOwned(Member member, Long id) {
-        return knowledgeNoteRepository.findByIdAndMemberId(id, member.getId())
+        // TODO(Task 4): 권한에 따라 공개 메모 조회·수정 가능 여부를 판정한다. 그때까지는 본인 메모만.
+        return knowledgeNoteRepository.findVisibleById(id, member.getId(), false)
                 .orElseThrow(() -> new CustomException(ErrorCode.KNOWLEDGE_NOTE_NOT_FOUND));
     }
 

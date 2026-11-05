@@ -38,6 +38,7 @@ import java.util.stream.IntStream;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.mockStatic;
@@ -183,7 +184,7 @@ class KnowledgeNoteServiceTest {
         KnowledgeNote note = KnowledgeNote.builder().member(member).category(KnowledgeCategory.DEV)
                 .content("old").build();
         note.replaceImages(List.of(img("a"), img("b"), img("c"), img("d"), img("e")));
-        when(repository.findByIdAndMemberId(5L, 1L)).thenReturn(Optional.of(note));
+        when(repository.findVisibleById(5L, 1L, false)).thenReturn(Optional.of(note));
         KnowledgeNoteRequest r = request(KnowledgeCategory.DEV, null, null);
         r.setImageUrls(List.of(img("a"), img("c"), img("d"), img("e")));
 
@@ -198,7 +199,7 @@ class KnowledgeNoteServiceTest {
     void update_noRemovedImages_passesEmptyList() {
         KnowledgeNote note = KnowledgeNote.builder().member(member).category(KnowledgeCategory.DEV)
                 .content("old").build();
-        when(repository.findByIdAndMemberId(5L, 1L)).thenReturn(Optional.of(note));
+        when(repository.findVisibleById(5L, 1L, false)).thenReturn(Optional.of(note));
 
         service.update(member, 5L, request(KnowledgeCategory.DEV, null, null));
 
@@ -228,15 +229,18 @@ class KnowledgeNoteServiceTest {
         try (var specs = mockStatic(com.behcm.domain.knowledge.repository.KnowledgeNoteSpecs.class)) {
             Specification<KnowledgeNote> spec = mock(Specification.class);
             specs.when(() -> com.behcm.domain.knowledge.repository.KnowledgeNoteSpecs
-                    .search(any(), any(), any(), any())).thenReturn(spec);
+                    .visibleTo(any(), any(), any())).thenReturn(spec);
+            specs.when(() -> com.behcm.domain.knowledge.repository.KnowledgeNoteSpecs
+                    .matches(any(), any(), any())).thenReturn(spec);
+            when(spec.and(any(Specification.class))).thenReturn(spec);
 
             service.search(member, "\u3000삼성\u3000반도체 \u3000", null, "\u3000", 0, 20);
-            specs.verify(() -> com.behcm.domain.knowledge.repository.KnowledgeNoteSpecs.search(
-                    1L, null, null, List.of("삼성", "반도체")));
+            specs.verify(() -> com.behcm.domain.knowledge.repository.KnowledgeNoteSpecs.matches(
+                    null, null, List.of("삼성", "반도체")));
 
             service.search(member, "\u3000\u3000", null, null, 0, 20);
-            specs.verify(() -> com.behcm.domain.knowledge.repository.KnowledgeNoteSpecs.search(
-                    1L, null, null, List.of()));
+            specs.verify(() -> com.behcm.domain.knowledge.repository.KnowledgeNoteSpecs.matches(
+                    null, null, List.of()));
         }
     }
 
@@ -334,7 +338,7 @@ class KnowledgeNoteServiceTest {
     @Test
     @DisplayName("다른 회원의 메모 조회는 NOT_FOUND")
     void get_otherMembersNote_throwsNotFound() {
-        when(repository.findByIdAndMemberId(5L, 1L)).thenReturn(Optional.empty());
+        when(repository.findVisibleById(5L, 1L, false)).thenReturn(Optional.empty());
 
         assertCode(() -> service.get(member, 5L), ErrorCode.KNOWLEDGE_NOTE_NOT_FOUND);
     }
@@ -345,7 +349,7 @@ class KnowledgeNoteServiceTest {
         KnowledgeNote note = KnowledgeNote.builder().member(member).category(KnowledgeCategory.DEV)
                 .content("old").sourceUrl("https://old.com").build();
         note.replaceTags(List.of("old"));
-        when(repository.findByIdAndMemberId(5L, 1L)).thenReturn(Optional.of(note));
+        when(repository.findVisibleById(5L, 1L, false)).thenReturn(Optional.of(note));
 
         KnowledgeNoteRequest r = request(KnowledgeCategory.STOCK, " ", " 새 출처 ");
         r.setContent("새 내용");
@@ -369,7 +373,7 @@ class KnowledgeNoteServiceTest {
         KnowledgeNote note = KnowledgeNote.builder().member(member).category(KnowledgeCategory.DEV)
                 .content("old").sourceText("s").build();
         java.time.LocalDateTime flushed = java.time.LocalDateTime.of(2026, 11, 2, 10, 0);
-        when(repository.findByIdAndMemberId(5L, 1L)).thenReturn(Optional.of(note));
+        when(repository.findVisibleById(5L, 1L, false)).thenReturn(Optional.of(note));
         org.mockito.Mockito.doAnswer(i -> {
             ReflectionTestUtils.setField(note, "updatedAt", flushed);
             return null;
@@ -378,7 +382,7 @@ class KnowledgeNoteServiceTest {
         KnowledgeNoteResponse response = service.update(member, 5L, request(KnowledgeCategory.DEV, null, "새 출처"));
 
         org.mockito.InOrder order = org.mockito.Mockito.inOrder(repository);
-        order.verify(repository).findByIdAndMemberId(5L, 1L);
+        order.verify(repository).findVisibleById(5L, 1L, false);
         order.verify(repository).flush();
         assertThat(response.updatedAt()).isEqualTo(flushed);
     }
@@ -386,7 +390,7 @@ class KnowledgeNoteServiceTest {
     @Test
     @DisplayName("다른 회원의 메모 삭제는 NOT_FOUND")
     void delete_otherMembersNote_throwsNotFound() {
-        when(repository.findByIdAndMemberId(5L, 1L)).thenReturn(Optional.empty());
+        when(repository.findVisibleById(5L, 1L, false)).thenReturn(Optional.empty());
 
         assertCode(() -> service.delete(member, 5L), ErrorCode.KNOWLEDGE_NOTE_NOT_FOUND);
         verify(repository, never()).delete(any(KnowledgeNote.class));
@@ -396,7 +400,7 @@ class KnowledgeNoteServiceTest {
     @DisplayName("내 메모 삭제")
     void delete_ownNote_deletes() {
         KnowledgeNote note = KnowledgeNote.builder().member(member).category(KnowledgeCategory.DEV).content("c").build();
-        when(repository.findByIdAndMemberId(5L, 1L)).thenReturn(Optional.of(note));
+        when(repository.findVisibleById(5L, 1L, false)).thenReturn(Optional.of(note));
 
         service.delete(member, 5L);
 
@@ -408,7 +412,7 @@ class KnowledgeNoteServiceTest {
     void delete_cleansAllImages() {
         KnowledgeNote note = KnowledgeNote.builder().member(member).category(KnowledgeCategory.DEV).content("c").build();
         note.replaceImages(List.of(img("a"), img("b")));
-        when(repository.findByIdAndMemberId(5L, 1L)).thenReturn(Optional.of(note));
+        when(repository.findVisibleById(5L, 1L, false)).thenReturn(Optional.of(note));
 
         service.delete(member, 5L);
 
@@ -424,11 +428,14 @@ class KnowledgeNoteServiceTest {
         try (var specs = mockStatic(com.behcm.domain.knowledge.repository.KnowledgeNoteSpecs.class)) {
             Specification<KnowledgeNote> spec = mock(Specification.class);
             specs.when(() -> com.behcm.domain.knowledge.repository.KnowledgeNoteSpecs
-                    .search(any(), any(), any(), any())).thenReturn(spec);
+                    .visibleTo(any(), any(), any())).thenReturn(spec);
+            specs.when(() -> com.behcm.domain.knowledge.repository.KnowledgeNoteSpecs
+                    .matches(any(), any(), any())).thenReturn(spec);
+            when(spec.and(any(Specification.class))).thenReturn(spec);
 
             service.search(member, "a b  c d e f g", KnowledgeCategory.DEV, " AAPL ", 2, 0);
-            specs.verify(() -> com.behcm.domain.knowledge.repository.KnowledgeNoteSpecs.search(
-                    1L, KnowledgeCategory.DEV, "AAPL", List.of("a", "b", "c", "d", "e")));
+            specs.verify(() -> com.behcm.domain.knowledge.repository.KnowledgeNoteSpecs.matches(
+                    KnowledgeCategory.DEV, "AAPL", List.of("a", "b", "c", "d", "e")));
 
             ArgumentCaptor<Pageable> pageable = ArgumentCaptor.forClass(Pageable.class);
             verify(repository).findAll(any(Specification.class), pageable.capture());
@@ -438,8 +445,8 @@ class KnowledgeNoteServiceTest {
                     .isEqualTo(Sort.by(Sort.Order.desc("createdAt"), Sort.Order.desc("id")));
 
             service.search(member, "   ", null, " ", -3, 999);
-            specs.verify(() -> com.behcm.domain.knowledge.repository.KnowledgeNoteSpecs.search(
-                    1L, null, null, List.of()));
+            specs.verify(() -> com.behcm.domain.knowledge.repository.KnowledgeNoteSpecs.matches(
+                    null, null, List.of()));
             ArgumentCaptor<Pageable> second = ArgumentCaptor.forClass(Pageable.class);
             verify(repository, org.mockito.Mockito.times(2)).findAll(any(Specification.class), second.capture());
             assertThat(second.getValue().getPageSize()).isEqualTo(50);
@@ -478,7 +485,7 @@ class KnowledgeNoteServiceTest {
     @Test
     @DisplayName("종목별 건수를 맵으로 반환하고 없는 종목은 포함하지 않는다")
     void countByStockSymbols_returnsMap() {
-        when(repository.countByStockSymbols(any(), anyCollection()))
+        when(repository.countVisibleByStockSymbols(any(), anyBoolean(), anyCollection()))
                 .thenReturn(List.of(new StockNoteCount("AAPL", 3)));
 
         Map<String, Long> result = service.countByStockSymbols(member, List.of(" AAPL ", "AAPL", "TSLA"));
@@ -486,7 +493,7 @@ class KnowledgeNoteServiceTest {
         assertThat(result).containsExactlyEntriesOf(Map.of("AAPL", 3L));
         @SuppressWarnings("unchecked")
         ArgumentCaptor<Collection<String>> captor = ArgumentCaptor.forClass(Collection.class);
-        verify(repository).countByStockSymbols(any(), captor.capture());
+        verify(repository).countVisibleByStockSymbols(any(), anyBoolean(), captor.capture());
         assertThat(captor.getValue()).containsExactlyInAnyOrder("AAPL", "TSLA");
     }
 

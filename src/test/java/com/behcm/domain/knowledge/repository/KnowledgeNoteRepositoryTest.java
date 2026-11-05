@@ -3,7 +3,9 @@ package com.behcm.domain.knowledge.repository;
 import com.behcm.domain.knowledge.entity.KnowledgeCategory;
 import com.behcm.domain.knowledge.entity.KnowledgeNote;
 import com.behcm.domain.knowledge.entity.KnowledgeVisibility;
+import com.behcm.domain.knowledge.service.KnowledgePermissions;
 import com.behcm.domain.member.entity.Member;
+import com.behcm.domain.member.entity.MemberRole;
 import com.behcm.domain.member.repository.MemberRepository;
 import com.behcm.support.IntegrationTestSupport;
 import jakarta.persistence.EntityManager;
@@ -13,8 +15,10 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.EnumSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -27,6 +31,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 @Transactional
 class KnowledgeNoteRepositoryTest extends IntegrationTestSupport {
 
+    private static final KnowledgePermissions READER = new KnowledgePermissions(false, true, false);
+    private static final KnowledgePermissions WRITER_ONLY = new KnowledgePermissions(false, false, true);
     private static final Sort NEWEST = Sort.by(Sort.Order.desc("createdAt"), Sort.Order.desc("id"));
 
     @Autowired
@@ -46,11 +52,23 @@ class KnowledgeNoteRepositoryTest extends IntegrationTestSupport {
     }
 
     private Member saveMember(String prefix) {
+        return saveMember(prefix, MemberRole.USER);
+    }
+
+    private Member saveMember(String prefix, MemberRole role) {
         String suffix = UUID.randomUUID().toString().substring(0, 6);
         return memberRepository.save(Member.builder()
                 .email(prefix + "-" + suffix + "@test.com")
                 .password("pw")
                 .nickname(prefix + suffix.substring(0, 4))
+                .role(role)
+                .build());
+    }
+
+    private KnowledgeNote saveVisibilityNote(Member owner, KnowledgeVisibility visibility) {
+        return repository.save(KnowledgeNote.builder()
+                .member(owner).category(KnowledgeCategory.STOCK).content(visibility.name())
+                .stockSymbol("005930").stockName("삼성전자").visibility(visibility)
                 .build());
     }
 
@@ -65,8 +83,133 @@ class KnowledgeNoteRepositoryTest extends IntegrationTestSupport {
     }
 
     private List<KnowledgeNote> search(Member owner, KnowledgeCategory category, String symbol, String... terms) {
-        return repository.findAll(KnowledgeNoteSpecs.search(owner.getId(), category, symbol, List.of(terms)),
+        // 작성 권한만 있는 회원 기준 = 본인 메모만. 검색 조건(matches)이 범위와 함께 걸리는지 확인한다.
+        return repository.findAll(KnowledgeNoteSpecs.visibleTo(owner.getId(), WRITER_ONLY, Set.of())
+                        .and(KnowledgeNoteSpecs.matches(category, symbol, List.of(terms))),
                 PageRequest.of(0, 20, NEWEST)).getContent();
+    }
+
+    /** viewer(일반)·other(일반)·admin 이 각자 PUBLIC 1건, PRIVATE 1건씩, 모두 종목 005930. */
+    private record Fixture(Member viewer, Member admin,
+                           Long viewerPublic, Long viewerPrivate,
+                           Long otherPublic, Long otherPrivate,
+                           Long adminPublic, Long adminPrivate) {
+        Set<Long> all() {
+            return Set.of(viewerPublic, viewerPrivate, otherPublic, otherPrivate, adminPublic, adminPrivate);
+        }
+    }
+
+    private Fixture visibilityFixture() {
+        Member admin = saveMember("admin", MemberRole.ADMIN);
+        Fixture f = new Fixture(me, admin,
+                saveVisibilityNote(me, KnowledgeVisibility.PUBLIC).getId(),
+                saveVisibilityNote(me, KnowledgeVisibility.PRIVATE).getId(),
+                saveVisibilityNote(other, KnowledgeVisibility.PUBLIC).getId(),
+                saveVisibilityNote(other, KnowledgeVisibility.PRIVATE).getId(),
+                saveVisibilityNote(admin, KnowledgeVisibility.PUBLIC).getId(),
+                saveVisibilityNote(admin, KnowledgeVisibility.PRIVATE).getId());
+        em.flush();
+        em.clear();
+        return f;
+    }
+
+    /** 공유 테스트 DB 에 남아 있는 다른 공개 메모가 섞이지 않도록 결과를 fixture 의 6건으로 한정한다. */
+    private Set<Long> visibleIds(Fixture f, Member viewer, KnowledgePermissions p, Set<KnowledgeNoteScope> scopes) {
+        Specification<KnowledgeNote> fixtureOnly = (root, query, cb) -> root.get("id").in(f.all());
+        return repository.findAll(KnowledgeNoteSpecs.visibleTo(viewer.getId(), p, scopes).and(fixtureOnly)).stream()
+                .map(KnowledgeNote::getId).collect(Collectors.toSet());
+    }
+
+    @Test
+    void visibleTo_reader_ownAndOthersPublic() {
+        Fixture f = visibilityFixture();
+
+        assertThat(visibleIds(f, f.viewer(), READER, Set.of()))
+                .containsExactlyInAnyOrder(f.viewerPublic(), f.viewerPrivate(), f.otherPublic(), f.adminPublic());
+    }
+
+    @Test
+    void visibleTo_writerOnly_ownOnly() {
+        Fixture f = visibilityFixture();
+
+        assertThat(visibleIds(f, f.viewer(), WRITER_ONLY, Set.of()))
+                .containsExactlyInAnyOrder(f.viewerPublic(), f.viewerPrivate());
+    }
+
+    @Test
+    void visibleTo_nonAdminPrivateScope_onlyOwnPrivate() {
+        Fixture f = visibilityFixture();
+
+        assertThat(visibleIds(f, f.viewer(), READER, Set.of(KnowledgeNoteScope.PRIVATE)))
+                .containsExactlyInAnyOrder(f.viewerPrivate());
+    }
+
+    @Test
+    void visibleTo_nonAdminMineScope_ownOnly() {
+        Fixture f = visibilityFixture();
+
+        assertThat(visibleIds(f, f.viewer(), READER, Set.of(KnowledgeNoteScope.MINE)))
+                .containsExactlyInAnyOrder(f.viewerPublic(), f.viewerPrivate());
+    }
+
+    @Test
+    void visibleTo_adminDefault_publicPlusOwnPrivate() {
+        Fixture f = visibilityFixture();
+
+        assertThat(visibleIds(f, f.admin(), KnowledgePermissions.ADMIN, Set.of()))
+                .containsExactlyInAnyOrder(f.viewerPublic(), f.otherPublic(), f.adminPublic(), f.adminPrivate());
+    }
+
+    @Test
+    void visibleTo_adminPrivateScope_allPrivate() {
+        Fixture f = visibilityFixture();
+
+        assertThat(visibleIds(f, f.admin(), KnowledgePermissions.ADMIN, Set.of(KnowledgeNoteScope.PRIVATE)))
+                .containsExactlyInAnyOrder(f.viewerPrivate(), f.otherPrivate(), f.adminPrivate());
+    }
+
+    @Test
+    void visibleTo_adminMineAndPrivate_union() {
+        Fixture f = visibilityFixture();
+
+        assertThat(visibleIds(f, f.admin(), KnowledgePermissions.ADMIN,
+                Set.of(KnowledgeNoteScope.MINE, KnowledgeNoteScope.PRIVATE)))
+                .containsExactlyInAnyOrder(f.adminPublic(), f.adminPrivate(), f.viewerPrivate(), f.otherPrivate());
+    }
+
+    @Test
+    void visibleTo_adminAllScopes_everything() {
+        Fixture f = visibilityFixture();
+
+        assertThat(visibleIds(f, f.admin(), KnowledgePermissions.ADMIN, EnumSet.allOf(KnowledgeNoteScope.class)))
+                .containsExactlyInAnyOrder(f.viewerPublic(), f.viewerPrivate(), f.otherPublic(), f.otherPrivate(),
+                        f.adminPublic(), f.adminPrivate());
+    }
+
+    @Test
+    void countVisible_excludesOthersPrivate() {
+        Fixture f = visibilityFixture();
+
+        assertThat(repository.countVisibleByStockSymbols(f.viewer().getId(), true, Set.of("005930")))
+                .extracting(StockNoteCount::count).containsExactly(4L);
+    }
+
+    @Test
+    void countVisible_adminSeesOwnAndPublic() {
+        Fixture f = visibilityFixture();
+
+        assertThat(repository.countVisibleByStockSymbols(f.admin().getId(), true, Set.of("005930")))
+                .extracting(StockNoteCount::count).containsExactly(4L);
+    }
+
+    @Test
+    void findVisibleById_othersPrivate_empty() {
+        Fixture f = visibilityFixture();
+
+        assertThat(repository.findVisibleById(f.otherPrivate(), f.viewer().getId(), true)).isEmpty();
+        assertThat(repository.findVisibleById(f.otherPublic(), f.viewer().getId(), true)).isPresent();
+        assertThat(repository.findVisibleById(f.otherPublic(), f.viewer().getId(), false)).isEmpty();
+        assertThat(repository.findVisibleById(f.viewerPrivate(), f.viewer().getId(), false)).isPresent();
     }
 
     @Test
@@ -124,7 +267,7 @@ class KnowledgeNoteRepositoryTest extends IntegrationTestSupport {
     }
 
     @Test
-    void countByStockSymbols_groupsOwnNotesOnly() {
+    void countVisibleByStockSymbols_withoutPublic_groupsOwnNotesOnly() {
         saveNote(me, KnowledgeCategory.STOCK, "a", null, "005930", "삼성전자");
         saveNote(me, KnowledgeCategory.STOCK, "b", null, "005930", "삼성전자");
         saveNote(me, KnowledgeCategory.STOCK, "c", null, "AAPL", "애플");
@@ -132,7 +275,7 @@ class KnowledgeNoteRepositoryTest extends IntegrationTestSupport {
         em.flush();
         em.clear();
 
-        Map<String, Long> counts = repository.countByStockSymbols(me.getId(), List.of("005930", "AAPL", "TSLA"))
+        Map<String, Long> counts = repository.countVisibleByStockSymbols(me.getId(), false, List.of("005930", "AAPL", "TSLA"))
                 .stream().collect(Collectors.toMap(StockNoteCount::stockSymbol, StockNoteCount::count));
 
         assertThat(counts).containsExactlyInAnyOrderEntriesOf(Map.of("005930", 2L, "AAPL", 1L));
@@ -218,7 +361,7 @@ class KnowledgeNoteRepositoryTest extends IntegrationTestSupport {
         assertThat(search(me, null, null, "hbm")).extracting(KnowledgeNote::getId)
                 .containsExactly(note.getId());
 
-        assertThat(repository.countByStockSymbols(me.getId(), Set.of("005930")))
+        assertThat(repository.countVisibleByStockSymbols(me.getId(), false, Set.of("005930")))
                 .extracting(StockNoteCount::count).containsExactly(1L);
 
         assertThat(repository.findImageUrlsByMemberId(me.getId()))

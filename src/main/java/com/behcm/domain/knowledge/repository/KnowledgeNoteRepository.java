@@ -14,15 +14,29 @@ import java.util.Optional;
 public interface KnowledgeNoteRepository
         extends JpaRepository<KnowledgeNote, Long>, JpaSpecificationExecutor<KnowledgeNote> {
 
-    Optional<KnowledgeNote> findByIdAndMemberId(Long id, Long memberId);
+    /**
+     * 요청자에게 보이는 메모 단건. 본인 메모이거나, includePublic 이면 공개 메모까지.
+     * 다른 회원의 비공개 메모는 어떤 경우에도 나오지 않는다.
+     */
+    @Query("SELECT n FROM KnowledgeNote n WHERE n.id = :id AND (n.member.id = :viewerId "
+            + "OR (:includePublic = true AND n.visibility = com.behcm.domain.knowledge.entity.KnowledgeVisibility.PUBLIC))")
+    Optional<KnowledgeNote> findVisibleById(@Param("id") Long id,
+                                            @Param("viewerId") Long viewerId,
+                                            @Param("includePublic") boolean includePublic);
 
-    /** 종목별 내 메모 건수. 종목 목록 화면에서 건별 count 를 돌리면 N+1 이 되므로 한 번에 집계한다. */
+    /**
+     * 종목별로 요청자에게 보이는 메모 건수({@link #findVisibleById} 와 같은 범위).
+     * 종목 목록 화면에서 건별 count 를 돌리면 N+1 이 되므로 한 번에 집계한다.
+     */
     @Query("SELECT new com.behcm.domain.knowledge.repository.StockNoteCount(n.stockSymbol, COUNT(n)) "
             + "FROM KnowledgeNote n "
-            + "WHERE n.member.id = :memberId AND n.stockSymbol IN :symbols "
+            + "WHERE (n.member.id = :viewerId "
+            + "OR (:includePublic = true AND n.visibility = com.behcm.domain.knowledge.entity.KnowledgeVisibility.PUBLIC)) "
+            + "AND n.stockSymbol IN :symbols "
             + "GROUP BY n.stockSymbol")
-    List<StockNoteCount> countByStockSymbols(@Param("memberId") Long memberId,
-                                             @Param("symbols") Collection<String> symbols);
+    List<StockNoteCount> countVisibleByStockSymbols(@Param("viewerId") Long viewerId,
+                                                    @Param("includePublic") boolean includePublic,
+                                                    @Param("symbols") Collection<String> symbols);
 
     /** 회원 삭제용 bulk delete. 태그는 FK ON DELETE CASCADE 로 함께 정리된다. */
     @Modifying

@@ -87,7 +87,8 @@ public class KnowledgeNoteService {
     public KnowledgeNoteResponse update(Member member, Long id, KnowledgeNoteRequest request) {
         KnowledgeNote note = findOwned(member, id);
         NormalizedNote n = normalize(request);
-        note.update(n.category(), n.content(), n.sourceUrl(), n.sourceText(), n.stockSymbol(), n.stockName());
+        note.update(n.category(), n.content(), n.sourceUrl(), n.sourceText(), n.stockSymbol(), n.stockName(),
+                note.getVisibility());
         note.replaceTags(n.tags());
         List<String> removedImages = note.replaceImages(n.imageUrls());
         // updatedAt 은 flush 시점에 갱신되므로, 응답을 만들기 전에 flush 해서 최신 값을 반영한다.

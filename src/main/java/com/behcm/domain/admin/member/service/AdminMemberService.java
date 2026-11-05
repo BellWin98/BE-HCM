@@ -1,6 +1,9 @@
 package com.behcm.domain.admin.member.service;
 
 import com.behcm.domain.admin.member.dto.AdminMemberResponse;
+import com.behcm.domain.admin.member.dto.KnowledgeAccessFlags;
+import com.behcm.domain.knowledge.entity.KnowledgeAccess;
+import com.behcm.domain.knowledge.repository.KnowledgeAccessRepository;
 import com.behcm.domain.chat.repository.ChatMessageRepository;
 import com.behcm.domain.knowledge.repository.KnowledgeNoteRepository;
 import com.behcm.domain.knowledge.service.KnowledgeNoteImageCleaner;
@@ -29,7 +32,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 @Service
 @Slf4j
@@ -49,6 +54,7 @@ public class AdminMemberService {
     private final PenaltyRepository penaltyRepository;
     private final RestRepository restRepository;
     private final TossAccessRepository tossAccessRepository;
+    private final KnowledgeAccessRepository knowledgeAccessRepository;
     private final KnowledgeNoteRepository knowledgeNoteRepository;
     private final KnowledgeNoteImageCleaner knowledgeNoteImageCleaner;
 
@@ -62,7 +68,16 @@ public class AdminMemberService {
                 ? Set.of()
                 : tossAccessRepository.findGrantedMemberIds(memberIds);
 
-        return members.map(member -> AdminMemberResponse.from(member, tossGranted.contains(member.getId())));
+        // 지식 메모 권한도 같은 이유로 페이지 단위로 일괄 조회한다. 행이 없는 회원은 NONE 이다.
+        Map<Long, KnowledgeAccessFlags> knowledgeFlags = memberIds.isEmpty()
+                ? Map.of()
+                : knowledgeAccessRepository.findByMemberIdIn(memberIds).stream()
+                        .collect(Collectors.toMap(access -> access.getMember().getId(), AdminMemberService::toFlags));
+
+        return members.map(member -> AdminMemberResponse.from(
+                member,
+                tossGranted.contains(member.getId()),
+                knowledgeFlags.getOrDefault(member.getId(), KnowledgeAccessFlags.NONE)));
     }
 
     @Transactional
@@ -76,7 +91,14 @@ public class AdminMemberService {
         // 관리자 행위는 되돌릴 수 없으므로 감사 로그를 남긴다. 행위자는 MDC memberId 에 있다.
         log.info("Admin changed member role (memberId={}, role={}->{})", saved.getId(), previousRole, newRole);
 
-        return AdminMemberResponse.from(saved, tossAccessRepository.existsByMemberId(saved.getId()));
+        KnowledgeAccessFlags knowledgeFlags = knowledgeAccessRepository.findByMemberId(saved.getId())
+                .map(AdminMemberService::toFlags)
+                .orElse(KnowledgeAccessFlags.NONE);
+        return AdminMemberResponse.from(saved, tossAccessRepository.existsByMemberId(saved.getId()), knowledgeFlags);
+    }
+
+    private static KnowledgeAccessFlags toFlags(KnowledgeAccess access) {
+        return new KnowledgeAccessFlags(access.isCanRead(), access.isCanWrite());
     }
 
     @Transactional
@@ -117,6 +139,9 @@ public class AdminMemberService {
 
         // 토스 접근 권한 삭제 (member 를 FK 로 참조하므로 회원보다 먼저 지워야 한다).
         tossAccessRepository.deleteByMemberId(memberId);
+
+        // 지식 메모 권한 삭제 (knowledge_access 도 member 를 FK 로 참조한다).
+        knowledgeAccessRepository.deleteByMemberId(memberId);
 
         // 지식 메모 삭제 (knowledge_note 가 member 를 FK 로 참조. 태그는 ON DELETE CASCADE).
         // 행이 지워진 뒤에는 이미지 URL 을 알 수 없으므로 먼저 조회해 커밋 후 S3 삭제를 예약한다.

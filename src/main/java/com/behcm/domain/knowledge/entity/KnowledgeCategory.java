@@ -4,5 +4,9 @@ public enum KnowledgeCategory {
     DEV,
     REAL_ESTATE,
     STOCK,
+    ECONOMY,
+    RESTAURANT,
+    CAFE,
+    TRAVEL,
     ETC
 }

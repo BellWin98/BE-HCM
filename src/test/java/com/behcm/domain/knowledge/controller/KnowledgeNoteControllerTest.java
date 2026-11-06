@@ -12,6 +12,8 @@ import com.behcm.domain.member.entity.MemberRole;
 import com.behcm.support.IntegrationTestSupport;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.http.MediaType;
@@ -230,6 +232,21 @@ class KnowledgeNoteControllerTest extends IntegrationTestSupport {
 
         verify(knowledgeNoteService).search(any(), eq("삼성 반도체"), eq(KnowledgeCategory.STOCK),
                 eq("005930"), any(), eq(0), eq(20));
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"ECONOMY", "RESTAURANT", "CAFE", "TRAVEL"})
+    @DisplayName("새 분야(경제/맛집/카페/여행지) category 파라미터를 enum 으로 바인딩한다")
+    void search_bindsNewCategories(String category) throws Exception {
+        given(knowledgeNoteService.search(any(), any(), any(), any(), any(), eq(0), eq(20)))
+                .willReturn(new PageImpl<>(List.of(), PageRequest.of(0, 20), 0));
+
+        mockMvc.perform(get("/api/knowledge-notes").with(user(grantedMember()))
+                        .param("category", category))
+                .andExpect(status().isOk());
+
+        verify(knowledgeNoteService).search(any(), any(), eq(KnowledgeCategory.valueOf(category)),
+                any(), any(), eq(0), eq(20));
     }
 
     @Test

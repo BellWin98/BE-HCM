@@ -14,6 +14,7 @@ import java.util.List;
 public record KnowledgeNoteResponse(
         Long id,
         KnowledgeCategory category,
+        String title,
         String content,
         String sourceUrl,
         String sourceText,
@@ -32,6 +33,7 @@ public record KnowledgeNoteResponse(
         return new KnowledgeNoteResponse(
                 note.getId(),
                 note.getCategory(),
+                note.getTitle(),
                 note.getContent(),
                 note.getSourceUrl(),
                 note.getSourceText(),

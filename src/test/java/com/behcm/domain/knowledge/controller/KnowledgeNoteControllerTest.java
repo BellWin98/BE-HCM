@@ -187,11 +187,11 @@ class KnowledgeNoteControllerTest extends IntegrationTestSupport {
     }
 
     @Test
-    @DisplayName("create는 내용이 2000자를 넘으면 400을 반환한다")
+    @DisplayName("create는 내용이 10000자를 넘으면 400을 반환한다")
     void create_withTooLongContent_returns400() throws Exception {
         KnowledgeNoteRequest request = new KnowledgeNoteRequest();
         request.setCategory(KnowledgeCategory.STOCK);
-        request.setContent("가".repeat(2001));
+        request.setContent("가".repeat(10001));
 
         mockMvc.perform(post("/api/knowledge-notes").with(user(grantedMember()))
                         .contentType(MediaType.APPLICATION_JSON)
@@ -215,6 +215,20 @@ class KnowledgeNoteControllerTest extends IntegrationTestSupport {
                 .andExpect(status().isBadRequest());
 
         verifyNoInteractions(knowledgeNoteService);
+    }
+
+    @Test
+    @DisplayName("create는 내용이 정확히 10000자면 검증을 통과한다")
+    void create_withMaxLengthContent_passesValidation() throws Exception {
+        given(knowledgeNoteService.create(any(), any(KnowledgeNoteRequest.class))).willReturn(response(7L));
+        KnowledgeNoteRequest request = new KnowledgeNoteRequest();
+        request.setCategory(KnowledgeCategory.STOCK);
+        request.setContent("가".repeat(10000));
+
+        mockMvc.perform(post("/api/knowledge-notes").with(user(grantedMember()))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk());
     }
 
     @Test

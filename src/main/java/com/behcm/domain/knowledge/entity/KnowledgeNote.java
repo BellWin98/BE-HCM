@@ -34,7 +34,7 @@ import java.util.Map;
 public class KnowledgeNote extends BaseTimeEntity {
 
     public static final int MAX_TITLE_LENGTH = 100;
-    public static final int MAX_CONTENT_LENGTH = 2000;
+    public static final int MAX_CONTENT_LENGTH = 10000;
     public static final int MAX_SOURCE_URL_LENGTH = 2048;
     public static final int MAX_SOURCE_TEXT_LENGTH = 500;
     public static final int MAX_IMAGES = 5;

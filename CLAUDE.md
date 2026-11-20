@@ -120,7 +120,7 @@ BE-HCM("헬창모임")은 그룹 운동 습관 관리 앱을 위한 Spring Boot 
 - 비즈니스 에러는 `CustomException(ErrorCode.X)` 형태로 던집니다. 새로운 에러 케이스는 새 예외 타입을
   만들지 말고, `ErrorCode`에 해당 도메인 주석 블록 아래에 추가하세요. 에러 메시지는 한국어로 작성합니다.
 - 생성/수정 시각이 필요한 엔티티는 `BaseTimeEntity`를 상속합니다.
-- `.cursor/rules/back-end.mdc`에 맞춰 DI는 전체적으로 생성자 주입(`@RequiredArgsConstructor`)을 사용합니다.
+- DI는 전체적으로 생성자 주입(`@RequiredArgsConstructor`)을 사용합니다. 필드 주입(`@Autowired` 필드)은 쓰지 않습니다.
 
 ### Spring Boot 4 관련 주의사항
 

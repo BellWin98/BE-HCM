@@ -240,4 +240,5 @@ GitHub Environment에 각각 별도로 설정됩니다(Secret 이름은 동일�
 - 브랜치명: `feature/issue-{issue_number}` 또는 `fix/issue-{issue_number}`
 - 커밋 메시지: 한국어로 작성하고 `(#{issue_number})`로 끝맺음
 - PR base 브랜치: `dev`를 거치지 않고 항상 `main`으로 바로 병합
-- 이슈/PR의 `title`, `body`는 한국어로 작성 (자세한 절차는 `.cursor/commands/github-issue-pr-command.md` 참고)
+- 이슈/PR의 `title`, `body`는 한국어로 작성
+- PR 본문은 `Closes #{issue_number}`로 시작해 병합 시 이슈가 자동으로 닫히게 함

@@ -33,6 +33,7 @@ import java.util.Map;
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class KnowledgeNote extends BaseTimeEntity {
 
+    public static final int MAX_TITLE_LENGTH = 100;
     public static final int MAX_CONTENT_LENGTH = 2000;
     public static final int MAX_SOURCE_URL_LENGTH = 2048;
     public static final int MAX_SOURCE_TEXT_LENGTH = 500;
@@ -58,6 +59,9 @@ public class KnowledgeNote extends BaseTimeEntity {
     @Column(nullable = false, length = 10)
     private KnowledgeVisibility visibility;
 
+    @Column(length = MAX_TITLE_LENGTH)
+    private String title;
+
     @Column(columnDefinition = "text")
     private String content;
 
@@ -81,10 +85,11 @@ public class KnowledgeNote extends BaseTimeEntity {
     private List<KnowledgeNoteImage> images = new ArrayList<>();
 
     @Builder
-    public KnowledgeNote(Member member, KnowledgeCategory category, String content, String sourceUrl,
+    public KnowledgeNote(Member member, KnowledgeCategory category, String title, String content, String sourceUrl,
                          String sourceText, String stockSymbol, String stockName, KnowledgeVisibility visibility) {
         this.member = member;
         this.category = category;
+        this.title = title;
         this.content = content;
         this.sourceUrl = sourceUrl;
         this.sourceText = sourceText;
@@ -93,9 +98,10 @@ public class KnowledgeNote extends BaseTimeEntity {
         this.visibility = visibility != null ? visibility : KnowledgeVisibility.PUBLIC;
     }
 
-    public void update(KnowledgeCategory category, String content, String sourceUrl, String sourceText,
+    public void update(KnowledgeCategory category, String title, String content, String sourceUrl, String sourceText,
                        String stockSymbol, String stockName, KnowledgeVisibility visibility) {
         this.category = category;
+        this.title = title;
         this.content = content;
         this.sourceUrl = sourceUrl;
         this.sourceText = sourceText;

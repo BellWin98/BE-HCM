@@ -173,6 +173,62 @@ class KnowledgeNoteServiceTest {
     }
 
     @Test
+    @DisplayName("제목은 앞뒤 공백·전각 공백을 지워 저장한다")
+    void create_title_isStripped() {
+        KnowledgeNoteRequest r = request(KnowledgeCategory.DEV, null, null);
+        r.setTitle("  HBM 증설　");
+
+        assertThat(saveAndCapture(r).getTitle()).isEqualTo("HBM 증설");
+    }
+
+    @Test
+    @DisplayName("공백만 있는 제목은 null 로 저장한다")
+    void create_blankTitle_storesNull() {
+        KnowledgeNoteRequest r = request(KnowledgeCategory.DEV, null, null);
+        r.setTitle("　 ");
+
+        assertThat(saveAndCapture(r).getTitle()).isNull();
+    }
+
+    @Test
+    @DisplayName("제목만 있고 내용·이미지가 없으면 거부한다")
+    void create_titleOnly_throwsContentOrImageRequired() {
+        KnowledgeNoteRequest r = request(KnowledgeCategory.DEV, null, null);
+        r.setTitle("제목");
+        r.setContent(" ");
+
+        assertCode(() -> service.create(member, r), ErrorCode.KNOWLEDGE_NOTE_CONTENT_OR_IMAGE_REQUIRED);
+        verify(repository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("수정에서 제목을 비우면 기존 제목이 지워진다")
+    void update_blankTitle_clearsExistingTitle() {
+        KnowledgeNote note = KnowledgeNote.builder().member(member).category(KnowledgeCategory.DEV)
+                .title("옛 제목").content("old").build();
+        when(repository.findVisibleById(5L, 1L, false)).thenReturn(Optional.of(note));
+        KnowledgeNoteRequest r = request(KnowledgeCategory.DEV, null, null);
+        r.setTitle(null);
+
+        KnowledgeNoteResponse response = service.update(member, 5L, r);
+
+        assertThat(note.getTitle()).isNull();
+        assertThat(response.title()).isNull();
+    }
+
+    @Test
+    @DisplayName("수정에서 제목을 바꾸면 응답에도 반영된다")
+    void update_title_isReturned() {
+        KnowledgeNote note = KnowledgeNote.builder().member(member).category(KnowledgeCategory.DEV)
+                .content("old").build();
+        when(repository.findVisibleById(5L, 1L, false)).thenReturn(Optional.of(note));
+        KnowledgeNoteRequest r = request(KnowledgeCategory.DEV, null, null);
+        r.setTitle("새 제목");
+
+        assertThat(service.update(member, 5L, r).title()).isEqualTo("새 제목");
+    }
+
+    @Test
     @DisplayName("이미지가 6장이면 거부한다")
     void create_sixImages_throwsImageInvalid() {
         allowAllImageUrls();

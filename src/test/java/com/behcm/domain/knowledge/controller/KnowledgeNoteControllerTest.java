@@ -74,7 +74,7 @@ class KnowledgeNoteControllerTest extends IntegrationTestSupport {
     }
 
     private KnowledgeNoteResponse response(Long id) {
-        return new KnowledgeNoteResponse(id, KnowledgeCategory.STOCK, "내용", null, null,
+        return new KnowledgeNoteResponse(id, KnowledgeCategory.STOCK, "제목", "내용", null, null,
                 List.of("반도체"), "005930", "삼성전자", List.of(), LocalDateTime.now(), LocalDateTime.now(),
                 KnowledgeVisibility.PUBLIC, new KnowledgeNoteAuthor(1L, "n", null), true);
     }
@@ -192,6 +192,22 @@ class KnowledgeNoteControllerTest extends IntegrationTestSupport {
         KnowledgeNoteRequest request = new KnowledgeNoteRequest();
         request.setCategory(KnowledgeCategory.STOCK);
         request.setContent("가".repeat(2001));
+
+        mockMvc.perform(post("/api/knowledge-notes").with(user(grantedMember()))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest());
+
+        verifyNoInteractions(knowledgeNoteService);
+    }
+
+    @Test
+    @DisplayName("create는 제목이 100자를 넘으면 400을 반환한다")
+    void create_withTooLongTitle_returns400() throws Exception {
+        KnowledgeNoteRequest request = new KnowledgeNoteRequest();
+        request.setCategory(KnowledgeCategory.STOCK);
+        request.setContent("내용");
+        request.setTitle("가".repeat(101));
 
         mockMvc.perform(post("/api/knowledge-notes").with(user(grantedMember()))
                         .contentType(MediaType.APPLICATION_JSON)
@@ -380,7 +396,7 @@ class KnowledgeNoteControllerTest extends IntegrationTestSupport {
     @DisplayName("create 응답 JSON 은 images 배열을 포함한다")
     void create_responseIncludesImages() throws Exception {
         given(knowledgeNoteService.create(any(), any(KnowledgeNoteRequest.class)))
-                .willReturn(new KnowledgeNoteResponse(9L, KnowledgeCategory.STOCK, null, null, null,
+                .willReturn(new KnowledgeNoteResponse(9L, KnowledgeCategory.STOCK, null, null, null, null,
                         List.of(), null, null, List.of("https://b/knowledge-notes/a.png"),
                         LocalDateTime.now(), LocalDateTime.now(),
                         KnowledgeVisibility.PUBLIC, new KnowledgeNoteAuthor(1L, "n", null), true));

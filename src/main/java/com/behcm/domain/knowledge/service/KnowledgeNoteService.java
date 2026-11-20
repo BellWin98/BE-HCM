@@ -74,6 +74,7 @@ public class KnowledgeNoteService {
         KnowledgeNote note = KnowledgeNote.builder()
                 .member(member)
                 .category(n.category())
+                .title(n.title())
                 .content(n.content())
                 .sourceUrl(n.sourceUrl())
                 .sourceText(n.sourceText())
@@ -111,7 +112,7 @@ public class KnowledgeNoteService {
         rejectUrlsUsedByOtherNotes(n.imageUrls().stream().filter(url -> !currentUrls.contains(url)).toList(), id);
         KnowledgeVisibility visibility = request.getVisibility() != null ? request.getVisibility() : note.getVisibility();
         // 작성자(member)는 바꾸지 않는다 — ADMIN 이 고쳐도 원 작성자의 메모로 남는다.
-        note.update(n.category(), n.content(), n.sourceUrl(), n.sourceText(), n.stockSymbol(), n.stockName(),
+        note.update(n.category(), n.title(), n.content(), n.sourceUrl(), n.sourceText(), n.stockSymbol(), n.stockName(),
                 visibility);
         note.replaceTags(n.tags());
         List<String> removedImages = note.replaceImages(n.imageUrls());
@@ -225,13 +226,14 @@ public class KnowledgeNoteService {
             stockName = stockSymbol;
         }
 
+        String title = blankToNull(request.getTitle());
         String content = blankToNull(request.getContent());
         List<String> imageUrls = normalizeImageUrls(request.getImageUrls());
         if (content == null && imageUrls.isEmpty()) {
             throw new CustomException(ErrorCode.KNOWLEDGE_NOTE_CONTENT_OR_IMAGE_REQUIRED);
         }
 
-        return new NormalizedNote(request.getCategory(), content, sourceUrl, sourceText,
+        return new NormalizedNote(request.getCategory(), title, content, sourceUrl, sourceText,
                 stockSymbol, stockName, normalizeTags(request.getTags()), imageUrls);
     }
 
@@ -302,7 +304,7 @@ public class KnowledgeNoteService {
         return stripped.isEmpty() ? null : stripped;
     }
 
-    private record NormalizedNote(KnowledgeCategory category, String content, String sourceUrl, String sourceText,
+    private record NormalizedNote(KnowledgeCategory category, String title, String content, String sourceUrl, String sourceText,
                                   String stockSymbol, String stockName, List<String> tags,
                                   List<String> imageUrls) {
     }

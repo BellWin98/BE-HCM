@@ -1,6 +1,7 @@
 package com.behcm.domain.knowledge.dto;
 
 import com.behcm.domain.knowledge.entity.KnowledgeCategory;
+import com.behcm.domain.knowledge.entity.KnowledgeNote;
 import com.behcm.domain.knowledge.entity.KnowledgeVisibility;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
@@ -17,7 +18,7 @@ public class KnowledgeNoteRequest {
     @Size(max = 100, message = "제목은 100자 이하로 입력해주세요.")
     private String title;
 
-    @Size(max = 2000, message = "내용은 2000자 이하로 입력해주세요.")
+    @Size(max = KnowledgeNote.MAX_CONTENT_LENGTH, message = "내용은 10000자 이하로 입력해주세요.")
     private String content;
 
     // 내용·이미지 중 하나는 있어야 하지만 둘의 조합은 서비스에서 판정한다.

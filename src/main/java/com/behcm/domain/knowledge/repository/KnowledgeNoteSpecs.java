@@ -62,7 +62,7 @@ public final class KnowledgeNoteSpecs {
     }
 
     /**
-     * 검색 조건. 모든 term 이 (내용/출처/종목/태그) 중 어딘가에 포함되어야 한다(AND).
+     * 검색 조건. 모든 term 이 (제목/내용/출처/종목/태그) 중 어딘가에 포함되어야 한다(AND).
      * 노출 범위는 걸지 않으므로 반드시 {@link #visibleTo} 와 함께 쓴다.
      * 태그는 조인하지 않고 EXISTS 서브쿼리로 비교한다 — 조인하면 태그 수만큼 행이 늘어 페이지가 중복된다.
      */
@@ -94,6 +94,7 @@ public final class KnowledgeNoteSpecs {
                 .where(cb.equal(tag.get("note"), root), cb.like(tag.get("name"), pattern, ESCAPE));
 
         return cb.or(
+                cb.like(root.get("title"), pattern, ESCAPE),
                 cb.like(root.get("content"), pattern, ESCAPE),
                 cb.like(root.get("sourceText"), pattern, ESCAPE),
                 cb.like(root.get("sourceUrl"), pattern, ESCAPE),

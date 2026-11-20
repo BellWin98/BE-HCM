@@ -229,6 +229,34 @@ class KnowledgeNoteRepositoryTest extends IntegrationTestSupport {
                 .containsExactly(n2.getId(), n1.getId());
     }
 
+    private KnowledgeNote saveTitledNote(Member owner, String title) {
+        return repository.save(KnowledgeNote.builder()
+                .member(owner).category(KnowledgeCategory.DEV).title(title).content("본문")
+                .build());
+    }
+
+    @Test
+    void search_matchesTitle() {
+        KnowledgeNote titled = saveTitledNote(me, "HBM 증설 메모");
+        saveNote(me, KnowledgeCategory.DEV, "다른 본문", null, null, null);
+        em.flush();
+        em.clear();
+
+        assertThat(search(me, null, null, "HBM")).extracting(KnowledgeNote::getId)
+                .containsExactly(titled.getId());
+    }
+
+    @Test
+    void search_titleTreatsPercentLiterally() {
+        KnowledgeNote percent = saveTitledNote(me, "수익률 10% 목표");
+        saveTitledNote(me, "수익률 100 목표");
+        em.flush();
+        em.clear();
+
+        assertThat(search(me, null, null, "10%")).extracting(KnowledgeNote::getId)
+                .containsExactly(percent.getId());
+    }
+
     @Test
     void search_neverReturnsOtherMembersNotes() {
         KnowledgeNote mine = saveNote(me, KnowledgeCategory.STOCK, "삼성 메모", null, null, null);

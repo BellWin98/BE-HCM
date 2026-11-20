@@ -17,7 +17,7 @@
 - "내용 또는 이미지 중 하나는 필수" 규칙은 그대로 — 제목만 있는 메모는 `KNOWLEDGE_NOTE_CONTENT_OR_IMAGE_REQUIRED`.
 - 기존 메모는 title NULL(백필 없음).
 - 마이그레이션은 DDL 한 개, `ALGORITHM = INPLACE, LOCK = NONE`, 이미 적용된 파일은 수정 금지(CLAUDE.md).
-- 시작 전 BE 저장소에 GitHub 이슈를 만들고(`.cursor/commands/github-issue-pr-command.md`), 브랜치 `feature/issue-187`, 커밋 메시지는 한국어 + 끝에 `(#187)`. PR base 는 `main`. 커밋 전 `./gradlew build`.
+- 시작 전 BE 저장소에 GitHub 이슈를 만들고, 브랜치 `feature/issue-187`, 커밋 메시지는 한국어 + 끝에 `(#187)`. PR base 는 `main`. 커밋 전 `./gradlew build`.
 
 ## Review Focus
 

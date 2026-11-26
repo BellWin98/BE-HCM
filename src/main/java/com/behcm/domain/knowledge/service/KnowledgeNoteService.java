@@ -10,6 +10,7 @@ import com.behcm.domain.knowledge.repository.KnowledgeNoteScope;
 import com.behcm.domain.knowledge.repository.KnowledgeNoteSpecs;
 import com.behcm.domain.knowledge.repository.StockNoteCount;
 import com.behcm.domain.member.entity.Member;
+import com.behcm.domain.notification.service.NotificationFacade;
 import com.behcm.global.config.aws.S3Service;
 import com.behcm.global.exception.CustomException;
 import com.behcm.global.exception.ErrorCode;
@@ -64,6 +65,7 @@ public class KnowledgeNoteService {
     private final S3Service s3Service;
     private final KnowledgeNoteImageCleaner imageCleaner;
     private final KnowledgeAccessChecker accessChecker;
+    private final NotificationFacade notificationFacade;
 
     @Transactional
     public KnowledgeNoteResponse create(Member member, KnowledgeNoteRequest request) {
@@ -86,6 +88,10 @@ public class KnowledgeNoteService {
         note.replaceImages(n.imageUrls());
         KnowledgeNote saved = knowledgeNoteRepository.save(note);
         log.info("Knowledge note created (memberId={}, noteId={})", member.getId(), saved.getId());
+        if (saved.getVisibility() == KnowledgeVisibility.PUBLIC) {
+            notificationFacade.notifyKnowledgeReaders(member, KnowledgeNoteNotification.title(member.getNickname()),
+                    KnowledgeNoteNotification.body(saved), KnowledgeNoteNotification.TYPE, KnowledgeNoteNotification.PATH);
+        }
         return KnowledgeNoteResponse.of(saved, member.getId(), p);
     }
 

@@ -21,6 +21,9 @@ public interface MemberRepository extends JpaRepository<Member, Long> {
     Optional<Member> findByOauthProviderAndOauthProviderId(String oauthProvider, String oauthProviderId);
     long countByRole(MemberRole role);
 
+    @Query("SELECT m.id FROM Member m WHERE m.role = :role")
+    List<Long> findIdsByRole(@Param("role") MemberRole role);
+
     @Query("SELECT m FROM Member m " +
             "WHERE (:role IS NULL OR m.role = :role) " +
             "AND (:query IS NULL OR LOWER(m.nickname) LIKE LOWER(CONCAT('%', :query, '%')) " +

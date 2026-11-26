@@ -21,6 +21,9 @@ public interface KnowledgeAccessRepository extends JpaRepository<KnowledgeAccess
     @Query("SELECT ka FROM KnowledgeAccess ka JOIN FETCH ka.member ORDER BY ka.updatedAt DESC")
     List<KnowledgeAccess> findAllWithMember();
 
+    @Query("SELECT ka.member.id FROM KnowledgeAccess ka WHERE ka.canRead = true")
+    List<Long> findReaderMemberIds();
+
     /**
      * 동시 요청에서도 uk_knowledge_access_member 충돌 없이 한 행으로 수렴하도록 단일 SQL 로 삽입/갱신한다.
      */

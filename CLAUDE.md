@@ -100,6 +100,14 @@ BE-HCM("헬창모임")은 그룹 운동 습관 관리 앱을 위한 Spring Boot 
   공유하므로, 새 조회 경로는 반드시 이 중 하나를 거쳐야 합니다. 관리자가 아니면 본인이 쓴 메모만
   수정·삭제할 수 있습니다(`KnowledgePermissions.canEdit`). 이미지 URL 은 메모 간 공유를 막고, 정리할 때
   `findUrlsUsedByOtherNotes` 로 확인해 다른 메모가 쓰는 URL 은 삭제하지 않습니다.
+  PUBLIC 메모를 생성하면 조회 권한자 + ADMIN(작성자 제외)에게 푸시를 보냅니다
+  (`NotificationFacade.notifyKnowledgeReaders`).
+- `domain/notification` — FCM 푸시. 알림은 `NotificationFacade` 로만 보냅니다. Facade 는 커밋 후(트랜잭션이
+  없으면 즉시) `NotificationSender` 의 `notificationExecutor` 비동기 작업으로 넘기고, 알림 실패는 본 작업에
+  영향을 주지 않습니다(예약 실패·발송 실패 모두 WARN 로그만 남기고 삼킴, 실행기가 포화되면 작업을 버림).
+  **비동기 쪽에 엔티티를 넘기지 말고(id 만 넘김) `NotificationSender` 에 `@Transactional` 을 붙이지
+  마세요**(`deleteByToken` flush 문제). `AsyncConfig` 는 한정자 없는 `@Async` 의 기본 실행기를
+  `mailExecutor` 로 고정하므로 새 실행기 빈을 추가해도 기존 동작은 바뀌지 않습니다.
 - `domain/stats` — 통계/랜딩 페이지용 집계 데이터. `SecurityConfig`에서 `/api/stats/**` 엔드포인트는
   `permitAll`로 설정되어 있다는 점에 유의하세요.
 

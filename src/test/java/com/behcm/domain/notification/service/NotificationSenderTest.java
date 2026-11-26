@@ -104,6 +104,28 @@ class NotificationSenderTest {
     }
 
     @Test
+    @DisplayName("본문이 50 코드 포인트를 넘으면 서로게이트 쌍을 깨지 않고 자른다")
+    void sendToMember_emojiAtBoundary_doesNotSplitSurrogatePair() {
+        given(fcmTokenRepository.findTokensByMemberIds(List.of(1L))).willReturn(List.of("t"));
+        String body = "가".repeat(49) + "😀" + "추가 텍스트";
+
+        notificationSender.sendToMember(1L, "title", body, "PENALTY_ASSIGNED", "/path");
+
+        verify(fcmService).sendGroupNotification(1L, List.of("t"), "title", "가".repeat(49) + "😀" + "...", "PENALTY_ASSIGNED-1", "/path");
+    }
+
+    @Test
+    @DisplayName("50 코드 포인트 이하면 UTF-16 길이가 50을 넘어도 그대로 전송한다")
+    void sendToMember_emojiWithinCodePointLimit_sentUnchanged() {
+        given(fcmTokenRepository.findTokensByMemberIds(List.of(1L))).willReturn(List.of("t"));
+        String body = "😀".repeat(30);
+
+        notificationSender.sendToMember(1L, "title", body, "PENALTY_ASSIGNED", "/path");
+
+        verify(fcmService).sendGroupNotification(1L, List.of("t"), "title", body, "PENALTY_ASSIGNED-1", "/path");
+    }
+
+    @Test
     @DisplayName("sendToRoom은 발신자를 제외한 방 멤버에게만 발송한다")
     void sendToRoom_excludesSender() {
         Member sender = member(1L, "sender");

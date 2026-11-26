@@ -37,6 +37,7 @@ public class FcmService {
                         .putData("body", body)
                         .putData("senderId", String.valueOf(senderId))
                         .putData("tag", tag)
+                        .putData("path", path != null ? path : "")
                         .setAndroidConfig(AndroidConfig.builder()
                                 .setTtl(0)
                                 .setPriority(AndroidConfig.Priority.HIGH)

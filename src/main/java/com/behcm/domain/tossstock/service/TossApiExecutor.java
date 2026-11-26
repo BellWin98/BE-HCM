@@ -18,7 +18,7 @@ import java.util.function.Supplier;
  * {@code ORDER_INFO}·{@code MARKET_INFO}) 한도 부담 없이 겹칠 수 있다.
  *
  * <p><b>풀을 빈으로 등록하지 않는 이유</b>: {@code TaskExecutor} 빈이 하나 더 생기면 한정자 없는
- * {@code @Async} 의 기본 실행기 판정이 바뀐다(지금은 유일한 {@code mailExecutor} 가 쓰인다).
+ * {@code @Async} 의 기본 실행기 판정이 바뀐다(AsyncConfig 가 기본값으로 고정한 {@code mailExecutor} 가 쓰인다).
  * 그래서 이 컴포넌트가 풀을 직접 들고, 컨텍스트 종료 시 직접 닫는다.
  *
  * <p>풀이 꽉 차면 호출 스레드가 직접 실행한다({@code CallerRunsPolicy}) — 거부해서 화면을 죽이느니

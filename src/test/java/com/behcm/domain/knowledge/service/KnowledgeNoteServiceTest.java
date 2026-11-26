@@ -9,6 +9,7 @@ import com.behcm.domain.knowledge.repository.KnowledgeNoteRepository;
 import com.behcm.domain.knowledge.repository.StockNoteCount;
 import com.behcm.domain.member.entity.Member;
 import com.behcm.domain.member.entity.MemberRole;
+import com.behcm.domain.notification.service.NotificationFacade;
 import com.behcm.global.exception.CustomException;
 import com.behcm.global.config.aws.S3Service;
 import com.behcm.global.exception.ErrorCode;
@@ -63,6 +64,9 @@ class KnowledgeNoteServiceTest {
 
     @Mock
     private KnowledgeAccessChecker accessChecker;
+
+    @Mock
+    private NotificationFacade notificationFacade;
 
     @InjectMocks
     private KnowledgeNoteService service;
@@ -449,6 +453,7 @@ class KnowledgeNoteServiceTest {
         assertThat(note.getStockName()).isEqualTo("AAPL");
         assertThat(note.getTagNames()).containsExactly("new", "x");
         assertThat(response.tags()).containsExactly("new", "x");
+        verifyNoInteractions(notificationFacade);
     }
 
     @Test
@@ -655,6 +660,41 @@ class KnowledgeNoteServiceTest {
         ArgumentCaptor<Collection<String>> captor = ArgumentCaptor.forClass(Collection.class);
         verify(repository).countVisibleByStockSymbols(any(), anyBoolean(), captor.capture());
         assertThat(captor.getValue()).containsExactlyInAnyOrder("AAPL", "TSLA");
+    }
+
+    @Test
+    @DisplayName("공개 메모를 만들면 조회 권한자에게 알린다")
+    void create_public_notifiesReaders() {
+        KnowledgeNoteRequest r = request(KnowledgeCategory.DEV, null, null);
+        r.setVisibility(KnowledgeVisibility.PUBLIC);
+        when(repository.save(any(KnowledgeNote.class))).thenAnswer(i -> i.getArgument(0));
+
+        service.create(member, r);
+
+        ArgumentCaptor<KnowledgeNote> captor = ArgumentCaptor.forClass(KnowledgeNote.class);
+        verify(repository).save(captor.capture());
+        verify(notificationFacade).notifyKnowledgeReaders(member, KnowledgeNoteNotification.title("n"),
+                KnowledgeNoteNotification.body(captor.getValue()), "KNOWLEDGE_NOTE_CREATED", "/notes");
+    }
+
+    @Test
+    @DisplayName("공개 범위를 생략하면 PUBLIC 이므로 알린다")
+    void create_visibilityOmitted_notifies() {
+        saveAndCapture(request(KnowledgeCategory.DEV, null, null));
+
+        verify(notificationFacade).notifyKnowledgeReaders(any(), any(), any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("비공개 메모를 만들면 알리지 않는다")
+    void create_private_doesNotNotify() {
+        KnowledgeNoteRequest r = request(KnowledgeCategory.DEV, null, null);
+        r.setVisibility(KnowledgeVisibility.PRIVATE);
+        when(repository.save(any(KnowledgeNote.class))).thenAnswer(i -> i.getArgument(0));
+
+        service.create(member, r);
+
+        verifyNoInteractions(notificationFacade);
     }
 
     @Test

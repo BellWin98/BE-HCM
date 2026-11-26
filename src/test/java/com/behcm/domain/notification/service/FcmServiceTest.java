@@ -14,9 +14,12 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.MockedStatic;
 import org.mockito.Mockito;
+import org.mockito.ArgumentCaptor;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -94,6 +97,33 @@ class FcmServiceTest {
             fcmService.sendGroupNotification(1L, List.of("bad-token", "good-token"), "title", "body", "tag", "/path");
 
             verify(messagingMock, times(2)).send(any(Message.class));
+        }
+    }
+
+    @Test
+    @DisplayName("sendGroupNotification은 path 를 data 에 싣는다")
+    void sendGroupNotification_includesPath() throws FirebaseMessagingException {
+        assertThat(sentData("/notes").get("path")).isEqualTo("/notes");
+    }
+
+    @Test
+    @DisplayName("sendGroupNotification은 path 가 null 이면 빈 문자열을 싣고 예외를 내지 않는다")
+    void sendGroupNotification_nullPath_sendsEmptyPath() throws FirebaseMessagingException {
+        assertThat(sentData(null).get("path")).isEqualTo("");
+    }
+
+    @SuppressWarnings("unchecked")
+    private Map<String, String> sentData(String path) throws FirebaseMessagingException {
+        try (MockedStatic<FirebaseMessaging> mockedStatic = Mockito.mockStatic(FirebaseMessaging.class)) {
+            FirebaseMessaging messagingMock = Mockito.mock(FirebaseMessaging.class);
+            mockedStatic.when(FirebaseMessaging::getInstance).thenReturn(messagingMock);
+            given(messagingMock.send(any(Message.class))).willReturn("message-id");
+
+            fcmService.sendGroupNotification(1L, List.of("token-a"), "title", "body", "tag", path);
+
+            ArgumentCaptor<Message> captor = ArgumentCaptor.forClass(Message.class);
+            verify(messagingMock).send(captor.capture());
+            return (Map<String, String>) ReflectionTestUtils.getField(captor.getValue(), "data");
         }
     }
 }

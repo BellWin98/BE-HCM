@@ -63,4 +63,20 @@ class KnowledgeAccessRepositoryTest extends IntegrationTestSupport {
         assertThat(result).hasSize(1);
         assertThat(result.get(0).getMember().getId()).isEqualTo(b.getId());
     }
+
+    @Test
+    @DisplayName("findReaderMemberIds 는 읽기 권한이 있는 회원 id 만 반환한다")
+    void findReaderMemberIds_returnsOnlyCanRead() {
+        Member readOnly = saveMember("r");
+        Member writeOnly = saveMember("w");
+        Member both = saveMember("b");
+        repository.save(KnowledgeAccess.builder().member(readOnly).canRead(true).canWrite(false).build());
+        repository.save(KnowledgeAccess.builder().member(writeOnly).canRead(false).canWrite(true).build());
+        repository.save(KnowledgeAccess.builder().member(both).canRead(true).canWrite(true).build());
+
+        List<Long> result = repository.findReaderMemberIds();
+
+        assertThat(result).contains(readOnly.getId(), both.getId());
+        assertThat(result).doesNotContain(writeOnly.getId());
+    }
 }

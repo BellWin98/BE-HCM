@@ -2,11 +2,12 @@ package com.behcm.domain.notification.repository;
 
 import com.behcm.domain.member.entity.Member;
 import com.behcm.domain.notification.entity.FcmToken;
-import io.lettuce.core.dynamic.annotation.Param;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -16,6 +17,9 @@ public interface FcmTokenRepository extends JpaRepository<FcmToken, Long> {
 
     @Query("SELECT f.token FROM FcmToken f WHERE f.member IN :members")
     List<String> findFcmTokensByMembers(@Param("members") List<Member> members);
+
+    @Query("SELECT f.token FROM FcmToken f WHERE f.member.id IN :memberIds")
+    List<String> findTokensByMemberIds(@Param("memberIds") Collection<Long> memberIds);
 
     void deleteByMember(Member member);
 

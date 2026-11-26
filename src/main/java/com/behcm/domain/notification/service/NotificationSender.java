@@ -90,8 +90,8 @@ public class NotificationSender {
      */
     private String truncateMessage(String message) {
         int maxLength = 50;
-        if (message != null && message.length() > maxLength) {
-            return message.substring(0, maxLength) + "...";
+        if (message != null && message.codePointCount(0, message.length()) > maxLength) {
+            return message.substring(0, message.offsetByCodePoints(0, maxLength)) + "...";
         }
         return message;
     }

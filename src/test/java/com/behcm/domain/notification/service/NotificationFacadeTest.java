@@ -2,44 +2,30 @@ package com.behcm.domain.notification.service;
 
 import com.behcm.domain.member.entity.Member;
 import com.behcm.domain.member.entity.MemberRole;
-import com.behcm.domain.notification.entity.FcmToken;
-import com.behcm.domain.notification.repository.FcmTokenRepository;
-import com.behcm.domain.workout.entity.WorkoutRoom;
-import com.behcm.domain.workout.entity.WorkoutRoomMember;
-import com.behcm.domain.workout.repository.WorkoutRoomMemberRepository;
-import com.behcm.domain.workout.repository.WorkoutRoomRepository;
-import com.behcm.global.exception.CustomException;
-import com.behcm.global.exception.ErrorCode;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.core.task.TaskRejectedException;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.lang.reflect.Field;
 import java.util.List;
-import java.util.Optional;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.BDDMockito.given;
-import static org.mockito.Mockito.never;
+import static org.assertj.core.api.Assertions.assertThatCode;
+import static org.mockito.BDDMockito.willThrow;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 
 @ExtendWith(MockitoExtension.class)
 class NotificationFacadeTest {
 
     @Mock
-    private WorkoutRoomRepository workoutRoomRepository;
-
-    @Mock
-    private WorkoutRoomMemberRepository workoutRoomMemberRepository;
-
-    @Mock
-    private FcmTokenRepository fcmTokenRepository;
+    private NotificationSender notificationSender;
 
     @Mock
     private FcmService fcmService;
@@ -47,13 +33,10 @@ class NotificationFacadeTest {
     @InjectMocks
     private NotificationFacade notificationFacade;
 
-    private void setId(Object entity, long id) {
-        try {
-            Field field = entity.getClass().getDeclaredField("id");
-            field.setAccessible(true);
-            field.set(entity, id);
-        } catch (ReflectiveOperationException e) {
-            throw new RuntimeException(e);
+    @AfterEach
+    void tearDown() {
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.clearSynchronization();
         }
     }
 
@@ -63,21 +46,18 @@ class NotificationFacadeTest {
                 .nickname(nickname)
                 .role(MemberRole.USER)
                 .build();
-        setId(m, id);
+        try {
+            Field field = m.getClass().getDeclaredField("id");
+            field.setAccessible(true);
+            field.set(m, id);
+        } catch (ReflectiveOperationException e) {
+            throw new RuntimeException(e);
+        }
         return m;
     }
 
-    private WorkoutRoom room(long id, Member owner) {
-        WorkoutRoom room = WorkoutRoom.builder()
-                .name("Test Room")
-                .minWeeklyWorkouts(3)
-                .penaltyEnabled(false)
-                .maxMembers(10)
-                .entryCode("ENTRY01")
-                .owner(owner)
-                .build();
-        setId(room, id);
-        return room;
+    private List<TransactionSynchronization> synchronizations() {
+        return TransactionSynchronizationManager.getSynchronizations();
     }
 
     @Test
@@ -91,92 +71,54 @@ class NotificationFacadeTest {
     }
 
     @Test
-    @DisplayName("notifyMember는 대상 회원의 토큰으로만 알림을 발송한다")
-    void notifyMember_sendsToTargetMemberToken() {
-        Member target = member(1L, "target");
-        FcmToken fcmToken = new FcmToken(target, "target-token");
-        given(fcmTokenRepository.findByMember(target)).willReturn(Optional.of(fcmToken));
+    @DisplayName("트랜잭션이 없으면 즉시 Sender에 위임한다")
+    void noTransaction_sendsImmediately() {
+        notificationFacade.notifyMember(member(1L, "target"), "title", "body", "PENALTY_ASSIGNED", "/path");
 
-        notificationFacade.notifyMember(target, "title", "body", "PENALTY_ASSIGNED", "/path");
-
-        verify(fcmService).sendGroupNotification(1L, List.of("target-token"), "title", "body", "PENALTY_ASSIGNED-1", "/path");
+        verify(notificationSender).sendToMember(1L, "title", "body", "PENALTY_ASSIGNED", "/path");
     }
 
     @Test
-    @DisplayName("notifyMember는 대상 회원의 토큰이 없으면 발송하지 않는다")
-    void notifyMember_noToken_doesNotSend() {
-        Member target = member(1L, "target");
-        given(fcmTokenRepository.findByMember(target)).willReturn(Optional.empty());
+    @DisplayName("트랜잭션 중이면 커밋 후에야 Sender에 위임한다")
+    void inTransaction_defersUntilAfterCommit() {
+        TransactionSynchronizationManager.initSynchronization();
 
-        notificationFacade.notifyMember(target, "title", "body", "PENALTY_ASSIGNED", "/path");
+        notificationFacade.notifyRoomMembers(5L, member(1L, "sender"), "title", "body", "CHAT", "/path");
 
-        verify(fcmService, never()).sendGroupNotification(any(), any(), any(), any(), any(), any());
+        verifyNoInteractions(notificationSender);
+        synchronizations().forEach(TransactionSynchronization::afterCommit);
+        verify(notificationSender).sendToRoom(5L, 1L, "title", "body", "CHAT", "/path");
     }
 
     @Test
-    @DisplayName("notifyRoomMembers는 운동방이 없으면 WORKOUT_ROOM_NOT_FOUND 예외를 던진다")
-    void notifyRoomMembers_roomNotFound_throwsWorkoutRoomNotFound() {
-        Member member = member(1L, "user");
-        given(workoutRoomRepository.findByIdAndIsActiveTrue(1L)).willReturn(Optional.empty());
+    @DisplayName("롤백되면 발송하지 않는다")
+    void rollback_doesNotSend() {
+        TransactionSynchronizationManager.initSynchronization();
 
-        assertThatThrownBy(() -> notificationFacade.notifyRoomMembers(1L, member, "title", "body", "CHAT", "/path"))
-                .isInstanceOf(CustomException.class)
-                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.WORKOUT_ROOM_NOT_FOUND);
+        notificationFacade.notifyMember(member(1L, "target"), "title", "body", "PENALTY_ASSIGNED", "/path");
+        synchronizations().forEach(s -> s.afterCompletion(TransactionSynchronization.STATUS_ROLLED_BACK));
 
-        verify(fcmService, never()).sendGroupNotification(any(), any(), any(), any(), any(), any());
+        verifyNoInteractions(notificationSender);
     }
 
     @Test
-    @DisplayName("notifyMember는 본문이 50자를 초과하면 잘라서 FcmService에 전달한다")
-    void notifyMember_longBody_truncatesTo50Chars() {
-        Member target = member(1L, "target");
-        FcmToken fcmToken = new FcmToken(target, "target-token");
-        given(fcmTokenRepository.findByMember(target)).willReturn(Optional.of(fcmToken));
-        String longBody = "가".repeat(60);
-        String expectedTruncated = "가".repeat(50) + "...";
+    @DisplayName("커밋 후 발송 예약이 실패해도 예외를 던지지 않는다")
+    void afterCommit_submitFails_doesNotThrow() {
+        willThrow(new TaskRejectedException("queue full"))
+                .given(notificationSender).sendToKnowledgeReaders(7L, "title", "body", "KNOWLEDGE_NOTE", "/path");
+        TransactionSynchronizationManager.initSynchronization();
 
-        notificationFacade.notifyMember(target, "title", longBody, "PENALTY_ASSIGNED", "/path");
+        notificationFacade.notifyKnowledgeReaders(member(7L, "author"), "title", "body", "KNOWLEDGE_NOTE", "/path");
 
-        verify(fcmService).sendGroupNotification(1L, List.of("target-token"), "title", expectedTruncated, "PENALTY_ASSIGNED-1", "/path");
+        assertThatCode(() -> synchronizations().forEach(TransactionSynchronization::afterCommit))
+                .doesNotThrowAnyException();
     }
 
     @Test
-    @DisplayName("notifyRoomMembers는 발신자를 제외한 나머지 방 멤버들에게만 알림을 발송한다")
-    void notifyRoomMembers_excludesSenderFromTargets() {
-        Member sender = member(1L, "sender");
-        Member other = member(2L, "other");
-        WorkoutRoom room = room(1L, sender);
-        WorkoutRoomMember senderWrm = WorkoutRoomMember.builder().member(sender).workoutRoom(room).build();
-        WorkoutRoomMember otherWrm = WorkoutRoomMember.builder().member(other).workoutRoom(room).build();
-        given(workoutRoomRepository.findByIdAndIsActiveTrue(1L)).willReturn(Optional.of(room));
-        given(workoutRoomMemberRepository.findByWorkoutRoomOrderByJoinedAtFetchMember(room))
-                .willReturn(List.of(senderWrm, otherWrm));
-        given(fcmTokenRepository.findFcmTokensByMembers(List.of(other))).willReturn(List.of("other-token"));
+    @DisplayName("notifyKnowledgeReaders는 작성자 id를 Sender에 전달한다")
+    void notifyKnowledgeReaders_passesAuthorId() {
+        notificationFacade.notifyKnowledgeReaders(member(7L, "author"), "title", "body", "KNOWLEDGE_NOTE", "/path");
 
-        notificationFacade.notifyRoomMembers(1L, sender, "title", "body", "CHAT", "/path");
-
-        verify(fcmService).sendGroupNotification(eq(1L), eq(List.of("other-token")), eq("title"), eq("body"), eq("CHAT-1"), eq("/path"));
-        verify(fcmTokenRepository).findFcmTokensByMembers(List.of(other));
-        verify(workoutRoomMemberRepository).findByWorkoutRoomOrderByJoinedAtFetchMember(room);
-    }
-
-    @Test
-    @DisplayName("notifyRoomMembers는 본문이 50자를 초과하면 잘라서 FcmService에 전달한다")
-    void notifyRoomMembers_longBody_truncatesTo50Chars() {
-        Member sender = member(1L, "sender");
-        Member other = member(2L, "other");
-        WorkoutRoom room = room(1L, sender);
-        WorkoutRoomMember senderWrm = WorkoutRoomMember.builder().member(sender).workoutRoom(room).build();
-        WorkoutRoomMember otherWrm = WorkoutRoomMember.builder().member(other).workoutRoom(room).build();
-        given(workoutRoomRepository.findByIdAndIsActiveTrue(1L)).willReturn(Optional.of(room));
-        given(workoutRoomMemberRepository.findByWorkoutRoomOrderByJoinedAtFetchMember(room))
-                .willReturn(List.of(senderWrm, otherWrm));
-        given(fcmTokenRepository.findFcmTokensByMembers(List.of(other))).willReturn(List.of("other-token"));
-        String longBody = "가".repeat(60);
-        String expectedTruncated = "가".repeat(50) + "...";
-
-        notificationFacade.notifyRoomMembers(1L, sender, "title", longBody, "CHAT", "/path");
-
-        verify(fcmService).sendGroupNotification(eq(1L), eq(List.of("other-token")), eq("title"), eq(expectedTruncated), eq("CHAT-1"), eq("/path"));
+        verify(notificationSender).sendToKnowledgeReaders(7L, "title", "body", "KNOWLEDGE_NOTE", "/path");
     }
 }
